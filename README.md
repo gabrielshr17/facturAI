@@ -1,5 +1,7 @@
 # Sistema de Facturación
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 Sistema de facturación, inventario y gestión para negocios en República
 Dominicana (comprobantes fiscales e-CF, impresión térmica ESC/POS, control
 de inventario, clientes, compras, corte de caja, reportes).
