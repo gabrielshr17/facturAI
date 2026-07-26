@@ -1,0 +1,23 @@
+{
+  "name": "sistema-facturacion-real",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sistema de facturación, inventario y gestión (República Dominicana)",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @sfr/web dev",
+    "dev:desktop": "pnpm --filter @sfr/desktop dev",
+    "dev:api": "pnpm --filter @sfr/api dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter @sfr/core db:migrate",
+    "db:seed": "pnpm --filter @sfr/core db:seed",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

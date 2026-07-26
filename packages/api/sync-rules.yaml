@@ -1,0 +1,37 @@
+# Reglas de sincronización de PowerSync — PLACEHOLDER, sin proyecto conectado.
+#
+# Esto define qué filas de Postgres (Supabase) se replican a cada cliente
+# SQLite (Tauri/wa-sqlite) y en qué "buckets". Se sube al dashboard de
+# PowerSync cuando exista un proyecto real; ver:
+# https://docs.powersync.com/usage/sync-rules
+#
+# Supuesto de este placeholder: negocio único (una sola pyme), por eso el
+# bucket "mostrador" es global sin filtrar por negocio_id. Si en el futuro
+# esta app sirve a varios negocios desde el mismo proyecto PowerSync, cada
+# bucket debe parametrizarse por negocio_id (o por token.negocio_id) para no
+# mezclar datos entre negocios.
+
+bucket_definitions:
+  mostrador:
+    data:
+      - SELECT * FROM negocio
+      - SELECT * FROM usuario
+      - SELECT * FROM caja
+      - SELECT * FROM departamento
+      - SELECT * FROM producto
+      - SELECT * FROM cliente
+      - SELECT * FROM proveedor
+      - SELECT * FROM factura
+      - SELECT * FROM factura_linea
+      - SELECT * FROM pago
+      - SELECT * FROM secuencia_ncf
+      - SELECT * FROM comprobante_fiscal
+      - SELECT * FROM corte_caja
+      - SELECT * FROM movimiento_inventario
+      - SELECT * FROM compra
+      - SELECT * FROM compra_linea
+      - SELECT * FROM comprobante_archivo
+      # bitacora_accion: normalmente de solo-escritura/auditoría, no hace
+      # falta que el cliente la lea de vuelta salvo para mostrarla en una
+      # pantalla de auditoría (evaluar si conviene un bucket aparte).
+      - SELECT * FROM bitacora_accion

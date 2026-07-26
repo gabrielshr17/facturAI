@@ -1,0 +1,23 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# SQLite local (datos de desarrollo)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Tauri / Rust
+packages/desktop/src-tauri/target/
+
+# Entorno
+.env
+.env.local
+.DS_Store
+
+# Datos reales del negocio (no publicar)
+productDatabase/
+*.xlsx
+*.xls
