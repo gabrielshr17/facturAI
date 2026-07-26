@@ -98,3 +98,7 @@ pnpm build        # build de producción de todos los paquetes
   contener datos comerciales reales.
 - Este repositorio es público; no subir `.env`, bases de datos reales
   (`*.db`, `*.xlsx`) ni credenciales.
+
+## Licencia
+
+MIT — ver [LICENSE](./LICENSE).
