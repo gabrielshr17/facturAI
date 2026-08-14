@@ -91,9 +91,8 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
                     autoFocus={i === 0}
                     onFocus={(e) => e.target.select()}
                     style={{ ...s.input, width: 70 }}
-                    type="number"
-                    min={0}
-                    max={l.cantidad}
+                    type="text"
+                    inputMode="decimal"
                     value={cantidades[l.id] ?? "0"}
                     onChange={(e) => setCantidades((prev) => ({ ...prev, [l.id]: e.target.value }))}
                   />

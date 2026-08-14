@@ -71,13 +71,13 @@ export function SeccionSecuenciasNcf() {
             </div>
             <div>
               <label style={s.label}>Rango desde</label>
-              <input style={s.input} type="number" value={form.rangoDesde}
-                onChange={(e) => setForm({ ...form, rangoDesde: Number(e.target.value) })} />
+              <input style={s.input} type="text" inputMode="numeric" value={form.rangoDesde}
+                onChange={(e) => setForm({ ...form, rangoDesde: Number(e.target.value) || 0 })} />
             </div>
             <div>
               <label style={s.label}>Rango hasta</label>
-              <input style={s.input} type="number" value={form.rangoHasta}
-                onChange={(e) => setForm({ ...form, rangoHasta: Number(e.target.value) })} />
+              <input style={s.input} type="text" inputMode="numeric" value={form.rangoHasta}
+                onChange={(e) => setForm({ ...form, rangoHasta: Number(e.target.value) || 0 })} />
             </div>
             <div>
               <label style={s.label}>Vencimiento</label>

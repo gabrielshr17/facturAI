@@ -85,11 +85,11 @@ export function CorteCaja() {
           </div>
           <div>
             <label style={s.label}>Fondo de caja inicial</label>
-            <input style={s.input} type="number" value={montoInicial} onChange={(e) => setMontoInicial(e.target.value)} />
+            <input style={s.input} type="text" inputMode="decimal" value={montoInicial} onChange={(e) => setMontoInicial(e.target.value)} />
           </div>
           <div>
             <label style={s.label}>Efectivo contado</label>
-            <input style={s.input} type="number" value={efectivoContado} onChange={(e) => setEfectivoContado(e.target.value)} />
+            <input style={s.input} type="text" inputMode="decimal" value={efectivoContado} onChange={(e) => setEfectivoContado(e.target.value)} />
           </div>
         </div>
         {error && <div style={s.errorBox}>{error}</div>}

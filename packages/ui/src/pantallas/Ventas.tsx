@@ -10,11 +10,13 @@ import {
   ValidacionError,
   cobrarConFiscal,
   aplicarDescuento,
+  pctGananciaDesdePrecio,
 } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money, sombra } from "../estilos.js";
 import { ModalCobro, type FiscalInput } from "../componentes/ModalCobro.js";
-import { FormularioProducto } from "../componentes/FormularioProducto.js";
+import { FormularioProducto, diferenciasProducto, type CambioProducto } from "../componentes/FormularioProducto.js";
+import { ModalConfirmarCambios } from "../componentes/ModalConfirmarCambios.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
 import { abrirGavetaTermica } from "../impresion/termica.js";
 import { BotonVoz } from "../componentes/BotonVoz.js";
@@ -92,6 +94,7 @@ export function Ventas() {
   const [editandoProducto, setEditandoProducto] = useState<Producto | null>(null);
   const [formEdicion, setFormEdicion] = useState<ProductoInput | null>(null);
   const [erroresEdicion, setErroresEdicion] = useState<string[]>([]);
+  const [cambiosPendientesEdicion, setCambiosPendientesEdicion] = useState<CambioProducto[] | null>(null);
 
   const [clienteQ, setClienteQ] = useState("");
   const [clienteResultados, setClienteResultados] = useState<Cliente[]>([]);
@@ -149,8 +152,13 @@ export function Ventas() {
 
   useAtajosTeclado({
     Escape: () => cerrarEdicionProducto(),
-    "Ctrl+S": () => void guardarEdicionProducto(),
-  }, formEdicion !== null);
+    "Ctrl+S": () => guardarEdicionProducto(),
+  }, formEdicion !== null && cambiosPendientesEdicion === null);
+
+  useAtajosTeclado({
+    Escape: () => setCambiosPendientesEdicion(null),
+    "Ctrl+S": () => void guardarEdicionProductoAhora(),
+  }, cambiosPendientesEdicion !== null);
 
   // Escribir en cualquier parte de la pantalla de Ventas (sin haber hecho clic en la búsqueda
   // primero) arranca una búsqueda de productos — como el "type-ahead" de Gmail. Si el foco ya está
@@ -365,7 +373,9 @@ export function Ventas() {
       tipo_venta: p.tipo_venta,
       unidad_medida: p.unidad_medida ?? "",
       costo: p.costo,
-      pct_ganancia: p.pct_ganancia,
+      // § Productos.editar(): el % guardado se desfasa cuando el precio se
+      // escribió a mano — se muestra el % que el precio actual implica de verdad.
+      pct_ganancia: pctGananciaDesdePrecio(p.costo, p.precio_venta, p.tasa_impuesto),
       precio_venta: p.precio_venta,
       precio_mayoreo: p.precio_mayoreo,
       impuesto_tipo: p.impuesto_tipo,
@@ -378,15 +388,26 @@ export function Ventas() {
     setEditandoProducto(null);
     setFormEdicion(null);
     setErroresEdicion([]);
+    setCambiosPendientesEdicion(null);
   }
 
-  async function guardarEdicionProducto() {
+  /** Antes de guardar, muestra qué va a cambiar y pide confirmar (§ Productos.guardar()) —
+   *  así corregir un precio desde la búsqueda no lo aplica sin querer. */
+  function guardarEdicionProducto() {
+    if (!editandoProducto || !formEdicion) return;
+    const cambios = diferenciasProducto(editandoProducto, formEdicion);
+    if (cambios.length === 0) { cerrarEdicionProducto(); return; }
+    setCambiosPendientesEdicion(cambios);
+  }
+
+  async function guardarEdicionProductoAhora() {
     if (!editandoProducto || !formEdicion) return;
     try {
       await productos.actualizar(editandoProducto.id, formEdicion);
       cerrarEdicionProducto();
       await buscarProducto(busqueda);
     } catch (e) {
+      setCambiosPendientesEdicion(null);
       setErroresEdicion(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje) : [String(e)]);
     }
   }
@@ -922,9 +943,9 @@ export function Ventas() {
                 <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
                   <input autoFocus style={s.input} placeholder="Descripción" value={sueltoDesc}
                     onChange={(e) => setSueltoDesc(e.target.value)} />
-                  <input style={{ ...s.input, maxWidth: 120 }} placeholder="Precio" type="number" value={sueltoPrecio}
+                  <input style={{ ...s.input, maxWidth: 120 }} placeholder="Precio" type="text" inputMode="decimal" value={sueltoPrecio}
                     onChange={(e) => setSueltoPrecio(e.target.value)} />
-                  <input style={{ ...s.input, maxWidth: 80 }} placeholder="Cant." type="number" min={1} value={sueltoCantidad}
+                  <input style={{ ...s.input, maxWidth: 80 }} placeholder="Cant." type="text" inputMode="decimal" value={sueltoCantidad}
                     onChange={(e) => setSueltoCantidad(e.target.value)} />
                   <button style={s.boton} onClick={agregarSuelto}>Agregar</button>
                 </div>
@@ -971,9 +992,9 @@ export function Ventas() {
                           {lineaEditandoId === l.id ? (
                             <input
                               autoFocus
-                              type="number"
-                              step="0.01"
-                              min="0"
+                              onFocus={(e) => e.target.select()}
+                              type="text"
+                              inputMode="decimal"
                               value={cantidadEditandoInput}
                               onChange={(e) => setCantidadEditandoInput(e.target.value)}
                               onBlur={() => void confirmarEdicionCantidad(l)}
@@ -1199,9 +1220,8 @@ export function Ventas() {
                 <input
                   autoFocus
                   onFocus={(e) => e.target.select()}
-                  type="number"
-                  step="0.01"
-                  min={0}
+                  type="text"
+                  inputMode="decimal"
                   style={{ ...s.input, fontSize: 18, textAlign: "center", fontWeight: 700 }}
                   value={cantidadModalTexto}
                   onChange={(e) => cambiarCantidadModal(e.target.value)}
@@ -1210,9 +1230,8 @@ export function Ventas() {
                 <label style={s.label}>Monto (RD$)</label>
                 <input
                   onFocus={(e) => e.target.select()}
-                  type="number"
-                  step="0.01"
-                  min={0}
+                  type="text"
+                  inputMode="decimal"
                   style={{ ...s.input, fontSize: 18, textAlign: "center", fontWeight: 700 }}
                   value={montoModalTexto}
                   onChange={(e) => cambiarMontoModal(e.target.value)}
@@ -1243,6 +1262,15 @@ export function Ventas() {
               placeholder="Escanear código de barra o buscar producto…"
               value={busquedaConsulta}
               onChange={(e) => setBusquedaConsulta(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter = "ya vi el precio, siguiente" — limpia para el próximo escaneo/búsqueda
+                // en vez de dejar el texto anterior ahí (§ hay que poder consultar varios seguidos
+                // sin seleccionar y borrar a mano cada vez).
+                if (e.key === "Enter") {
+                  setBusquedaConsulta("");
+                  setResultadosConsulta([]);
+                }
+              }}
             />
             {resultadosConsulta.length > 0 && (
               <div style={{ marginTop: 8, border: `1px solid ${c.borde}`, borderRadius: 8, overflow: "hidden", maxHeight: 300, overflowY: "auto" }}>
@@ -1288,11 +1316,19 @@ export function Ventas() {
               editando
               inventarioActivo={negocio?.inventario_activo === 1}
               errores={erroresEdicion}
-              onGuardar={() => void guardarEdicionProducto()}
+              onGuardar={guardarEdicionProducto}
               onCancelar={cerrarEdicionProducto}
             />
           </div>
         </div>
+      )}
+
+      {cambiosPendientesEdicion && (
+        <ModalConfirmarCambios
+          cambios={cambiosPendientesEdicion}
+          onConfirmar={() => void guardarEdicionProductoAhora()}
+          onCancelar={() => setCambiosPendientesEdicion(null)}
+        />
       )}
 
       <ChatBot />

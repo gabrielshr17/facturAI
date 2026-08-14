@@ -28,6 +28,24 @@ export function precioBaseDesdeCosto(costo: number, pctGanancia: number): number
 }
 
 /**
+ * Inverso de `calcularPrecioVenta`: el % de ganancia que de verdad implica un
+ * precio de venta dado, para costo y tasa de impuesto conocidos.
+ *
+ * Existe porque `pct_ganancia` solo se actualiza cuando el precio se DERIVA de
+ * costo + %. Si en cambio el precio se escribió a mano (§ "manual manda" en
+ * `calcularPrecioVenta`), `pct_ganancia` se queda en lo que sea que tenía
+ * antes — típicamente 0 — y deja de reflejar el margen real. La ventana de
+ * edición usa esto para mostrar el % verdadero en vez del valor guardado.
+ * Con costo 0 el % no está definido (cualquier precio es "infinito" margen),
+ * así que se devuelve 0 en vez de Infinity/NaN.
+ */
+export function pctGananciaDesdePrecio(costo: number, precioVenta: number, tasaImpuesto: number): number {
+  if (!(costo > 0)) return 0;
+  const base = precioVenta / (1 + tasaImpuesto);
+  return redondear2((base / costo - 1) * 100);
+}
+
+/**
  * Calcula el precio de venta final (ITBIS incluido).
  * Si `precioManual` viene definido y no negativo, se usa tal cual (manual manda).
  * Si no, se deriva: (costo + %) y se le suma el impuesto.

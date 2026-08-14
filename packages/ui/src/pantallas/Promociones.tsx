@@ -106,7 +106,7 @@ export function Promociones() {
             </div>
             <div>
               <label style={s.label}>Valor</label>
-              <input style={s.input} type="number" value={form.valor} onChange={(e) => setForm({ ...form, valor: Number(e.target.value) })} />
+              <input style={s.input} type="text" inputMode="decimal" value={form.valor} onChange={(e) => setForm({ ...form, valor: Number(e.target.value) || 0 })} />
             </div>
             <div>
               <label style={s.label}>Aplica a</label>

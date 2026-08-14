@@ -125,7 +125,8 @@ export function ModalCobro({
             </select>
             <input
               style={{ ...s.input, width: 120 }}
-              type="number"
+              type="text"
+              inputMode="decimal"
               autoFocus={i === 0}
               onFocus={(e) => e.target.select()}
               value={f.monto}

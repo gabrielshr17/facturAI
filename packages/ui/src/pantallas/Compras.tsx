@@ -358,7 +358,7 @@ export function Compras() {
         {mostrarSuelto && (
           <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
             <input autoFocus style={s.input} placeholder="Descripción" value={sueltoDesc} onChange={(e) => setSueltoDesc(e.target.value)} />
-            <input style={{ ...s.input, maxWidth: 140 }} placeholder="Costo unitario" type="number" value={sueltoCosto}
+            <input style={{ ...s.input, maxWidth: 140 }} placeholder="Costo unitario" type="text" inputMode="decimal" value={sueltoCosto}
               onChange={(e) => setSueltoCosto(e.target.value)} />
             <button style={s.boton} onClick={agregarLineaSuelta}>Agregar</button>
           </div>
@@ -385,11 +385,11 @@ export function Compras() {
                   {!l.producto_id && <span style={{ ...s.badge, marginLeft: 6, background: c.amarilloFondo, color: c.amarillo }}>no registrado</span>}
                 </td>
                 <td style={s.td}>
-                  <input style={{ ...s.input, width: 70 }} type="number" value={l.cantidad}
+                  <input style={{ ...s.input, width: 70 }} type="text" inputMode="decimal" value={l.cantidad}
                     onChange={(e) => actualizarLinea(i, { cantidad: Number(e.target.value) || 0 })} />
                 </td>
                 <td style={s.td}>
-                  <input style={{ ...s.input, width: 100 }} type="number" value={l.costoUnitario}
+                  <input style={{ ...s.input, width: 100 }} type="text" inputMode="decimal" value={l.costoUnitario}
                     onChange={(e) => actualizarLinea(i, { costoUnitario: Number(e.target.value) || 0 })} />
                 </td>
                 <td style={s.tdDerecha}>RD$ {money(l.cantidad * l.costoUnitario)}</td>

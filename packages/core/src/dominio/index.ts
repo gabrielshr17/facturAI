@@ -4,6 +4,7 @@ export {
   type CalculoPrecioInput,
   precioBaseDesdeCosto,
   calcularPrecioVenta,
+  pctGananciaDesdePrecio,
 } from "./precio.js";
 export {
   type LineaInput,

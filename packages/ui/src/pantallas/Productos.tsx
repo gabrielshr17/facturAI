@@ -5,11 +5,13 @@ import {
   type ImpuestoTipo,
   type MovimientoInventario,
   ValidacionError,
+  pctGananciaDesdePrecio,
 } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { ImportarProductos } from "../componentes/ImportarProductos.js";
-import { FormularioProducto } from "../componentes/FormularioProducto.js";
+import { FormularioProducto, diferenciasProducto, type CambioProducto } from "../componentes/FormularioProducto.js";
+import { ModalConfirmarCambios } from "../componentes/ModalConfirmarCambios.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 const IMPUESTOS: { valor: ImpuestoTipo; etiqueta: string }[] = [
@@ -48,6 +50,7 @@ export function Productos() {
   const [editando, setEditando] = useState<Producto | null>(null);
   const [form, setForm] = useState<ProductoInput | null>(null);
   const [errores, setErrores] = useState<string[]>([]);
+  const [cambiosPendientes, setCambiosPendientes] = useState<CambioProducto[] | null>(null);
   const [inventarioActivo, setInventarioActivo] = useState(false);
 
   const [ajustando, setAjustando] = useState<string | null>(null);
@@ -67,7 +70,11 @@ export function Productos() {
     F6: () => nuevo(),
     "Ctrl+S": () => { if (form) void guardar(); },
     Escape: () => { if (form) setForm(null); },
-  });
+  }, cambiosPendientes === null);
+  useAtajosTeclado({
+    "Ctrl+S": () => void guardarAhora(),
+    Escape: () => setCambiosPendientes(null),
+  }, cambiosPendientes !== null);
 
   async function recargar(filtro = q) {
     setLista(await repo.listar(filtro));
@@ -117,7 +124,10 @@ export function Productos() {
       tipo_venta: p.tipo_venta,
       unidad_medida: p.unidad_medida ?? "",
       costo: p.costo,
-      pct_ganancia: p.pct_ganancia,
+      // El % guardado solo se actualiza cuando el precio se DERIVA de costo + %; si
+      // se escribió el precio a mano queda desfasado (típicamente en 0) — se muestra
+      // el % que ese precio implica de verdad, no el valor guardado y obsoleto.
+      pct_ganancia: pctGananciaDesdePrecio(p.costo, p.precio_venta, p.tasa_impuesto),
       precio_venta: p.precio_venta,
       precio_mayoreo: p.precio_mayoreo,
       impuesto_tipo: p.impuesto_tipo,
@@ -126,15 +136,30 @@ export function Productos() {
     setErrores([]);
   }
 
-  async function guardar() {
+  /** Al editar (no al crear), primero muestra qué va a cambiar y pide confirmar — así una
+   *  corrección de precio no se aplica sin querer. Si nada cambió, no hay nada que confirmar. */
+  function guardar() {
+    if (!form) return;
+    if (editando) {
+      const cambios = diferenciasProducto(editando, form);
+      if (cambios.length === 0) { setForm(null); setEditando(null); return; }
+      setCambiosPendientes(cambios);
+      return;
+    }
+    void guardarAhora();
+  }
+
+  async function guardarAhora() {
     if (!form) return;
     try {
       if (editando) await repo.actualizar(editando.id, form);
       else await repo.crear(form);
       setForm(null);
       setEditando(null);
+      setCambiosPendientes(null);
       await recargar();
     } catch (e) {
+      setCambiosPendientes(null);
       if (e instanceof ValidacionError) setErrores(e.errores.map((x) => x.mensaje));
       else setErrores([String(e)]);
     }
@@ -253,7 +278,8 @@ export function Productos() {
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <input
                             style={{ ...s.input, width: 80 }}
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             value={nuevaExistencia}
                             onChange={(e) => setNuevaExistencia(e.target.value)}
                           />
@@ -330,6 +356,14 @@ export function Productos() {
         <ImportarProductos
           onCerrar={() => setMostrarImportar(false)}
           onImportado={() => void recargar()}
+        />
+      )}
+
+      {cambiosPendientes && (
+        <ModalConfirmarCambios
+          cambios={cambiosPendientes}
+          onConfirmar={() => void guardarAhora()}
+          onCancelar={() => setCambiosPendientes(null)}
         />
       )}
     </div>
