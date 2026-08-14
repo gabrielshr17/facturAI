@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   type Producto,
   type Proveedor,
@@ -9,8 +9,9 @@ import {
   ValidacionError,
 } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
-import { s, c } from "../estilos.js";
+import { s, c, money } from "../estilos.js";
 import { analizarComprobante, type DatosExtraidosComprobante } from "../data/chatbotCliente.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 interface LineaLocal {
   producto_id: string | null;
@@ -45,6 +46,7 @@ export function Compras() {
   const [fecha, setFecha] = useState(hoyIso());
   const [proveedorQ, setProveedorQ] = useState("");
   const [proveedorResultados, setProveedorResultados] = useState<Proveedor[]>([]);
+  const [indiceResultadoProveedor, setIndiceResultadoProveedor] = useState(-1);
   const [proveedorSel, setProveedorSel] = useState<Proveedor | null>(null);
   const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
   const [nuevoProveedorNombre, setNuevoProveedorNombre] = useState("");
@@ -60,6 +62,7 @@ export function Compras() {
   const [lineas, setLineas] = useState<LineaLocal[]>([]);
   const [busquedaProducto, setBusquedaProducto] = useState("");
   const [resultadosProducto, setResultadosProducto] = useState<Producto[]>([]);
+  const [indiceResultadoProducto, setIndiceResultadoProducto] = useState(-1);
   const [mostrarSuelto, setMostrarSuelto] = useState(false);
   const [sueltoDesc, setSueltoDesc] = useState("");
   const [sueltoCosto, setSueltoCosto] = useState("");
@@ -76,6 +79,15 @@ export function Compras() {
   const [lineasSel, setLineasSel] = useState<CompraLinea[]>([]);
   const [archivosSel, setArchivosSel] = useState<ComprobanteArchivo[]>([]);
   const [proveedoresPorId, setProveedoresPorId] = useState<Record<string, Proveedor>>({});
+
+  const proveedorRef = useRef<HTMLInputElement>(null);
+  const busquedaProductoRef = useRef<HTMLInputElement>(null);
+  const enfocarBusquedaProducto = useCallback(() => busquedaProductoRef.current?.focus(), []);
+  useAtajosTeclado({
+    F10: enfocarBusquedaProducto,
+    F6: () => { if (!proveedorSel) setMostrarNuevoProveedor((v) => !v); },
+    "Ctrl+S": () => { if (!guardando) void guardarCompra(); },
+  });
 
   const cargarHistorial = useCallback(async () => {
     const lista = await repo.listar({ desde: filtroDesde || null, hasta: filtroHasta || null });
@@ -104,6 +116,7 @@ export function Compras() {
   async function buscarProveedor(q: string) {
     setProveedorQ(q);
     setProveedorResultados(q.trim() ? await proveedores.listar(q) : []);
+    setIndiceResultadoProveedor(-1);
   }
 
   async function crearProveedorRapido() {
@@ -123,6 +136,7 @@ export function Compras() {
   async function buscarProducto(q: string) {
     setBusquedaProducto(q);
     setResultadosProducto(q.trim() ? await productos.listar(q) : []);
+    setIndiceResultadoProducto(-1);
   }
 
   function agregarLineaProducto(p: Producto) {
@@ -263,20 +277,36 @@ export function Compras() {
             ) : (
               <>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <input style={s.input} placeholder="Buscar proveedor…" value={proveedorQ}
-                    onChange={(e) => void buscarProveedor(e.target.value)} />
-                  <button style={s.botonSecundario} onClick={() => setMostrarNuevoProveedor((v) => !v)}>+ Nuevo</button>
+                  <input ref={proveedorRef} style={s.input} placeholder="Buscar proveedor…" value={proveedorQ}
+                    autoFocus
+                    onChange={(e) => void buscarProveedor(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && proveedorResultados.length > 0) {
+                        e.preventDefault();
+                        setIndiceResultadoProveedor((i) => {
+                          const siguiente = e.key === "ArrowDown" ? i + 1 : i - 1;
+                          return Math.min(Math.max(siguiente, 0), proveedorResultados.length - 1);
+                        });
+                        return;
+                      }
+                      if (e.key === "Enter" && indiceResultadoProveedor >= 0 && proveedorResultados[indiceResultadoProveedor]) {
+                        const p = proveedorResultados[indiceResultadoProveedor];
+                        setProveedorSel(p); setProveedorQ(""); setProveedorResultados([]);
+                      }
+                    }} />
+                  <button style={s.botonSecundario} onClick={() => setMostrarNuevoProveedor((v) => !v)}>+ Nuevo (F6)</button>
                 </div>
-                {proveedorResultados.map((p) => (
+                {proveedorResultados.map((p, i) => (
                   <div key={p.id} className="sfr-fila-clickeable"
                     onClick={() => { setProveedorSel(p); setProveedorQ(""); setProveedorResultados([]); }}
-                    style={{ padding: "6px 8px", cursor: "pointer", fontSize: 14, borderRadius: 6 }}>
+                    onMouseEnter={() => setIndiceResultadoProveedor(i)}
+                    style={{ padding: "6px 8px", cursor: "pointer", fontSize: 14, borderRadius: 6, ...(i === indiceResultadoProveedor ? { background: c.azulClaro } : {}) }}>
                     {p.nombre}
                   </div>
                 ))}
                 {mostrarNuevoProveedor && (
                   <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                    <input style={s.input} placeholder="Nombre del proveedor" value={nuevoProveedorNombre}
+                    <input autoFocus style={s.input} placeholder="Nombre del proveedor" value={nuevoProveedorNombre}
                       onChange={(e) => setNuevoProveedorNombre(e.target.value)} />
                     <button style={s.boton} onClick={crearProveedorRapido}>Crear</button>
                   </div>
@@ -296,24 +326,38 @@ export function Compras() {
         </label>
 
         <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
-          <input style={s.input} placeholder="Buscar producto para agregar a la compra…" value={busquedaProducto}
-            onChange={(e) => void buscarProducto(e.target.value)} />
+          <input ref={busquedaProductoRef} style={s.input} placeholder="Buscar producto para agregar a la compra… (F10)" value={busquedaProducto}
+            onChange={(e) => void buscarProducto(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.key === "ArrowDown" || e.key === "ArrowUp") && resultadosProducto.length > 0) {
+                e.preventDefault();
+                setIndiceResultadoProducto((i) => {
+                  const siguiente = e.key === "ArrowDown" ? i + 1 : i - 1;
+                  return Math.min(Math.max(siguiente, 0), resultadosProducto.length - 1);
+                });
+                return;
+              }
+              if (e.key === "Enter" && indiceResultadoProducto >= 0 && resultadosProducto[indiceResultadoProducto]) {
+                agregarLineaProducto(resultadosProducto[indiceResultadoProducto]);
+              }
+            }} />
           <button style={s.botonSecundario} onClick={() => setMostrarSuelto((v) => !v)}>+ Producto nuevo</button>
         </div>
         {resultadosProducto.length > 0 && (
           <div style={{ marginTop: 8, border: `1px solid ${c.borde}`, borderRadius: 8, overflow: "hidden" }}>
-            {resultadosProducto.map((p) => (
+            {resultadosProducto.map((p, i) => (
               <div key={p.id} className="sfr-fila-clickeable" onClick={() => agregarLineaProducto(p)}
-                style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${c.borde}`, display: "flex", justifyContent: "space-between" }}>
-                <span>{p.descripcion} {p.codigo_barra ? <span style={{ color: c.gris, fontSize: 12 }}>({p.codigo_barra})</span> : ""}</span>
-                <span style={{ color: c.gris, fontVariantNumeric: "tabular-nums" }}>costo actual RD$ {p.costo.toFixed(2)}</span>
+                onMouseEnter={() => setIndiceResultadoProducto(i)}
+                style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${c.borde}`, display: "flex", justifyContent: "space-between", ...(i === indiceResultadoProducto ? { background: c.azulClaro } : {}) }}>
+                <span>{p.favorito === 1 && <span title="Favorito" style={{ color: c.amarillo, marginRight: 4 }}>★</span>}{p.descripcion} {p.codigo_barra ? <span style={{ color: c.gris, fontSize: 12 }}>({p.codigo_barra})</span> : ""}</span>
+                <span style={{ color: c.gris, fontVariantNumeric: "tabular-nums" }}>costo actual RD$ {money(p.costo)}</span>
               </div>
             ))}
           </div>
         )}
         {mostrarSuelto && (
           <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-            <input style={s.input} placeholder="Descripción" value={sueltoDesc} onChange={(e) => setSueltoDesc(e.target.value)} />
+            <input autoFocus style={s.input} placeholder="Descripción" value={sueltoDesc} onChange={(e) => setSueltoDesc(e.target.value)} />
             <input style={{ ...s.input, maxWidth: 140 }} placeholder="Costo unitario" type="number" value={sueltoCosto}
               onChange={(e) => setSueltoCosto(e.target.value)} />
             <button style={s.boton} onClick={agregarLineaSuelta}>Agregar</button>
@@ -338,7 +382,7 @@ export function Compras() {
               <tr key={i}>
                 <td style={s.td}>
                   {l.descripcion}
-                  {!l.producto_id && <span style={{ ...s.badge, marginLeft: 6, background: "#fef3c7", color: "#92400e" }}>no registrado</span>}
+                  {!l.producto_id && <span style={{ ...s.badge, marginLeft: 6, background: c.amarilloFondo, color: c.amarillo }}>no registrado</span>}
                 </td>
                 <td style={s.td}>
                   <input style={{ ...s.input, width: 70 }} type="number" value={l.cantidad}
@@ -348,7 +392,7 @@ export function Compras() {
                   <input style={{ ...s.input, width: 100 }} type="number" value={l.costoUnitario}
                     onChange={(e) => actualizarLinea(i, { costoUnitario: Number(e.target.value) || 0 })} />
                 </td>
-                <td style={s.tdDerecha}>RD$ {(l.cantidad * l.costoUnitario).toFixed(2)}</td>
+                <td style={s.tdDerecha}>RD$ {money(l.cantidad * l.costoUnitario)}</td>
                 <td style={s.td}><button style={s.botonPeligro} onClick={() => quitarLinea(i)}>Borrar</button></td>
               </tr>
             ))}
@@ -356,7 +400,7 @@ export function Compras() {
         </table>
 
         <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 20, fontWeight: 700, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${c.borde}`, fontVariantNumeric: "tabular-nums" }}>
-          Total: RD$ {total.toFixed(2)}
+          Total: RD$ {money(total)}
         </div>
 
         <div style={{ marginTop: 12 }}>
@@ -375,11 +419,11 @@ export function Compras() {
           </div>
           {errorIA && <div style={{ ...s.errorBox, marginTop: 8 }}>{errorIA}</div>}
           {datosIA && (
-            <div style={{ marginTop: 8, padding: 10, borderRadius: 8, background: "#f0fdf4", border: `1px solid ${c.verde}`, fontSize: 13 }}>
+            <div style={{ marginTop: 8, padding: 10, borderRadius: 8, background: c.verdeFondo, border: `1px solid ${c.verde}`, fontSize: 13 }}>
               <strong>Lo que leyó la IA (revisa antes de guardar):</strong>
               <div>Proveedor: {datosIA.proveedor ?? "—"} · RNC: {datosIA.rnc ?? "—"}</div>
               <div>NCF: {datosIA.ncf ?? "—"} · Fecha: {datosIA.fecha ?? "—"}</div>
-              <div>Monto: {datosIA.monto != null ? `RD$ ${datosIA.monto.toFixed(2)}` : "—"} · ITBIS: {datosIA.itbis != null ? `RD$ ${datosIA.itbis.toFixed(2)}` : "—"}</div>
+              <div>Monto: {datosIA.monto != null ? `RD$ ${money(datosIA.monto)}` : "—"} · ITBIS: {datosIA.itbis != null ? `RD$ ${money(datosIA.itbis)}` : "—"}</div>
               <div>Clasificación: {datosIA.clasificacion} · Confianza: {datosIA.confianza}</div>
               {datosIA.notas && <div style={{ marginTop: 4, fontStyle: "italic" }}>Nota: {datosIA.notas}</div>}
               <div style={{ marginTop: 4, color: c.gris }}>
@@ -393,11 +437,11 @@ export function Compras() {
         <textarea style={{ ...s.input, minHeight: 50 }} value={notas} onChange={(e) => setNotas(e.target.value)} />
 
         {error && <div style={s.errorBox}>{error}</div>}
-        {mensaje && <div style={{ ...s.errorBox, background: "#f0fdf4", borderColor: c.verde, color: c.verde }}>{mensaje}</div>}
+        {mensaje && <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>{mensaje}</div>}
 
         <div style={s.formFooter}>
           <button style={s.boton} disabled={guardando} onClick={guardarCompra}>
-            Guardar compra
+            Guardar compra (Ctrl+S)
           </button>
         </div>
       </div>
@@ -436,7 +480,7 @@ export function Compras() {
                   <td style={s.td}>{new Date(h.fecha).toLocaleDateString("es-DO")}</td>
                   <td style={s.td}>{h.proveedor_id ? (proveedoresPorId[h.proveedor_id]?.nombre ?? "—") : "—"}</td>
                   <td style={s.td}><span style={s.badge}>{h.estado_clasificacion}</span></td>
-                  <td style={s.tdDerecha}>RD$ {h.total.toFixed(2)}</td>
+                  <td style={s.tdDerecha}>RD$ {money(h.total)}</td>
                 </tr>
               ))}
             </tbody>
@@ -452,13 +496,13 @@ export function Compras() {
                 {lineasSel.map((l) => (
                   <tr key={l.id}>
                     <td style={s.td}>{l.descripcion} × {l.cantidad}</td>
-                    <td style={s.tdDerecha}>RD$ {l.subtotal.toFixed(2)}</td>
+                    <td style={s.tdDerecha}>RD$ {money(l.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, borderTop: `1px solid ${c.borde}`, paddingTop: 8, marginTop: 8, fontVariantNumeric: "tabular-nums" }}>
-              <span>Total</span><span>RD$ {seleccionada.total.toFixed(2)}</span>
+              <span>Total</span><span>RD$ {money(seleccionada.total)}</span>
             </div>
 
             {archivosSel.length > 0 && (

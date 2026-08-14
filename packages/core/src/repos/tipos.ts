@@ -29,6 +29,7 @@ export interface Producto extends Auditoria {
   existencia: number | null;
   politica_sin_existencia: PoliticaSinExistencia;
   activo: number; // 0 | 1
+  favorito: number; // 0 | 1
 }
 
 export interface Cliente extends Auditoria {

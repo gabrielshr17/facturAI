@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { type FacturaLinea, type Factura, ValidacionError, calcularLinea, registrarDevolucionConFiscal } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
-import { s, c, sombra } from "../estilos.js";
+import { s, c, sombra, money } from "../estilos.js";
 
 export interface ModalDevolucionProps {
   factura: Factura;
@@ -82,12 +82,14 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
             </tr>
           </thead>
           <tbody>
-            {lineas.map((l) => (
+            {lineas.map((l, i) => (
               <tr key={l.id}>
                 <td style={s.td}>{l.descripcion}</td>
                 <td style={s.td}>{l.cantidad}</td>
                 <td style={s.td}>
                   <input
+                    autoFocus={i === 0}
+                    onFocus={(e) => e.target.select()}
                     style={{ ...s.input, width: 70 }}
                     type="number"
                     min={0}
@@ -102,7 +104,7 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
         </table>
 
         <div style={{ display: "flex", justifyContent: "flex-end", fontWeight: 700, marginTop: 8 }}>
-          Total estimado: RD$ {totalEstimado.toFixed(2)}
+          Total estimado: RD$ {money(totalEstimado)}
         </div>
 
         <label style={s.label}>Motivo (opcional)</label>
@@ -110,7 +112,7 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
 
         {error && <div style={s.errorBox}>{error}</div>}
         {mensaje && (
-          <div style={{ ...s.errorBox, background: "#f0fdf4", borderColor: c.verde, color: c.verde }}>{mensaje}</div>
+          <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>{mensaje}</div>
         )}
 
         <div style={s.formFooter}>
@@ -127,7 +129,7 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
 const overlay: CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(15, 23, 42, 0.45)",
+  background: "var(--sfr-overlay)",
   backdropFilter: "blur(2px)",
   display: "flex",
   alignItems: "center",

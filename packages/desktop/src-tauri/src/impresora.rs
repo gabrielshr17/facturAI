@@ -16,11 +16,11 @@
 #[cfg(target_os = "windows")]
 mod win {
     use std::ffi::c_void;
-    use windows::core::PWSTR;
+    use windows::core::{PCWSTR, PWSTR};
     use windows::Win32::Graphics::Printing::{
-        ClosePrinter, EndDocPrinter, EndPagePrinter, EnumPrintersW, OpenPrinterW,
-        StartDocPrinterW, StartPagePrinter, WritePrinter, DOC_INFO_1W, PRINTER_ENUM_LOCAL,
-        PRINTER_HANDLE, PRINTER_INFO_4W,
+        ClosePrinter, EndDocPrinter, EndPagePrinter, EnumPrintersW, GetDefaultPrinterW,
+        OpenPrinterW, StartDocPrinterW, StartPagePrinter, WritePrinter, DOC_INFO_1W,
+        PRINTER_ENUM_LOCAL, PRINTER_HANDLE, PRINTER_INFO_4W,
     };
 
     fn a_utf16(s: &str) -> Vec<u16> {
@@ -121,6 +121,163 @@ mod win {
             resultado
         }
     }
+
+    fn nombre_impresora_predeterminada() -> Result<String, String> {
+        unsafe {
+            let mut necesitados: u32 = 0;
+            // Igual que EnumPrintersW: primera llamada solo para saber el tamaño.
+            let _ = GetDefaultPrinterW(Some(PWSTR::null()), &mut necesitados);
+            if necesitados == 0 {
+                return Err("No hay ninguna impresora predeterminada configurada en Windows.".into());
+            }
+            let mut buffer: Vec<u16> = vec![0; necesitados as usize];
+            GetDefaultPrinterW(Some(PWSTR::from_raw(buffer.as_mut_ptr())), &mut necesitados)
+                .ok()
+                .map_err(|_| "No se pudo obtener la impresora predeterminada de Windows.".to_string())?;
+            let fin = buffer.iter().position(|&c| c == 0).unwrap_or(buffer.len());
+            Ok(String::from_utf16_lossy(&buffer[..fin]))
+        }
+    }
+
+    /// Imprime texto plano directamente al driver GDI de la impresora (cualquier
+    /// impresora instalada en Windows, no solo térmicas), sin mostrar el diálogo
+    /// de impresión del sistema: el trabajo se manda al Spooler ya armado
+    /// (StartDocW/StartPage/TextOutW/EndPage/EndDoc), que es la vía nativa de
+    /// Windows para imprimir sin intervención del usuario — el diálogo es una
+    /// UI aparte que este camino nunca invoca. Usado quien no tiene una térmica
+    /// ESC/POS configurada en Configuración, para que "Cobrar e imprimir"
+    /// tampoco muestre nada ahí.
+    pub fn imprimir_texto(nombre_impresora: Option<&str>, lineas: &[String]) -> Result<(), String> {
+        imprimir_texto_interno(nombre_impresora, lineas, None)
+    }
+
+    /// Misma lógica que `imprimir_texto`, con un `archivo_salida` opcional para pruebas: apunta
+    /// `DOCINFOW.lpszOutput` a un archivo (ej. con la impresora virtual "Microsoft Print to PDF")
+    /// para poder verificar el resultado sin depender de una impresora física ni de un diálogo.
+    pub(crate) fn imprimir_texto_interno(
+        nombre_impresora: Option<&str>,
+        lineas: &[String],
+        archivo_salida: Option<&str>,
+    ) -> Result<(), String> {
+        use windows::Win32::Graphics::Gdi::{
+            CreateDCW, CreateFontW, DeleteDC, DeleteObject, GetDeviceCaps, SelectObject,
+            SetBkMode, TextOutW, ANSI_CHARSET, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_MODERN,
+            FIXED_PITCH, FW_NORMAL, HORZRES, LOGPIXELSY, OUT_DEFAULT_PRECIS, TRANSPARENT, VERTRES,
+        };
+        // StartDocW/StartPage/EndPage/EndDoc/DOCINFOW viven en el módulo Xps del crate
+        // `windows` (así clasifica ese binding esas funciones), no en Gdi.
+        use windows::Win32::Storage::Xps::{DOCINFOW, EndDoc, EndPage, StartDocW, StartPage};
+
+        let nombre = match nombre_impresora {
+            Some(n) if !n.is_empty() => n.to_string(),
+            _ => nombre_impresora_predeterminada()?,
+        };
+
+        unsafe {
+            let nombre_utf16 = a_utf16(&nombre);
+            let hdc = CreateDCW(
+                PCWSTR::null(),
+                PCWSTR::from_raw(nombre_utf16.as_ptr()),
+                PCWSTR::null(),
+                None,
+            );
+            if hdc.is_invalid() {
+                return Err(format!("No se pudo abrir la impresora \"{nombre}\"."));
+            }
+
+            let resultado = (|| -> Result<(), String> {
+                let mut doc_nombre = a_utf16("Ticket de venta");
+                let mut salida_utf16 = archivo_salida.map(a_utf16);
+                let info = DOCINFOW {
+                    cbSize: std::mem::size_of::<DOCINFOW>() as i32,
+                    lpszDocName: PCWSTR::from_raw(doc_nombre.as_mut_ptr()),
+                    lpszOutput: match &mut salida_utf16 {
+                        Some(s) => PCWSTR::from_raw(s.as_mut_ptr()),
+                        None => PCWSTR::null(),
+                    },
+                    lpszDatatype: PCWSTR::null(),
+                    fwType: 0,
+                };
+                if StartDocW(hdc, &info) <= 0 {
+                    return Err("No se pudo iniciar el trabajo de impresión.".into());
+                }
+
+                let dpi_y = GetDeviceCaps(Some(hdc), LOGPIXELSY);
+                let alto_pagina = GetDeviceCaps(Some(hdc), VERTRES);
+                let ancho_pagina = GetDeviceCaps(Some(hdc), HORZRES);
+                let alto_fuente = -(dpi_y * 11 / 72); // ~11pt
+                let margen = dpi_y / 4; // ~0.25"
+
+                // El ancho de carácter se pide EXPLÍCITO (nWidth) en vez de dejar que GDI use el
+                // ancho "natural" de la fuente (nWidth=0): en una térmica de recibo, el área
+                // imprimible real (HORZRES) suele ser bastante más angosta que lo que una fuente a
+                // este alto de línea ocupa a su ancho natural — con ancho natural, una línea de
+                // ANCHO_TEXTO caracteres (ver `recibo.ts`, debe coincidir con la constante de ahí)
+                // se salía del papel por la derecha, y como las columnas se arman con `columnasTexto`
+                // (etiqueta + espacios + monto pegado al final), lo que quedaba fuera del área
+                // imprimible era justo el monto — el bug reportado de "el total sale en blanco" era
+                // en realidad el total (y cualquier subtotal) recortado, no ausente de los datos.
+                const CARACTERES_POR_LINEA: i32 = 46; // debe coincidir con ANCHO_TEXTO en recibo.ts
+                let ancho_util = (ancho_pagina - margen * 2).max(CARACTERES_POR_LINEA);
+                let ancho_caracter = ancho_util / CARACTERES_POR_LINEA;
+
+                let mut fuente_nombre = a_utf16("Consolas");
+                let fuente = CreateFontW(
+                    alto_fuente,
+                    ancho_caracter,
+                    0,
+                    0,
+                    FW_NORMAL.0 as i32,
+                    0,
+                    0,
+                    0,
+                    ANSI_CHARSET,
+                    OUT_DEFAULT_PRECIS,
+                    CLIP_DEFAULT_PRECIS,
+                    DEFAULT_QUALITY,
+                    (FIXED_PITCH.0 as u32) | (FF_MODERN.0 as u32),
+                    PCWSTR::from_raw(fuente_nombre.as_mut_ptr()),
+                );
+
+                let alto_linea = (alto_fuente.abs() * 6) / 5; // interlineado ~1.2x
+                let mut y = margen;
+
+                // StartPage/EndPage reinician los atributos del DC (fuente, modo de fondo) a sus
+                // valores por defecto — es un comportamiento documentado de GDI, no un descuido.
+                // Seleccionarlos ANTES del primer StartPage (como hacía esta función antes) hacía
+                // que el texto se dibujara con la fuente por defecto del driver en vez de la elegida
+                // aquí: como el alto de línea se calcula a partir de la fuente pedida y no de la que
+                // terminó usándose, el texto de más abajo (los totales) podía quedar recortado o
+                // fuera del área imprimible. Por eso la fuente se reselecciona DESPUÉS de cada
+                // StartPage, incluida la primera página.
+                let _ = StartPage(hdc);
+                let fuente_anterior = SelectObject(hdc, fuente.into());
+                let _ = SetBkMode(hdc, TRANSPARENT);
+
+                for linea in lineas {
+                    if y > alto_pagina - margen {
+                        let _ = EndPage(hdc);
+                        let _ = StartPage(hdc);
+                        SelectObject(hdc, fuente.into());
+                        let _ = SetBkMode(hdc, TRANSPARENT);
+                        y = margen;
+                    }
+                    let texto: Vec<u16> = linea.encode_utf16().collect();
+                    let _ = TextOutW(hdc, margen, y, &texto);
+                    y += alto_linea;
+                }
+                let _ = EndPage(hdc);
+
+                SelectObject(hdc, fuente_anterior);
+                let _ = DeleteObject(fuente.into());
+                let _ = EndDoc(hdc);
+                Ok(())
+            })();
+
+            let _ = DeleteDC(hdc);
+            resultado
+        }
+    }
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -132,6 +289,10 @@ mod win {
     pub fn imprimir_raw(_nombre_impresora: &str, _datos: &[u8]) -> Result<(), String> {
         Err("La impresión térmica solo está implementada para Windows.".into())
     }
+
+    pub fn imprimir_texto(_nombre_impresora: Option<&str>, _lineas: &[String]) -> Result<(), String> {
+        Err("La impresión solo está implementada para Windows.".into())
+    }
 }
 
 #[tauri::command]
@@ -142,6 +303,11 @@ pub fn listar_impresoras() -> Result<Vec<String>, String> {
 #[tauri::command]
 pub fn imprimir_ticket_termico(impresora: String, datos: Vec<u8>) -> Result<(), String> {
     win::imprimir_raw(&impresora, &datos)
+}
+
+#[tauri::command]
+pub fn imprimir_texto_generico(lineas: Vec<String>, impresora: Option<String>) -> Result<(), String> {
+    win::imprimir_texto(impresora.as_deref(), &lineas)
 }
 
 #[cfg(all(test, target_os = "windows"))]
@@ -220,5 +386,55 @@ mod tests {
         };
         imprimir_ticket_termico(pdf.clone(), b"prueba de escritura RAW".to_vec())
             .expect("WritePrinter debería aceptar bytes crudos en cualquier impresora instalada");
+    }
+
+    /// Verificación real del camino GDI (`imprimir_texto_generico`, el respaldo silencioso sin
+    /// térmica ESC/POS): imprime un recibo de mentira con varias líneas de artículos y, al final,
+    /// los totales — igual que un ticket real — a "Microsoft Print to PDF" con la salida
+    /// redirigida a un archivo, para poder abrir el PDF resultante y confirmar a ojo que los
+    /// totales sí aparecen (el bug reportado era que no aparecían). No corre en la suite normal
+    /// porque depende de esa impresora virtual estando instalada.
+    #[test]
+    #[ignore]
+    fn imprime_texto_con_totales_a_pdf() {
+        let impresoras = listar_impresoras().unwrap();
+        let Some(pdf) = impresoras.iter().find(|n| n.contains("PDF")) else {
+            eprintln!("No hay 'Microsoft Print to PDF' instalado, se omite.");
+            return;
+        };
+
+        let mut lineas: Vec<String> = vec![
+            "Colmado La Esperanza".into(),
+            "RNC: 101023122".into(),
+            "Calle Duarte #45, Santiago".into(),
+            "----------------------------------------------".into(),
+            "Ticket #8              13/08/2026 05:20 p. m.".into(),
+            "----------------------------------------------".into(),
+        ];
+        for i in 1..=5 {
+            lineas.push(format!("Producto de prueba {i}"));
+            lineas.push("1 x 150.00                              150.00".to_string());
+        }
+        lineas.push("----------------------------------------------".into());
+        lineas.push("Gravado                              RD$ 636.36".into());
+        lineas.push("Exento                                 RD$ 0.00".into());
+        lineas.push("ITBIS                                RD$ 113.64".into());
+        lineas.push("TOTAL                                RD$ 750.00".into());
+        lineas.push("----------------------------------------------".into());
+        lineas.push("Efectivo                             RD$ 750.00".into());
+        lineas.push("Pagado                               RD$ 750.00".into());
+        lineas.push("Cambio                                 RD$ 0.00".into());
+        lineas.push("----------------------------------------------".into());
+        lineas.push("Gracias por su compra!".into());
+
+        let salida = r"C:\Users\saint\AppData\Local\Temp\claude\C--Users-saint-Desktop-Bootcamp-Builder-AA-sistemaDeFacturacionReal\611f880a-1ae3-4019-8fde-9c5982910726\scratchpad\prueba_recibo_totales.pdf";
+        let _ = std::fs::remove_file(salida);
+
+        win::imprimir_texto_interno(Some(pdf), &lineas, Some(salida))
+            .expect("debería imprimir a PDF sin fallar");
+
+        let metadata = std::fs::metadata(salida).expect("el PDF debería haberse creado");
+        println!("PDF generado en {salida} ({} bytes)", metadata.len());
+        assert!(metadata.len() > 0, "el PDF no debería estar vacío");
     }
 }

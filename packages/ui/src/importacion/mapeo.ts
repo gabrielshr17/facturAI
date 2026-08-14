@@ -1,4 +1,4 @@
-import { normalizar, type ImpuestoTipo } from "@sfr/core";
+import { normalizar, type ImpuestoTipo, type TipoVenta } from "@sfr/core";
 
 export type CampoDestino =
   | "descripcion"
@@ -9,6 +9,8 @@ export type CampoDestino =
   | "impuesto_tipo"
   | "existencia"
   | "departamento"
+  | "tipo_venta"
+  | "unidad_medida"
   | "ignorar";
 
 export const ETIQUETA_CAMPO: Record<CampoDestino, string> = {
@@ -20,6 +22,8 @@ export const ETIQUETA_CAMPO: Record<CampoDestino, string> = {
   impuesto_tipo: "Impuesto",
   existencia: "Existencia",
   departamento: "Departamento",
+  tipo_venta: "Tipo de venta (unidad/granel)",
+  unidad_medida: "Unidad de medida",
   ignorar: "(No importar)",
 };
 
@@ -32,6 +36,8 @@ const PISTAS: Record<Exclude<CampoDestino, "ignorar">, string[]> = {
   impuesto_tipo: ["impuesto", "itbis", "tax", "iva"],
   existencia: ["existencia", "stock", "cantidad", "inventario", "qty"],
   departamento: ["departamento", "categoria", "category", "familia"],
+  tipo_venta: ["tipodeventa", "tipoventa", "salestype"],
+  unidad_medida: ["unidadmedida", "unidaddemedida", "unitofmeasure", "um"],
 };
 
 /** Encabezados abreviados como "P. Venta" o "P.Costo" deben matchear igual que "precio venta"/"costo": se quita todo lo que no sea letra/número antes de buscar las pistas. */
@@ -64,6 +70,16 @@ export function normalizarImpuesto(valor: string | number | null): ImpuestoTipo 
   if (t.includes("16")) return "itbis16";
   if (t.includes("18")) return "itbis18";
   return "itbis18";
+}
+
+/** Normaliza valores libres de tipo de venta ("GRANEL", "Por unidad", "Paquete"...) al tipo interno. Por defecto "unidad". */
+export function normalizarTipoVenta(valor: string | number | null): TipoVenta {
+  const t = normalizar(String(valor ?? "").trim());
+  if (!t) return "unidad";
+  if (t.includes("granel") || t.includes("peso") || t.includes("libra") || t.includes("weight")) return "granel";
+  if (t.includes("paquete") || t.includes("pack")) return "paquete";
+  if (t.includes("kit")) return "kit";
+  return "unidad";
 }
 
 /** Busca en `mapeo` la columna asignada a `campo` (o undefined si ninguna). */

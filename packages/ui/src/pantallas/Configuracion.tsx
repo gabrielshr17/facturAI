@@ -5,6 +5,7 @@ import { s, c } from "../estilos.js";
 import { SeccionSecuenciasNcf } from "../componentes/SeccionSecuenciasNcf.js";
 import { SeccionBitacora } from "../componentes/SeccionBitacora.js";
 import { SeccionImpresoraTermica } from "../componentes/SeccionImpresoraTermica.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 const VACIO: NegocioInput = {
   nombre_comercial: "",
@@ -24,6 +25,8 @@ export function Configuracion() {
   const [errores, setErrores] = useState<string[]>([]);
   const [guardado, setGuardado] = useState(false);
   const [exportando, setExportando] = useState(false);
+
+  useAtajosTeclado({ "Ctrl+S": () => void guardar() });
 
   useEffect(() => {
     void (async () => {
@@ -136,13 +139,13 @@ export function Configuracion() {
 
         {errores.length > 0 && <div style={s.errorBox}>{errores.join(" ")}</div>}
         {guardado && (
-          <div style={{ ...s.errorBox, background: "#f0fdf4", borderColor: c.verde, color: c.verde }}>
+          <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>
             Configuración guardada.
           </div>
         )}
 
         <div style={s.formFooter}>
-          <button style={s.boton} onClick={guardar}>Guardar configuración</button>
+          <button style={s.boton} onClick={guardar}>Guardar configuración (Ctrl+S)</button>
         </div>
       </div>
 

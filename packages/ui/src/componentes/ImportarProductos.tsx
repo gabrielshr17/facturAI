@@ -3,11 +3,11 @@ import { normalizar, ValidacionError, type ProductoInput } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
 import { s, c, sombra } from "../estilos.js";
 import { parseArchivoProductos, type ArchivoParseado } from "../importacion/parseArchivo.js";
-import { adivinarMapeo, normalizarImpuesto, columnaDe, ETIQUETA_CAMPO, type CampoDestino } from "../importacion/mapeo.js";
+import { adivinarMapeo, normalizarImpuesto, normalizarTipoVenta, columnaDe, ETIQUETA_CAMPO, type CampoDestino } from "../importacion/mapeo.js";
 
 const CAMPOS: CampoDestino[] = [
   "descripcion", "codigo_barra", "costo", "precio_venta", "precio_mayoreo",
-  "impuesto_tipo", "existencia", "departamento", "ignorar",
+  "impuesto_tipo", "existencia", "departamento", "tipo_venta", "unidad_medida", "ignorar",
 ];
 
 type Paso = "seleccion" | "mapeo" | "importando" | "resultado";
@@ -119,6 +119,16 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
           departamento_id = departamentosCache.get(clave) ?? null;
         }
 
+        const unidadRaw = valorDeFila(fila, mapeo, "unidad_medida");
+        const unidad_medida = unidadRaw != null && String(unidadRaw).trim() ? String(unidadRaw).trim() : null;
+        // A diferencia de los demás campos, `normalizarTipoVenta` siempre devuelve un valor concreto
+        // (nunca null/undefined) porque necesita un default ("unidad") para cuando la columna SÍ está
+        // mapeada pero la celda viene vacía. Eso significa que `input.tipo_venta ?? actual.tipo_venta`
+        // en el repo nunca caería al valor existente si mandáramos ese default también cuando la
+        // columna NO está mapeada — una actualización masiva sin esa columna resetearía a "unidad"
+        // hasta los productos que ya se marcaron a granel a mano. Por eso el `undefined` explícito aquí.
+        const tipoVentaMapeado = columnaDe(mapeo, "tipo_venta") !== undefined;
+
         const input: ProductoInput = {
           descripcion,
           codigo_barra,
@@ -126,6 +136,8 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
           precio_venta: aNumero(valorDeFila(fila, mapeo, "precio_venta")),
           precio_mayoreo: aNumero(valorDeFila(fila, mapeo, "precio_mayoreo")),
           impuesto_tipo: normalizarImpuesto(valorDeFila(fila, mapeo, "impuesto_tipo")),
+          tipo_venta: tipoVentaMapeado ? normalizarTipoVenta(valorDeFila(fila, mapeo, "tipo_venta")) : undefined,
+          unidad_medida,
           departamento_id,
         };
         const existencia = aNumero(valorDeFila(fila, mapeo, "existencia"));
@@ -222,7 +234,7 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
             </label>
 
             {!columnaDe(mapeo, "precio_venta") && !columnaDe(mapeo, "costo") && (
-              <div style={{ background: "#fffbeb", border: "1px solid #f59e0b", color: "#92400e", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 10 }}>
+              <div style={{ background: c.amarilloFondo, border: `1px solid ${c.amarillo}`, color: c.amarillo, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 10 }}>
                 ⚠️ Ninguna columna está asignada a "Precio de venta" ni "Costo": todos los productos se
                 importarán con precio RD$0.00. Revisa el mapeo si tu archivo sí tiene precios.
               </div>
@@ -243,7 +255,7 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
 
         {paso === "resultado" && resultado && (
           <>
-            <div style={{ ...s.errorBox, background: "#f0fdf4", borderColor: c.verde, color: c.verde }}>
+            <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>
               {resultado.creados} creado(s), {resultado.actualizados} actualizado(s), {resultado.omitidos} omitido(s).
             </div>
             {resultado.errores.length > 0 && (
@@ -271,7 +283,7 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
 const overlay: CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(15, 23, 42, 0.45)",
+  background: "var(--sfr-overlay)",
   backdropFilter: "blur(2px)",
   display: "flex",
   alignItems: "center",

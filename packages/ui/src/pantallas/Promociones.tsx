@@ -9,7 +9,8 @@ import {
   ValidacionError,
 } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
-import { s, c } from "../estilos.js";
+import { s, c, money } from "../estilos.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 function hoyIso(): string {
   const d = new Date();
@@ -30,6 +31,12 @@ export function Promociones() {
   const [form, setForm] = useState<PromocionInput | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [errores, setErrores] = useState<string[]>([]);
+
+  useAtajosTeclado({
+    F6: () => nueva(),
+    "Ctrl+S": () => { if (form) void guardar(); },
+    Escape: () => { if (form) setForm(null); },
+  });
 
   async function recargar() {
     setLista(await repo.listar());
@@ -79,7 +86,7 @@ export function Promociones() {
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <button style={s.boton} onClick={nueva}>+ Nueva promoción</button>
+        <button style={s.boton} onClick={nueva}>+ Nueva promoción (F6)</button>
       </div>
 
       {form && (
@@ -88,7 +95,7 @@ export function Promociones() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
               <label style={s.label}>Nombre *</label>
-              <input style={s.input} value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+              <input autoFocus style={s.input} value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
             </div>
             <div>
               <label style={s.label}>Tipo de descuento</label>
@@ -146,8 +153,8 @@ export function Promociones() {
           {errores.length > 0 && <div style={s.errorBox}>{errores.join(" ")}</div>}
 
           <div style={s.formFooter}>
-            <button style={s.boton} onClick={guardar}>Guardar</button>
-            <button style={s.botonSecundario} onClick={() => setForm(null)}>Cancelar</button>
+            <button style={s.boton} onClick={guardar}>Guardar (Ctrl+S)</button>
+            <button style={s.botonSecundario} onClick={() => setForm(null)}>Cancelar (Esc)</button>
           </div>
         </div>
       )}
@@ -173,7 +180,7 @@ export function Promociones() {
               return (
                 <tr key={p.id}>
                   <td style={s.td}>{p.nombre}</td>
-                  <td style={s.tdDerecha}>{p.tipo === "porcentaje" ? `${p.valor}%` : `RD$ ${p.valor.toFixed(2)}`}</td>
+                  <td style={s.tdDerecha}>{p.tipo === "porcentaje" ? `${p.valor}%` : `RD$ ${money(p.valor)}`}</td>
                   <td style={s.td}>
                     {p.aplica_a === "producto"
                       ? listaProductos.find((x) => x.id === p.producto_id)?.descripcion ?? "Producto"
@@ -183,7 +190,7 @@ export function Promociones() {
                   </td>
                   <td style={s.td}>{p.fecha_inicio} – {p.fecha_fin}</td>
                   <td style={s.td}>
-                    <span style={{ ...s.badge, background: vigente ? "#dcfce7" : c.grisClaro, color: vigente ? c.verde : c.gris }}>
+                    <span style={{ ...s.badge, background: vigente ? c.verdeFondo : c.grisClaro, color: vigente ? c.verde : c.gris }}>
                       {p.activa === 0 ? "Inactiva" : vigente ? "Vigente" : "Fuera de vigencia"}
                     </span>
                   </td>

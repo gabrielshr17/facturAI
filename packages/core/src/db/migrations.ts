@@ -442,4 +442,14 @@ export const migrations: Migration[] = [
       CREATE INDEX ix_promocion_vigencia ON promocion(fecha_inicio, fecha_fin);
     `,
   },
+  {
+    id: 9,
+    nombre: "producto_favorito",
+    sql: /* sql */ `
+      -- Favoritos (§ Ventas): productos marcados por el usuario para que
+      -- aparezcan primero al buscar, sin tener que escribir tanto.
+      ALTER TABLE producto ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0;
+      CREATE INDEX ix_producto_favorito ON producto(favorito);
+    `,
+  },
 ];

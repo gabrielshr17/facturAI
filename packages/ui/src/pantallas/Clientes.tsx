@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type Cliente, type ClienteInput, ValidacionError } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
 import { s, c } from "../estilos.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 const VACIO: ClienteInput = {
   nombre: "",
@@ -21,6 +22,15 @@ export function Clientes() {
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [form, setForm] = useState<ClienteInput | null>(null);
   const [errores, setErrores] = useState<string[]>([]);
+
+  const busquedaRef = useRef<HTMLInputElement>(null);
+  const enfocarBusqueda = useCallback(() => busquedaRef.current?.focus(), []);
+  useAtajosTeclado({
+    F10: enfocarBusqueda,
+    F6: () => nuevo(),
+    "Ctrl+S": () => { if (form) void guardar(); },
+    Escape: () => { if (form) setForm(null); },
+  });
 
   async function recargar(filtro = q) {
     setLista(await repo.listar(filtro));
@@ -76,11 +86,13 @@ export function Clientes() {
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
-        <button style={s.boton} onClick={nuevo}>+ Nuevo cliente</button>
+        <button style={s.boton} onClick={nuevo}>+ Nuevo cliente (F6)</button>
         <input
+          ref={busquedaRef}
           style={{ ...s.input, maxWidth: 320 }}
-          placeholder="Buscar por nombre, teléfono o correo…"
+          placeholder="Buscar por nombre, teléfono o correo… (F10)"
           value={q}
+          autoFocus
           onChange={(e) => {
             setQ(e.target.value);
             void recargar(e.target.value);
@@ -95,7 +107,7 @@ export function Clientes() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
               <label style={s.label}>Nombre *</label>
-              <input style={s.input} value={form.nombre}
+              <input autoFocus style={s.input} value={form.nombre}
                 onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
             </div>
             <div>
@@ -144,8 +156,8 @@ export function Clientes() {
           {errores.length > 0 && <div style={s.errorBox}>{errores.join(" ")}</div>}
 
           <div style={s.formFooter}>
-            <button style={s.boton} onClick={guardar}>Guardar</button>
-            <button style={s.botonSecundario} onClick={() => setForm(null)}>Cancelar</button>
+            <button style={s.boton} onClick={guardar}>Guardar (Ctrl+S)</button>
+            <button style={s.botonSecundario} onClick={() => setForm(null)}>Cancelar (Esc)</button>
           </div>
         </div>
       )}

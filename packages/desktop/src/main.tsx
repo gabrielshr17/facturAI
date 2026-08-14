@@ -1,12 +1,13 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AppShell, ProveedorDatos, configurarAdaptadorImpresora } from "@sfr/ui";
+import { AppShell, ProveedorDatos, configurarAdaptadorImpresora, configurarAdaptadorImpresoraTexto } from "@sfr/ui";
 import { migrate, seed, type SqlDriver } from "@sfr/core";
 import { crearTauriSqlDriver } from "./db/tauri-sql-driver.js";
-import { adaptadorImpresoraTauri } from "./impresora/tauri-impresora.js";
+import { adaptadorImpresoraTauri, adaptadorImpresoraTextoTauri } from "./impresora/tauri-impresora.js";
 import "@sfr/ui/estilos-globales.css";
 
 configurarAdaptadorImpresora(adaptadorImpresoraTauri);
+configurarAdaptadorImpresoraTexto(adaptadorImpresoraTextoTauri);
 
 /**
  * Arranque del escritorio: inicializa SQLite (tauri-plugin-sql, archivo real),

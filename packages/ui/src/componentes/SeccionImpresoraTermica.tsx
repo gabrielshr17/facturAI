@@ -101,7 +101,7 @@ export function SeccionImpresoraTermica() {
         </p>
       )}
       {mensaje && (
-        <div style={{ ...s.errorBox, marginTop: 8, ...(mensaje.error ? {} : { background: "#f0fdf4", borderColor: c.verde, color: c.verde }) }}>
+        <div style={{ ...s.errorBox, marginTop: 8, ...(mensaje.error ? {} : { background: c.verdeFondo, borderColor: c.verde, color: c.verde }) }}>
           {mensaje.texto}
         </div>
       )}

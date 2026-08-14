@@ -11,6 +11,7 @@ import type { ReciboDatos } from "./recibo.js";
  *   ESC @         (1B 40)          inicializar impresora
  *   ESC a n       (1B 61 n)        alinear: 0 izq, 1 centro, 2 der
  *   ESC E n       (1B 45 n)        negrita on/off
+ *   GS ! n        (1D 21 n)        tamaño de fuente (n=0x01 doble alto, ancho normal)
  *   GS V m        (1D 56 m)        cortar papel (m=1 corte parcial)
  *   ESC p m t1 t2 (1B 70 00 19 FA) abrir gaveta (pulso al conector RJ11)
  */
@@ -26,7 +27,13 @@ const ETIQUETA_METODO: Record<string, string> = {
 };
 
 function money(n: number): string {
-  return n.toFixed(2);
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Recorta el ruido de punto flotante de cantidades calculadas (ej. monto/precio en la ventanita de
+ *  cantidad específica) antes de imprimirlas — el recibo no debe mostrar "3.3333333333333335". */
+function cantidad(n: number): string {
+  return Number(n.toFixed(4)).toString();
 }
 
 class ConstructorEscPos {
@@ -61,6 +68,11 @@ class ConstructorEscPos {
 
   negrita(activa: boolean): this {
     return this.bytes([ESC, 0x45, activa ? 1 : 0]);
+  }
+
+  /** Doble alto (ancho normal, para no romper el conteo de caracteres por línea de `columnas()`). */
+  tamano(doble: boolean): this {
+    return this.bytes([GS, 0x21, doble ? 0x01 : 0x00]);
   }
 
   separador(ancho: number): this {
@@ -100,7 +112,7 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
   const { negocio, factura, lineas, pagos, cliente, comprobante } = datos;
   const ancho = anchoCaracteres(negocio.ancho_impresora_default);
   const fecha = new Date(factura.fecha_hora);
-  const b = new ConstructorEscPos().init();
+  const b = new ConstructorEscPos().init().tamano(true);
 
   b.alinear("centro").negrita(true).linea(negocio.nombre_comercial).negrita(false);
   if (negocio.rnc) b.linea(`RNC: ${negocio.rnc}`);
@@ -125,7 +137,7 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
   b.separador(ancho);
   for (const l of lineas) {
     b.linea(l.descripcion);
-    b.columnas(`${l.cantidad} x ${money(l.precio_unitario)}`, money(l.subtotal), ancho);
+    b.columnas(`${cantidad(l.cantidad)} x ${money(l.precio_unitario)}`, money(l.subtotal), ancho);
   }
   b.separador(ancho);
 
@@ -164,6 +176,7 @@ export function generarTicketPrueba(): Uint8Array {
   const ahora = new Date();
   return new ConstructorEscPos()
     .init()
+    .tamano(true)
     .alinear("centro")
     .negrita(true)
     .linea("PRUEBA DE IMPRESION")

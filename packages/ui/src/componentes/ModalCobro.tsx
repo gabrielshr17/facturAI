@@ -1,6 +1,7 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { type MetodoPago, type TipoEcf, ETIQUETA_TIPO_ECF, tipoEcfSugerido, procesarCobro } from "@sfr/core";
-import { s, c, sombra } from "../estilos.js";
+import { s, c, sombra, money } from "../estilos.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 const METODOS: { valor: MetodoPago; etiqueta: string }[] = [
   { valor: "efectivo", etiqueta: "Efectivo" },
@@ -59,13 +60,11 @@ export function ModalCobro({
   const [receptorTipo, setReceptorTipo] = useState<"rnc" | "cedula">(clienteDocumentoTipo ?? "rnc");
   const [receptorNumero, setReceptorNumero] = useState(clienteDocumentoNumero ?? "");
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancelar();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCancelar]);
+  useAtajosTeclado({
+    Escape: onCancelar,
+    F1: () => { if (!guardando) void confirmar(true); },
+    F2: () => { if (!guardando) void confirmar(false); },
+  });
 
   const pagos = filas.map((f) => ({ metodo: f.metodo, monto: Number(f.monto) || 0 }));
   const resultado = procesarCobro(total, pagos);
@@ -83,7 +82,7 @@ export function ModalCobro({
   async function confirmar(imprimir: boolean) {
     setError(null);
     if (!resultado.suficiente) {
-      setError(`Falta por pagar RD$ ${resultado.faltante.toFixed(2)}.`);
+      setError(`Falta por pagar RD$ ${money(resultado.faltante)}.`);
       return;
     }
     if (emitirFiscal && tipoEcf === "31" && !receptorNumero.trim()) {
@@ -110,7 +109,7 @@ export function ModalCobro({
         <h3 style={{ marginTop: 0, marginBottom: 4 }}>💳 Cobrar</h3>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${c.borde}` }}>
           <span style={{ color: c.gris, fontSize: 14 }}>{cantidadArticulos} artículo(s)</span>
-          <span style={{ fontSize: 24, fontWeight: 700, color: c.texto }}>RD$ {total.toFixed(2)}</span>
+          <span style={{ fontSize: 24, fontWeight: 700, color: c.texto }}>RD$ {money(total)}</span>
         </div>
 
         {filas.map((f, i) => (
@@ -127,6 +126,8 @@ export function ModalCobro({
             <input
               style={{ ...s.input, width: 120 }}
               type="number"
+              autoFocus={i === 0}
+              onFocus={(e) => e.target.select()}
               value={f.monto}
               onChange={(e) => actualizarFila(i, { monto: e.target.value })}
             />
@@ -140,18 +141,18 @@ export function ModalCobro({
         </button>
 
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: c.gris, marginBottom: 8 }}>
-          <span>Pagado</span><span>RD$ {resultado.montoPagado.toFixed(2)}</span>
+          <span>Pagado</span><span>RD$ {money(resultado.montoPagado)}</span>
         </div>
         <div
           style={{
             display: "flex", justifyContent: "space-between", alignItems: "center",
             fontSize: 18, fontWeight: 700, borderRadius: 8, padding: "10px 14px", marginBottom: 14,
-            background: resultado.suficiente ? "#f0fdf4" : "#fef2f2",
+            background: resultado.suficiente ? c.verdeFondo : c.rojoFondo,
             color: resultado.suficiente ? c.verde : c.rojo,
           }}
         >
           <span>{resultado.suficiente ? "Cambio" : "Falta"}</span>
-          <span>RD$ {(resultado.suficiente ? resultado.cambio : resultado.faltante).toFixed(2)}</span>
+          <span>RD$ {money(resultado.suficiente ? resultado.cambio : resultado.faltante)}</span>
         </div>
 
         <label style={{ ...s.label, display: "flex", alignItems: "center", gap: 8 }}>
@@ -187,10 +188,10 @@ export function ModalCobro({
 
         <div style={s.formFooter}>
           <button style={s.boton} disabled={guardando} onClick={() => confirmar(true)}>
-            Cobrar e imprimir
+            Cobrar e imprimir (F1)
           </button>
           <button style={s.botonSecundario} disabled={guardando} onClick={() => confirmar(false)}>
-            Cobrar sin imprimir
+            Cobrar sin imprimir (F2)
           </button>
           <button style={s.botonSecundario} disabled={guardando} onClick={onCancelar}>
             Cancelar (Esc)
@@ -204,7 +205,7 @@ export function ModalCobro({
 const overlay: CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(15, 23, 42, 0.45)",
+  background: "var(--sfr-overlay)",
   backdropFilter: "blur(2px)",
   display: "flex",
   alignItems: "center",

@@ -22,6 +22,32 @@ export function hayImpresoraTermicaDisponible(): boolean {
   return adaptador !== null;
 }
 
+/**
+ * Segundo mecanismo silencioso (§ impresión), para cuando no hay térmica
+ * ESC/POS configurada: imprime texto plano directo al driver GDI de
+ * cualquier impresora Windows instalada (o la predeterminada), sin el
+ * diálogo del sistema. Solo existe en el escritorio (Tauri); en la PWA
+ * queda `null` y `recibo.ts` cae al `window.print()` del navegador.
+ */
+export interface AdaptadorImpresoraTexto {
+  imprimir: (lineas: string[]) => Promise<void>;
+}
+
+let adaptadorTexto: AdaptadorImpresoraTexto | null = null;
+
+export function configurarAdaptadorImpresoraTexto(a: AdaptadorImpresoraTexto | null): void {
+  adaptadorTexto = a;
+}
+
+export function hayImpresionTextoDisponible(): boolean {
+  return adaptadorTexto !== null;
+}
+
+export async function imprimirTexto(lineas: string[]): Promise<void> {
+  if (!adaptadorTexto) throw new Error("La impresión de texto genérica no está disponible en esta plataforma.");
+  await adaptadorTexto.imprimir(lineas);
+}
+
 export async function listarImpresorasTermicas(): Promise<string[]> {
   if (!adaptador) return [];
   return adaptador.listar();

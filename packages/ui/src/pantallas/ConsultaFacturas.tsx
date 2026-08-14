@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   type Factura,
   type FacturaLinea,
@@ -10,9 +10,10 @@ import {
   normalizar,
 } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
-import { s, c } from "../estilos.js";
+import { s, c, money } from "../estilos.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
 import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 /** Fila enriquecida con los datos que no vienen directo en `factura` (§ Consulta de facturas). */
 interface FilaFactura {
@@ -47,6 +48,14 @@ export function ConsultaFacturas() {
   const [mostrarDevolucion, setMostrarDevolucion] = useState(false);
 
   const seleccionada = filas.find((f) => f.factura.id === seleccionadaId) ?? null;
+
+  const busquedaRef = useRef<HTMLInputElement>(null);
+  const enfocarBusqueda = useCallback(() => busquedaRef.current?.focus(), []);
+  useAtajosTeclado({
+    F10: enfocarBusqueda,
+    "Ctrl+P": () => { if (seleccionada) reimprimir(seleccionada); },
+    Escape: () => { if (mostrarDevolucion) setMostrarDevolucion(false); else setSeleccionadaId(null); },
+  });
 
   useEffect(() => {
     void negocioRepo.obtener().then((n) => setNegocio(n ?? null));
@@ -151,8 +160,8 @@ export function ConsultaFacturas() {
             </select>
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={s.label}>Buscar (número, cliente, NCF)</label>
-            <input style={s.input} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+            <label style={s.label}>Buscar (número, cliente, NCF) (F10)</label>
+            <input ref={busquedaRef} style={s.input} value={busqueda} autoFocus onChange={(e) => setBusqueda(e.target.value)} />
           </div>
         </div>
         {error && <div style={s.errorBox}>{error}</div>}
@@ -191,7 +200,7 @@ export function ConsultaFacturas() {
                         : "Normal"}
                     </span>
                   </td>
-                  <td style={s.tdDerecha}>RD$ {f.factura.total.toFixed(2)}</td>
+                  <td style={s.tdDerecha}>RD$ {money(f.factura.total)}</td>
                   <td style={s.td}>
                     <button
                       style={s.botonSecundario}
@@ -226,27 +235,27 @@ export function ConsultaFacturas() {
                 {lineasSel.map((l) => (
                   <tr key={l.id}>
                     <td style={s.td}>{l.descripcion} × {l.cantidad}</td>
-                    <td style={s.tdDerecha}>RD$ {l.subtotal.toFixed(2)}</td>
+                    <td style={s.tdDerecha}>RD$ {money(l.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 16, borderTop: `1px solid ${c.borde}`, paddingTop: 8, marginTop: 8 }}>
-              <span>Total</span><span>RD$ {seleccionada.factura.total.toFixed(2)}</span>
+              <span>Total</span><span>RD$ {money(seleccionada.factura.total)}</span>
             </div>
 
             <div style={{ marginTop: 8 }}>
               {pagosSel.map((p) => (
                 <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: c.gris }}>
-                  <span>{p.metodo}</span><span>RD$ {p.monto.toFixed(2)}</span>
+                  <span>{p.metodo}</span><span>RD$ {money(p.monto)}</span>
                 </div>
               ))}
             </div>
 
             <div style={s.formFooter}>
               <button style={{ ...s.boton, flex: 1 }} onClick={() => reimprimir(seleccionada)}>
-                Reimprimir
+                Reimprimir (Ctrl+P)
               </button>
               <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => setMostrarDevolucion(true)}>
                 Devolver

@@ -8,7 +8,8 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             impresora::listar_impresoras,
-            impresora::imprimir_ticket_termico
+            impresora::imprimir_ticket_termico,
+            impresora::imprimir_texto_generico
         ])
         .run(tauri::generate_context!())
         .expect("error al ejecutar la aplicación Tauri");

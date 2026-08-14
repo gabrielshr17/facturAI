@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { type CorteCaja as CorteCajaTipo, type ResumenPeriodoVentas, calcularCorteCaja, ValidacionError } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
-import { s, c } from "../estilos.js";
+import { s, c, money } from "../estilos.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 /** Fecha local (no UTC): `toISOString` corre el día si la zona horaria está adelantada a UTC. */
 function hoyIso(): string {
@@ -25,6 +26,8 @@ export function CorteCaja() {
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+
+  useAtajosTeclado({ "Ctrl+S": () => { if (resumen && !guardando) void registrarCorte(); } });
 
   const cargarResumen = useCallback(async () => {
     setError(null);
@@ -91,7 +94,7 @@ export function CorteCaja() {
         </div>
         {error && <div style={s.errorBox}>{error}</div>}
         {mensaje && (
-          <div style={{ ...s.errorBox, background: "#f0fdf4", borderColor: c.verde, color: c.verde }}>{mensaje}</div>
+          <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>{mensaje}</div>
         )}
       </div>
 
@@ -103,54 +106,54 @@ export function CorteCaja() {
               <span style={{ color: c.gris }}>Facturas cobradas</span><span>{resumen.cantidadFacturas}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>ITBIS</span><span>RD$ {resumen.totalItbis.toFixed(2)}</span>
+              <span style={{ color: c.gris }}>ITBIS</span><span>RD$ {money(resumen.totalItbis)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 700, borderTop: `1px solid ${c.borde}`, paddingTop: 8, marginBottom: 12 }}>
-              <span>Total ventas</span><span>RD$ {resumen.totalVentas.toFixed(2)}</span>
+              <span>Total ventas</span><span>RD$ {money(resumen.totalVentas)}</span>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>Efectivo</span><span>RD$ {resumen.totalEfectivo.toFixed(2)}</span>
+              <span style={{ color: c.gris }}>Efectivo</span><span>RD$ {money(resumen.totalEfectivo)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>Tarjeta</span><span>RD$ {resumen.totalTarjeta.toFixed(2)}</span>
+              <span style={{ color: c.gris }}>Tarjeta</span><span>RD$ {money(resumen.totalTarjeta)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>Transferencia</span><span>RD$ {resumen.totalTransferencia.toFixed(2)}</span>
+              <span style={{ color: c.gris }}>Transferencia</span><span>RD$ {money(resumen.totalTransferencia)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-              <span style={{ color: c.gris }}>Crédito</span><span>RD$ {resumen.totalCredito.toFixed(2)}</span>
+              <span style={{ color: c.gris }}>Crédito</span><span>RD$ {money(resumen.totalCredito)}</span>
             </div>
           </div>
 
           <div style={s.tarjeta}>
             <h4 style={{ marginTop: 0 }}>💵 Efectivo</h4>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>Fondo inicial</span><span>RD$ {(Number(montoInicial) || 0).toFixed(2)}</span>
+              <span style={{ color: c.gris }}>Fondo inicial</span><span>RD$ {money(Number(montoInicial) || 0)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>+ Ventas en efectivo</span><span>RD$ {resumen.totalEfectivo.toFixed(2)}</span>
+              <span style={{ color: c.gris }}>+ Ventas en efectivo</span><span>RD$ {money(resumen.totalEfectivo)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, borderTop: `1px solid ${c.borde}`, paddingTop: 8, marginBottom: 8 }}>
-              <span>Efectivo esperado</span><span>RD$ {efectivoEsperado.toFixed(2)}</span>
+              <span>Efectivo esperado</span><span>RD$ {money(efectivoEsperado)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 12 }}>
-              <span style={{ color: c.gris }}>Efectivo contado</span><span>RD$ {(Number(efectivoContado) || 0).toFixed(2)}</span>
+              <span style={{ color: c.gris }}>Efectivo contado</span><span>RD$ {money(Number(efectivoContado) || 0)}</span>
             </div>
             <div
               style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
                 fontSize: 18, fontWeight: 700, borderRadius: 8, padding: "10px 14px",
-                background: diferencia === 0 ? "#f0fdf4" : "#fef2f2",
+                background: diferencia === 0 ? c.verdeFondo : c.rojoFondo,
                 color: diferencia === 0 ? c.verde : c.rojo,
               }}
             >
               <span>Diferencia</span>
-              <span>RD$ {diferencia.toFixed(2)}</span>
+              <span>RD$ {money(diferencia)}</span>
             </div>
 
             <button style={{ ...s.boton, width: "100%", marginTop: 16 }} disabled={guardando} onClick={registrarCorte}>
-              Registrar corte
+              Registrar corte (Ctrl+S)
             </button>
           </div>
         </div>
@@ -175,10 +178,10 @@ export function CorteCaja() {
             {historial.map((h) => (
               <tr key={h.id}>
                 <td style={s.td}>{h.fecha_apertura === h.fecha_cierre ? h.fecha_apertura : `${h.fecha_apertura} – ${h.fecha_cierre}`}</td>
-                <td style={s.tdDerecha}>RD$ {h.total_ventas.toFixed(2)}</td>
-                <td style={s.tdDerecha}>RD$ {h.efectivo_esperado.toFixed(2)}</td>
-                <td style={s.tdDerecha}>RD$ {h.efectivo_contado.toFixed(2)}</td>
-                <td style={{ ...s.tdDerecha, color: h.diferencia === 0 ? c.verde : c.rojo, fontWeight: 600 }}>RD$ {h.diferencia.toFixed(2)}</td>
+                <td style={s.tdDerecha}>RD$ {money(h.total_ventas)}</td>
+                <td style={s.tdDerecha}>RD$ {money(h.efectivo_esperado)}</td>
+                <td style={s.tdDerecha}>RD$ {money(h.efectivo_contado)}</td>
+                <td style={{ ...s.tdDerecha, color: h.diferencia === 0 ? c.verde : c.rojo, fontWeight: 600 }}>RD$ {money(h.diferencia)}</td>
               </tr>
             ))}
           </tbody>

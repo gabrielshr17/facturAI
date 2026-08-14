@@ -1,17 +1,40 @@
 import type { CSSProperties } from "react";
 
-/** Paleta y estilos base compartidos por las pantallas del MVP. */
+/**
+ * Formatea un monto para MOSTRAR en pantalla, con separador de miles ("RD$
+ * 1,600.00" en vez de "RD$1600.00"). Solo para texto de solo lectura — NO
+ * usar para el `value` de un `<input type="number">` editable (el navegador
+ * rechaza comas ahí) ni para exportaciones CSV (el valor debe quedar plano
+ * para poder reprocesarse).
+ */
+export function money(n: number): string {
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * Paleta y estilos base compartidos por las pantallas del MVP.
+ *
+ * Los valores son variables CSS (`--sfr-*`, definidas en
+ * `estilos-globales.css`) en vez de hex fijos: así un solo atributo
+ * `data-theme` en `<html>` (ver `tema.ts`) cambia claro/oscuro en toda la
+ * app sin que cada pantalla tenga que saber en qué tema está.
+ */
 export const c = {
-  azul: "#2563eb",
-  azulOscuro: "#1e40af",
-  azulClaro: "#eff6ff",
-  rojo: "#dc2626",
-  verde: "#16a34a",
-  gris: "#6b7280",
-  grisClaro: "#f3f4f6",
-  borde: "#e5e7eb",
-  texto: "#1f2937",
-  fondo: "#f8fafc",
+  azul: "var(--sfr-acento)",
+  azulOscuro: "var(--sfr-acento-oscuro)",
+  azulClaro: "var(--sfr-acento-claro)",
+  rojo: "var(--sfr-peligro)",
+  rojoFondo: "var(--sfr-peligro-fondo)",
+  verde: "var(--sfr-exito)",
+  verdeFondo: "var(--sfr-exito-fondo)",
+  amarillo: "var(--sfr-advertencia)",
+  amarilloFondo: "var(--sfr-advertencia-fondo)",
+  gris: "var(--sfr-gris)",
+  grisClaro: "var(--sfr-gris-claro)",
+  borde: "var(--sfr-borde)",
+  texto: "var(--sfr-texto)",
+  fondo: "var(--sfr-fondo)",
+  superficie: "var(--sfr-superficie)",
 };
 
 /** Sombras sutiles (misma escala que Tailwind shadow-sm/shadow) para dar sensación de elevación a tarjetas y menús. */
@@ -33,7 +56,7 @@ export const s = {
     boxShadow: sombra.sm,
   } as CSSProperties,
   botonSecundario: {
-    background: "white",
+    background: c.superficie,
     color: c.texto,
     border: `1px solid ${c.borde}`,
     borderRadius: 8,
@@ -43,7 +66,7 @@ export const s = {
     cursor: "pointer",
   } as CSSProperties,
   botonPeligro: {
-    background: "white",
+    background: c.superficie,
     color: c.rojo,
     border: `1px solid ${c.rojo}`,
     borderRadius: 8,
@@ -59,7 +82,8 @@ export const s = {
     border: `1px solid ${c.borde}`,
     borderRadius: 8,
     boxSizing: "border-box",
-    background: "white",
+    background: c.superficie,
+    color: c.texto,
   } as CSSProperties,
   label: {
     display: "block",
@@ -121,14 +145,14 @@ export const s = {
     borderTop: `1px solid ${c.borde}`,
   } as CSSProperties,
   tarjeta: {
-    background: "white",
+    background: c.superficie,
     border: `1px solid ${c.borde}`,
     borderRadius: 12,
     padding: 18,
     boxShadow: sombra.sm,
   } as CSSProperties,
   errorBox: {
-    background: "#fef2f2",
+    background: c.rojoFondo,
     border: `1px solid ${c.rojo}`,
     color: c.rojo,
     borderRadius: 8,

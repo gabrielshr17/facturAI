@@ -3,6 +3,7 @@ import {
   type Factura,
   type FacturaLinea,
   type Producto,
+  type ProductoInput,
   type Cliente,
   type Negocio,
   type MetodoPago,
@@ -11,12 +12,14 @@ import {
   aplicarDescuento,
 } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
-import { s, c } from "../estilos.js";
+import { s, c, money, sombra } from "../estilos.js";
 import { ModalCobro, type FiscalInput } from "../componentes/ModalCobro.js";
+import { FormularioProducto } from "../componentes/FormularioProducto.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
 import { abrirGavetaTermica } from "../impresion/termica.js";
 import { BotonVoz } from "../componentes/BotonVoz.js";
 import { ChatBot } from "../componentes/ChatBot.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import type { CSSProperties } from "react";
 
 const stepperBtn: CSSProperties = {
@@ -34,6 +37,12 @@ const stepperBtn: CSSProperties = {
 function hoyIso(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Recorta el ruido de punto flotante (ej. una cantidad calculada como monto/precio puede llegar como
+ *  "3.3333333333333335") para mostrarla en pantalla, sin tocar el valor guardado en la línea. */
+function formatearCantidad(n: number): string {
+  return Number(n.toFixed(4)).toString();
 }
 
 /**
@@ -59,17 +68,43 @@ export function Ventas() {
 
   const [busqueda, setBusqueda] = useState("");
   const [resultados, setResultados] = useState<Producto[]>([]);
+  const [indiceResultado, setIndiceResultado] = useState(-1);
+  // Escape esconde el desplegable de resultados sin perder la búsqueda escrita ni tocar `resultados`
+  // — así se puede ver la lista del ticket debajo por un momento, y en cuanto se sigue escribiendo
+  // (§ buscarProducto) el desplegable vuelve a aparecer solo.
+  const [ocultarResultados, setOcultarResultados] = useState(false);
   const [esMayoreo, setEsMayoreo] = useState(false);
+  const [modalCantidad, setModalCantidad] = useState<{ producto: Producto | null } | null>(null);
+  const [busquedaModalCantidad, setBusquedaModalCantidad] = useState("");
+  const [resultadosModalCantidad, setResultadosModalCantidad] = useState<Producto[]>([]);
+  const [indiceResultadoModalCantidad, setIndiceResultadoModalCantidad] = useState(-1);
+  const [cantidadModalTexto, setCantidadModalTexto] = useState("");
+  const [montoModalTexto, setMontoModalTexto] = useState("");
+  const [modalConsultaAbierto, setModalConsultaAbierto] = useState(false);
+  const [busquedaConsulta, setBusquedaConsulta] = useState("");
+  const [resultadosConsulta, setResultadosConsulta] = useState<Producto[]>([]);
+  const [lineaEditandoId, setLineaEditandoId] = useState<string | null>(null);
+  const [cantidadEditandoInput, setCantidadEditandoInput] = useState("");
+  const [lineaResaltada, setLineaResaltada] = useState<FacturaLinea | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [promoAplicada, setPromoAplicada] = useState<string | null>(null);
 
+  const [editandoProducto, setEditandoProducto] = useState<Producto | null>(null);
+  const [formEdicion, setFormEdicion] = useState<ProductoInput | null>(null);
+  const [erroresEdicion, setErroresEdicion] = useState<string[]>([]);
+
   const [clienteQ, setClienteQ] = useState("");
   const [clienteResultados, setClienteResultados] = useState<Cliente[]>([]);
+  const [indiceResultadoCliente, setIndiceResultadoCliente] = useState(-1);
   const [clienteActivo, setClienteActivo] = useState<Cliente | null>(null);
+  const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false);
+  const [nuevoClienteNombre, setNuevoClienteNombre] = useState("");
+  const [nuevoClienteTelefono, setNuevoClienteTelefono] = useState("");
 
   const [mostrarSuelto, setMostrarSuelto] = useState(false);
   const [sueltoDesc, setSueltoDesc] = useState("");
   const [sueltoPrecio, setSueltoPrecio] = useState("");
+  const [sueltoCantidad, setSueltoCantidad] = useState("1");
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   const [mostrarCobro, setMostrarCobro] = useState(false);
@@ -77,6 +112,66 @@ export function Ventas() {
   const [reimprimiendo, setReimprimiendo] = useState(false);
 
   const activo = tickets.find((t) => t.id === activoId) ?? null;
+
+  const busquedaRef = useRef<HTMLInputElement>(null);
+  const enfocarBusqueda = useCallback(() => busquedaRef.current?.focus(), []);
+
+  useAtajosTeclado({
+    F10: enfocarBusqueda,
+    F12: () => { if (lineas.length > 0) setMostrarCobro(true); },
+    F6: () => void nuevoTicket(),
+    F7: () => setMostrarSuelto((v) => !v),
+    // Apuntando (con el mouse, sin hacer clic) a una línea del ticket: F8 alterna el precio
+    // mayoreo de ESA línea. Si no hay ninguna resaltada, F8 vuelve a su otro significado: el
+    // régimen por defecto para el próximo producto que se agregue.
+    F8: () => { if (lineaResaltada) void alternarMayoreoLinea(lineaResaltada); else setEsMayoreo((v) => !v); },
+    F9: () => abrirConsultaPrecio(),
+    F11: () => abrirModalCantidad(),
+    "Ctrl+P": () => { if (!reimprimiendo) void reimprimirUltimo(); },
+    // "+"/"-" solo se registran mientras hay una línea resaltada: si estuvieran siempre en el
+    // mapa, el hook les haría preventDefault() en CUALQUIER campo de texto (aunque el manejador
+    // no hiciera nada), y esos caracteres dejarían de poderse escribir en toda la pantalla.
+    ...(lineaResaltada
+      ? {
+          "+": () => cambiarCantidad(lineaResaltada, 1),
+          "-": () => cambiarCantidad(lineaResaltada, -1),
+        }
+      : {}),
+  }, !mostrarCobro && !modalCantidad && !modalConsultaAbierto && !formEdicion);
+
+  useAtajosTeclado({
+    Escape: () => cerrarConsultaPrecio(),
+  }, modalConsultaAbierto);
+
+  useAtajosTeclado({
+    Escape: () => cerrarModalCantidad(),
+  }, modalCantidad !== null);
+
+  useAtajosTeclado({
+    Escape: () => cerrarEdicionProducto(),
+    "Ctrl+S": () => void guardarEdicionProducto(),
+  }, formEdicion !== null);
+
+  // Escribir en cualquier parte de la pantalla de Ventas (sin haber hecho clic en la búsqueda
+  // primero) arranca una búsqueda de productos — como el "type-ahead" de Gmail. Si el foco ya está
+  // en OTRO campo de texto (cliente, notas, edición de cantidad, etc.) no se interfiere: esos
+  // campos deben poder recibir su propio tecleo sin que salte a la búsqueda. "+"/"-" se excluyen
+  // a propósito porque ya tienen su propio significado (cambiar cantidad de la línea resaltada).
+  useEffect(() => {
+    if (mostrarCobro || modalCantidad || modalConsultaAbierto || formEdicion) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key.length !== 1 || e.key === "+" || e.key === "-") return;
+      const activo = document.activeElement;
+      const enCampoDeTexto = activo instanceof HTMLInputElement || activo instanceof HTMLTextAreaElement || activo instanceof HTMLSelectElement;
+      if (enCampoDeTexto) return;
+      e.preventDefault();
+      busquedaRef.current?.focus();
+      void buscarProducto(e.key);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mostrarCobro, modalCantidad, modalConsultaAbierto, formEdicion]);
 
   useEffect(() => {
     const id = setInterval(() => setAhora(new Date()), 1000 * 30);
@@ -104,15 +199,56 @@ export function Ventas() {
     cargarTickets().catch((e) => setErrorCarga(String(e)));
   }, [cargarTickets]);
 
+  // `Factura` solo trae `cliente_id` (§ core), así que las pestañas de tickets abiertos resuelven
+  // el nombre del cliente aparte — igual que ya hacía `clienteActivo` para el ticket activo, pero
+  // para todos los tickets abiertos a la vez, para poder nombrar cada pestaña.
+  const [nombreClientePorTicket, setNombreClientePorTicket] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const idsCliente = Array.from(new Set(tickets.map((t) => t.cliente_id).filter((id): id is string => !!id)));
+    if (idsCliente.length === 0) {
+      setNombreClientePorTicket({});
+      return;
+    }
+    void (async () => {
+      const pares = await Promise.all(
+        idsCliente.map(async (id) => [id, await clientes.obtener(id)] as const),
+      );
+      const nombrePorClienteId = new Map(pares.map(([id, cl]) => [id, cl ? `${cl.nombre} ${cl.apellidos ?? ""}`.trim() : null]));
+      const porTicket: Record<string, string> = {};
+      for (const t of tickets) {
+        const nombre = t.cliente_id ? nombrePorClienteId.get(t.cliente_id) : null;
+        if (nombre) porTicket[t.id] = nombre;
+      }
+      setNombreClientePorTicket(porTicket);
+    })();
+  }, [tickets, clientes]);
+
   const cargarLineas = useCallback(async () => {
-    if (!activoId) return setLineas([]);
-    setLineas(await repo.obtenerLineas(activoId));
+    if (!activoId) {
+      setLineas([]);
+      return [] as FacturaLinea[];
+    }
+    const ls = await repo.obtenerLineas(activoId);
+    setLineas(ls);
+    return ls;
   }, [repo, activoId]);
 
   useEffect(() => {
     setError(null);
     cargarLineas().catch((e) => setErrorCarga(String(e)));
   }, [activoId]);
+
+  // Siempre hay una línea "resaltada" mientras el ticket tenga artículos — así F8/+/− (que actúan
+  // sobre `lineaResaltada`) y las flechas arriba/abajo (§ onKeyDown de la búsqueda) siempre tienen
+  // sobre qué línea trabajar, sin depender de que el mouse esté encima de una fila. Si la línea
+  // resaltada ya no existe (se borró, o se cambió de ticket), cae a la primera de la lista.
+  useEffect(() => {
+    setLineaResaltada((actual) => {
+      if (lineas.length === 0) return null;
+      if (actual && lineas.some((l) => l.id === actual.id)) return actual;
+      return lineas[0];
+    });
+  }, [lineas]);
 
   useEffect(() => {
     void (async () => {
@@ -128,7 +264,7 @@ export function Ventas() {
   async function refrescarTicketActivo() {
     const abiertos = await repo.listarAbiertos();
     setTickets(abiertos);
-    await cargarLineas();
+    return await cargarLineas();
   }
 
   async function nuevoTicket() {
@@ -147,36 +283,248 @@ export function Ventas() {
 
   async function buscarProducto(q: string) {
     setBusqueda(q);
-    setResultados(q.trim() ? await productos.listar(q) : []);
+    setOcultarResultados(false);
+    const res = q.trim() ? await productos.listar(q) : [];
+    setResultados(res);
+    setIndiceResultado(res.length > 0 ? 0 : -1);
   }
 
-  async function agregarProducto(p: Producto) {
+  async function agregarProducto(p: Producto, cantidad: number) {
     if (!activoId) return;
     setError(null);
     setPromoAplicada(null);
-    const precioBase = esMayoreo && p.precio_mayoreo != null ? p.precio_mayoreo : p.precio_venta;
+    const base = precioBase(p);
     try {
       const promo = await promocionRepo.obtenerAplicable(p.id, p.departamento_id, hoyIso());
-      const precio = promo ? aplicarDescuento(precioBase, promo) : precioBase;
+      const precio = promo ? aplicarDescuento(base, promo) : base;
       if (promo) {
-        setPromoAplicada(`Promoción aplicada: ${promo.nombre} (RD$ ${precioBase.toFixed(2)} → RD$ ${precio.toFixed(2)})`);
+        setPromoAplicada(`Promoción aplicada: ${promo.nombre} (RD$ ${money(base)} → RD$ ${money(precio)})`);
       }
-      await repo.agregarLinea(activoId, {
-        producto_id: p.id,
-        descripcion: p.descripcion,
-        cantidad: 1,
-        precioUnitario: precio,
-        esMayoreo,
-        impuestoTipo: p.impuesto_tipo,
-        tasaImpuesto: p.tasa_impuesto,
-      });
+      // Si el mismo producto ya está en el ticket con el mismo precio (mismo
+      // régimen mayoreo/promo), suma a esa línea en vez de crear una repetida.
+      const existente = lineas.find(
+        (l) => l.producto_id === p.id && l.es_mayoreo === (esMayoreo ? 1 : 0) && l.precio_unitario === precio,
+      );
+      let lineaId: string;
+      if (existente) {
+        await repo.actualizarCantidadLinea(existente.id, existente.cantidad + cantidad);
+        lineaId = existente.id;
+      } else {
+        const nueva = await repo.agregarLinea(activoId, {
+          producto_id: p.id,
+          descripcion: p.descripcion,
+          cantidad,
+          precioUnitario: precio,
+          esMayoreo,
+          impuestoTipo: p.impuesto_tipo,
+          tasaImpuesto: p.tasa_impuesto,
+        });
+        lineaId = nueva.id;
+      }
       setBusqueda("");
       setResultados([]);
-      await refrescarTicketActivo();
+      setIndiceResultado(-1);
+      // El producto recién agregado (o la línea a la que se sumó) queda "resaltado" para poder
+      // ajustar cantidad/mayoreo con +/−/F8 sin tocar el mouse — el foco del teclado se queda en
+      // la búsqueda (para seguir escaneando), y las flechas arriba/abajo desde ahí mueven el
+      // resaltado entre líneas (§ onKeyDown de la búsqueda).
+      const lineasNuevas = await refrescarTicketActivo();
+      const destino = lineasNuevas.find((x) => x.id === lineaId) ?? null;
+      setLineaResaltada(destino);
+      enfocarBusqueda();
     } catch (e) {
       setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
     }
   }
+
+  /** Precio unitario a usar para un producto según el régimen mayoreo activo (botón "Precio
+   *  mayoreo"/F8). Sin promoción — esa se resuelve de forma asíncrona dentro de `agregarProducto`
+   *  al confirmar. */
+  function precioBase(p: Producto): number {
+    return esMayoreo && p.precio_mayoreo ? p.precio_mayoreo : p.precio_venta;
+  }
+
+  /** Punto de entrada al elegir un producto desde la búsqueda principal (clic en resultado, código de
+   *  barra exacto, o único resultado + Enter). Los productos a granel (§ venta a granel) no tienen una
+   *  cantidad implícita: se abre la ventanita de cantidad específica en vez de agregar 1 unidad de una vez. */
+  function seleccionarProducto(p: Producto) {
+    if (p.tipo_venta === "granel") {
+      elegirProductoModalCantidad(p);
+      return;
+    }
+    void agregarProducto(p, 1);
+  }
+
+  /** Abre el "Modificar" (§ botón en la búsqueda): corrige un producto sin salir del ticket que se
+   *  está armando, para poder corregir un precio equivocado y agregarlo enseguida. */
+  function abrirEdicionProducto(p: Producto) {
+    setEditandoProducto(p);
+    setFormEdicion({
+      descripcion: p.descripcion,
+      codigo_barra: p.codigo_barra ?? "",
+      tipo_venta: p.tipo_venta,
+      unidad_medida: p.unidad_medida ?? "",
+      costo: p.costo,
+      pct_ganancia: p.pct_ganancia,
+      precio_venta: p.precio_venta,
+      precio_mayoreo: p.precio_mayoreo,
+      impuesto_tipo: p.impuesto_tipo,
+      politica_sin_existencia: p.politica_sin_existencia,
+    });
+    setErroresEdicion([]);
+  }
+
+  function cerrarEdicionProducto() {
+    setEditandoProducto(null);
+    setFormEdicion(null);
+    setErroresEdicion([]);
+  }
+
+  async function guardarEdicionProducto() {
+    if (!editandoProducto || !formEdicion) return;
+    try {
+      await productos.actualizar(editandoProducto.id, formEdicion);
+      cerrarEdicionProducto();
+      await buscarProducto(busqueda);
+    } catch (e) {
+      setErroresEdicion(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje) : [String(e)]);
+    }
+  }
+
+  /** Abre la ventanita "Agregar cantidad específica" (§ botón dedicado) empezando por la búsqueda del producto. */
+  function abrirModalCantidad() {
+    setModalCantidad({ producto: null });
+    setBusquedaModalCantidad("");
+    setResultadosModalCantidad([]);
+    setIndiceResultadoModalCantidad(-1);
+  }
+
+  /** Busca con un pequeño debounce y, en cuanto el texto deja un solo producto posible, pasa directo
+   *  a cantidad/monto — sin esperar Enter ni un clic, para poder usar esta ventanita solo con el
+   *  teclado. El debounce (en vez de buscar en cada tecla) es a propósito: si el cambio de foco a la
+   *  ventanita de cantidad ocurriera a mitad de una racha de teclas (tipeo rápido o un escáner de
+   *  código de barra, que dispara teclas mucho más rápido que el round-trip de `productos.listar`),
+   *  las teclas que quedan en vuelo terminan escribiéndose en el campo que recién ganó el foco. Esperar
+   *  a una pausa evita esa condición de carrera por completo. */
+  useEffect(() => {
+    if (!modalCantidad || modalCantidad.producto) return;
+    const q = busquedaModalCantidad;
+    if (!q.trim()) {
+      setResultadosModalCantidad([]);
+      setIndiceResultadoModalCantidad(-1);
+      return;
+    }
+    const id = setTimeout(() => {
+      void productos.listar(q).then((resultados) => {
+        setResultadosModalCantidad(resultados);
+        setIndiceResultadoModalCantidad(-1);
+        if (resultados.length === 1) elegirProductoModalCantidad(resultados[0]);
+      });
+    }, 250);
+    return () => clearTimeout(id);
+  }, [busquedaModalCantidad, modalCantidad, productos]);
+
+  // Cuál de los dos campos escribió la persona por último: es el que manda al confirmar. El otro es
+  // solo una vista previa calculada — mostrarlo redondeado a 2 decimales está bien para leer en
+  // pantalla, pero si se usara ese texto YA REDONDEADO como la cantidad real a cobrar, el redondeo se
+  // arrastra al total (p.ej. pedir "RD$500 de queso" podía terminar cobrando RD$499.10). Por eso
+  // `confirmarModalCantidad` recalcula desde el campo autoritativo con precisión completa, no desde el
+  // texto ya redondeado del campo derivado.
+  const [campoModalActivo, setCampoModalActivo] = useState<"cantidad" | "monto">("cantidad");
+
+  /** Producto ya elegido (desde la búsqueda de la ventanita, o directo si es a granel): pasa al paso de cantidad/monto.
+   *  Cantidad arranca en "1" (Enter agrega una unidad de una vez) y con foco+selección — así, si en
+   *  vez de aceptar la unidad se empieza a escribir, lo tecleado reemplaza el "1" en vez de sumarse. */
+  function elegirProductoModalCantidad(p: Producto) {
+    setModalCantidad({ producto: p });
+    setCampoModalActivo("cantidad");
+    const precio = precioBase(p);
+    setCantidadModalTexto("1");
+    setMontoModalTexto(precio > 0 ? precio.toFixed(2) : "");
+  }
+
+  function cambiarCantidadModal(texto: string) {
+    setCampoModalActivo("cantidad");
+    setCantidadModalTexto(texto);
+    const p = modalCantidad?.producto;
+    const cantidad = Number(texto);
+    if (p && Number.isFinite(cantidad)) {
+      const precio = precioBase(p);
+      setMontoModalTexto(precio > 0 ? (cantidad * precio).toFixed(2) : "");
+    }
+  }
+
+  function cambiarMontoModal(texto: string) {
+    setCampoModalActivo("monto");
+    setMontoModalTexto(texto);
+    const p = modalCantidad?.producto;
+    const monto = Number(texto);
+    const precio = p ? precioBase(p) : 0;
+    if (p && Number.isFinite(monto) && precio > 0) {
+      setCantidadModalTexto((monto / precio).toFixed(2));
+    }
+  }
+
+  function cerrarModalCantidad() {
+    setModalCantidad(null);
+    setBusquedaModalCantidad("");
+    setResultadosModalCantidad([]);
+    setCantidadModalTexto("");
+    setMontoModalTexto("");
+    enfocarBusqueda();
+  }
+
+  /** Cantidad real a agregar: si el último campo tocado fue "monto", se recalcula aquí con precisión
+   *  completa (monto / precio) en vez de usar el texto de `cantidadModalTexto`, que solo existe
+   *  redondeado a 2 decimales para mostrarse en pantalla. */
+  function cantidadFinalModal(): number {
+    const p = modalCantidad?.producto;
+    if (!p) return 0;
+    if (campoModalActivo === "monto") {
+      const precio = precioBase(p);
+      const monto = Number(montoModalTexto);
+      return precio > 0 && monto > 0 ? monto / precio : 0;
+    }
+    return Number(cantidadModalTexto) || 0;
+  }
+
+  async function confirmarModalCantidad() {
+    const p = modalCantidad?.producto;
+    if (!p) return;
+    const cantidad = cantidadFinalModal();
+    if (!(cantidad > 0)) return;
+    cerrarModalCantidad();
+    await agregarProducto(p, cantidad);
+  }
+
+  /** Abre la ventanita "Consultar precio" (F9): buscar un producto y ver su precio sin agregarlo al ticket. */
+  function abrirConsultaPrecio() {
+    setModalConsultaAbierto(true);
+    setBusquedaConsulta("");
+    setResultadosConsulta([]);
+  }
+
+  function cerrarConsultaPrecio() {
+    setModalConsultaAbierto(false);
+    setBusquedaConsulta("");
+    setResultadosConsulta([]);
+    enfocarBusqueda();
+  }
+
+  // Mismo debounce que la búsqueda de "Agregar cantidad" (§ useEffect de buscarModalCantidad):
+  // evita que la ventanita reaccione a mitad de una racha de teclas.
+  useEffect(() => {
+    if (!modalConsultaAbierto) return;
+    const q = busquedaConsulta;
+    if (!q.trim()) {
+      setResultadosConsulta([]);
+      return;
+    }
+    const id = setTimeout(() => {
+      void productos.listar(q).then(setResultadosConsulta);
+    }, 250);
+    return () => clearTimeout(id);
+  }, [busquedaConsulta, modalConsultaAbierto, productos]);
 
   async function agregarSuelto() {
     if (!activoId) return;
@@ -185,13 +533,14 @@ export function Ventas() {
       await repo.agregarLinea(activoId, {
         producto_id: null,
         descripcion: sueltoDesc,
-        cantidad: 1,
+        cantidad: Math.max(1, Number(sueltoCantidad) || 1),
         precioUnitario: Number(sueltoPrecio) || 0,
         impuestoTipo: "itbis18",
         tasaImpuesto: 0.18,
       });
       setSueltoDesc("");
       setSueltoPrecio("");
+      setSueltoCantidad("1");
       setMostrarSuelto(false);
       await refrescarTicketActivo();
     } catch (e) {
@@ -199,26 +548,90 @@ export function Ventas() {
     }
   }
 
-  async function cambiarCantidad(l: FacturaLinea, delta: number) {
-    const nueva = l.cantidad + delta;
-    if (nueva <= 0) return eliminarLinea(l);
+  async function establecerCantidad(l: FacturaLinea, cantidad: number) {
+    if (!(cantidad > 0)) return eliminarLinea(l);
     setError(null);
     try {
-      await repo.actualizarCantidadLinea(l.id, nueva);
+      await repo.actualizarCantidadLinea(l.id, cantidad);
       await refrescarTicketActivo();
     } catch (e) {
       setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
     }
   }
 
+  function cambiarCantidad(l: FacturaLinea, delta: number) {
+    return establecerCantidad(l, l.cantidad + delta);
+  }
+
+  /** Mueve el resaltado de línea con las flechas arriba/abajo (§ contenedor `lineasRef`), partiendo
+   *  de la línea actual si hay una, o del extremo correspondiente si no hay ninguna resaltada. */
+  function moverResaltado(delta: number) {
+    if (lineas.length === 0) return;
+    const idx = lineaResaltada ? lineas.findIndex((x) => x.id === lineaResaltada.id) : -1;
+    const siguiente = idx === -1 ? (delta > 0 ? 0 : lineas.length - 1) : Math.min(Math.max(idx + delta, 0), lineas.length - 1);
+    setLineaResaltada(lineas[siguiente]);
+  }
+
+  function editarCantidad(l: FacturaLinea) {
+    setLineaEditandoId(l.id);
+    setCantidadEditandoInput(formatearCantidad(l.cantidad));
+  }
+
+  async function confirmarEdicionCantidad(l: FacturaLinea) {
+    const cantidad = Number(cantidadEditandoInput);
+    setLineaEditandoId(null);
+    if (!Number.isFinite(cantidad)) return;
+    await establecerCantidad(l, cantidad);
+  }
+
   async function eliminarLinea(l: FacturaLinea) {
     await repo.eliminarLinea(l.id);
+    // No hace falta soltar `lineaResaltada` a mano aquí: el efecto que la mantiene siempre válida
+    // (§ arriba) la reconcilia en cuanto `lineas` se actualiza, cayendo a otra línea si existía.
     await refrescarTicketActivo();
+  }
+
+  /** Alterna el precio mayoreo de una línea ya agregada (§ resaltar con el mouse + F8, sin clic):
+   *  recalcula el precio con el producto actual y, si ya hay otra línea con ese mismo régimen/precio,
+   *  fusiona en vez de dejar dos líneas — mismo criterio que al agregar por primera vez. */
+  async function alternarMayoreoLinea(l: FacturaLinea) {
+    if (!activoId || !l.producto_id) return; // los artículos sueltos no tienen precio mayoreo
+    setError(null);
+    try {
+      const p = await productos.obtener(l.producto_id);
+      if (!p) return;
+      const nuevoMayoreo = !l.es_mayoreo;
+      const nuevoPrecio = nuevoMayoreo && p.precio_mayoreo ? p.precio_mayoreo : p.precio_venta;
+
+      const existente = lineas.find(
+        (x) => x.id !== l.id && x.producto_id === l.producto_id && x.es_mayoreo === (nuevoMayoreo ? 1 : 0) && x.precio_unitario === nuevoPrecio,
+      );
+      if (existente) {
+        await repo.actualizarCantidadLinea(existente.id, existente.cantidad + l.cantidad);
+        await repo.eliminarLinea(l.id);
+      } else {
+        await repo.eliminarLinea(l.id);
+        await repo.agregarLinea(activoId, {
+          producto_id: l.producto_id,
+          descripcion: l.descripcion,
+          cantidad: l.cantidad,
+          precioUnitario: nuevoPrecio,
+          esMayoreo: nuevoMayoreo,
+          impuestoTipo: l.impuesto_tipo,
+          tasaImpuesto: l.tasa_impuesto,
+        });
+      }
+      setLineaResaltada(null);
+      await refrescarTicketActivo();
+    } catch (e) {
+      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+    }
   }
 
   async function buscarCliente(q: string) {
     setClienteQ(q);
     setClienteResultados(q.trim() ? await clientes.listar(q) : []);
+    setIndiceResultadoCliente(-1);
   }
 
   async function asignarCliente(cl: Cliente | null) {
@@ -228,6 +641,20 @@ export function Ventas() {
     setClienteQ("");
     setClienteResultados([]);
     await refrescarTicketActivo();
+  }
+
+  async function crearClienteRapido() {
+    if (!nuevoClienteNombre.trim()) return;
+    setError(null);
+    try {
+      const cl = await clientes.crear({ nombre: nuevoClienteNombre.trim(), telefono: nuevoClienteTelefono.trim() || null });
+      await asignarCliente(cl);
+      setMostrarNuevoCliente(false);
+      setNuevoClienteNombre("");
+      setNuevoClienteTelefono("");
+    } catch (e) {
+      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+    }
   }
 
   const negocioReciboDefault = {
@@ -281,6 +708,7 @@ export function Ventas() {
     setMostrarCobro(false);
     setActivoId(null);
     await cargarTickets();
+    enfocarBusqueda();
   }
 
   /** Reimprime la última venta cobrada (§7.1). */
@@ -326,20 +754,25 @@ export function Ventas() {
             <button
               key={t.id}
               onClick={() => setActivoId(t.id)}
+              title={nombreClientePorTicket[t.id] ? `Ticket #${t.numero_interno}` : undefined}
               style={{
                 ...s.botonSecundario,
                 borderRadius: 999,
+                maxWidth: 160,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
                 ...(t.id === activoId ? { background: c.azulClaro, color: c.azulOscuro, border: `1px solid ${c.azul}`, fontWeight: 600 } : {}),
               }}
             >
-              Ticket #{t.numero_interno}
+              {nombreClientePorTicket[t.id] ?? `Ticket #${t.numero_interno}`}
             </button>
           ))}
-          <button style={s.botonSecundario} onClick={nuevoTicket}>+ Nuevo ticket</button>
+          <button style={s.botonSecundario} onClick={nuevoTicket}>+ Nuevo ticket (F6)</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button style={s.botonSecundario} disabled={reimprimiendo} onClick={reimprimirUltimo}>
-            Reimprimir último ticket
+            Reimprimir último ticket (Ctrl+P)
           </button>
           <span style={{ color: c.gris, fontSize: 13 }}>
             {ahora.toLocaleDateString("es-DO")} {ahora.toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })}
@@ -356,67 +789,150 @@ export function Ventas() {
           {/* Columna principal: búsqueda + líneas */}
           <div>
             <div style={{ ...s.tarjeta, marginBottom: 12 }}>
+              {/* `position: relative` para que el desplegable de resultados (§ abajo) quede
+                  posicionado ENCIMA del contenido de más abajo (el formulario de suelto, y sobre
+                  todo la tabla de líneas del ticket) en vez de empujarlo hacia abajo cada vez que
+                  aparecen resultados — la lista del ticket no debe moverse mientras se busca. */}
+              <div style={{ position: "relative" }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input
+                  ref={busquedaRef}
                   style={{ ...s.input, fontSize: 15, padding: "11px 14px" }}
-                  placeholder="Escanear código de barra o buscar producto…"
+                  placeholder="Escanear código de barra o buscar producto… (F10)"
                   value={busqueda}
                   autoFocus
                   onChange={(e) => void buscarProducto(e.target.value)}
                   onKeyDown={async (e) => {
+                    if (e.key === "Escape" && resultados.length > 0 && !ocultarResultados) {
+                      e.preventDefault();
+                      setOcultarResultados(true);
+                      return;
+                    }
+                    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && resultados.length > 0 && !ocultarResultados) {
+                      e.preventDefault();
+                      setIndiceResultado((i) => {
+                        const siguiente = e.key === "ArrowDown" ? i + 1 : i - 1;
+                        return Math.min(Math.max(siguiente, 0), resultados.length - 1);
+                      });
+                      return;
+                    }
+                    // Sin un desplegable de resultados visible, arriba/abajo mueve el resaltado
+                    // entre las líneas del ticket — así siempre hay una línea con la que trabajar
+                    // (F8/+/−) sin salir de la búsqueda ni tocar el mouse.
+                    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && lineas.length > 0) {
+                      e.preventDefault();
+                      moverResaltado(e.key === "ArrowDown" ? 1 : -1);
+                      return;
+                    }
                     if (e.key === "Enter" && busqueda.trim()) {
                       const exacto = await productos.porCodigoBarra(busqueda.trim());
-                      if (exacto) void agregarProducto(exacto);
-                      else if (resultados.length === 1) void agregarProducto(resultados[0]);
+                      if (exacto) { seleccionarProducto(exacto); return; }
+                      if (indiceResultado >= 0 && resultados[indiceResultado]) { seleccionarProducto(resultados[indiceResultado]); return; }
+                      if (resultados.length === 1) seleccionarProducto(resultados[0]);
                     }
                   }}
                 />
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, whiteSpace: "nowrap" }}>
-                  <input type="checkbox" checked={esMayoreo} onChange={(e) => setEsMayoreo(e.target.checked)} />
-                  Precio mayoreo
-                </label>
+                <button
+                  style={{
+                    ...s.botonSecundario,
+                    whiteSpace: "nowrap",
+                    ...(esMayoreo ? { background: c.azulClaro, color: c.azulOscuro, border: `1px solid ${c.azul}`, fontWeight: 600 } : {}),
+                  }}
+                  onClick={() => setEsMayoreo((v) => !v)}
+                >
+                  {esMayoreo ? "✓ " : ""}Precio mayoreo (F8)
+                </button>
                 <BotonVoz onResultado={(texto) => void buscarProducto(texto)} />
                 <button style={s.botonSecundario} onClick={() => setMostrarSuelto((v) => !v)}>
-                  + Artículo no registrado
+                  + Artículo no registrado (F7)
+                </button>
+                <button style={s.botonSecundario} onClick={abrirModalCantidad}>
+                  🔢 Agregar cantidad (F11)
+                </button>
+                <button style={s.botonSecundario} onClick={abrirConsultaPrecio}>
+                  🔍 Consultar precio (F9)
                 </button>
               </div>
 
-              {resultados.length > 0 && (
-                <div style={{ marginTop: 8, border: `1px solid ${c.borde}`, borderRadius: 8, overflow: "hidden" }}>
-                  {resultados.map((p) => (
+              {resultados.length > 0 && !ocultarResultados && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    marginTop: 8,
+                    background: c.superficie,
+                    border: `1px solid ${c.borde}`,
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    maxHeight: 340,
+                    overflowY: "auto",
+                    boxShadow: sombra.md,
+                    zIndex: 20,
+                  }}
+                >
+                  {resultados.map((p, i) => (
                     <div
                       key={p.id}
                       className="sfr-fila-clickeable"
-                      onClick={() => void agregarProducto(p)}
-                      style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${c.borde}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                      onClick={() => seleccionarProducto(p)}
+                      onMouseEnter={() => setIndiceResultado(i)}
+                      style={{
+                        padding: "10px 12px",
+                        cursor: "pointer",
+                        borderBottom: `1px solid ${c.borde}`,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        ...(i === indiceResultado ? { background: c.azulClaro } : {}),
+                      }}
                     >
                       <span>
+                        {p.favorito === 1 && <span title="Favorito" style={{ color: c.amarillo, marginRight: 4 }}>★</span>}
                         {p.descripcion} {p.codigo_barra ? <span style={{ color: c.gris, fontSize: 12 }}>({p.codigo_barra})</span> : ""}
+                        {p.tipo_venta === "granel" && (
+                          <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo }}>
+                            ⚖️ a granel{p.unidad_medida ? ` (${p.unidad_medida})` : ""}
+                          </span>
+                        )}
                         {negocio?.inventario_activo === 1 && (
                           <span style={{ color: (p.existencia ?? 0) <= 0 ? c.rojo : c.gris, fontSize: 12, marginLeft: 8 }}>
                             {(p.existencia ?? 0) <= 0 ? "⚠ sin existencia" : `${p.existencia} disponibles`}
                           </span>
                         )}
                       </span>
-                      <b style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {(esMayoreo && p.precio_mayoreo != null ? p.precio_mayoreo : p.precio_venta).toFixed(2)}</b>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <b style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(esMayoreo && p.precio_mayoreo ? p.precio_mayoreo : p.precio_venta)}</b>
+                        <button
+                          style={s.botonSecundario}
+                          title="Corregir este producto sin salir del ticket"
+                          onClick={(e) => { e.stopPropagation(); abrirEdicionProducto(p); }}
+                        >
+                          ✏️ Modificar
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
+              </div>
 
               {mostrarSuelto && (
                 <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                  <input style={s.input} placeholder="Descripción" value={sueltoDesc}
+                  <input autoFocus style={s.input} placeholder="Descripción" value={sueltoDesc}
                     onChange={(e) => setSueltoDesc(e.target.value)} />
                   <input style={{ ...s.input, maxWidth: 120 }} placeholder="Precio" type="number" value={sueltoPrecio}
                     onChange={(e) => setSueltoPrecio(e.target.value)} />
+                  <input style={{ ...s.input, maxWidth: 80 }} placeholder="Cant." type="number" min={1} value={sueltoCantidad}
+                    onChange={(e) => setSueltoCantidad(e.target.value)} />
                   <button style={s.boton} onClick={agregarSuelto}>Agregar</button>
                 </div>
               )}
 
               {error && <div style={s.errorBox}>{error}</div>}
               {promoAplicada && (
-                <div style={{ ...s.errorBox, background: "#f0fdf4", borderColor: c.verde, color: c.verde }}>
+                <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>
                   {promoAplicada}
                 </div>
               )}
@@ -438,21 +954,49 @@ export function Ventas() {
                     <tr><td style={s.filaVacia} colSpan={5}>Sin artículos. Escanea o busca un producto arriba.</td></tr>
                   )}
                   {lineas.map((l) => (
-                    <tr key={l.id}>
+                    <tr
+                      key={l.id}
+                      onMouseEnter={() => setLineaResaltada(l)}
+                      title={l.producto_id ? "↑/↓: moverse · +/−: cambiar cantidad · F8: alternar mayoreo (sin hacer clic)" : "↑/↓: moverse · +/−: cambiar cantidad (sin hacer clic)"}
+                      style={lineaResaltada?.id === l.id ? { background: c.azulClaro } : undefined}
+                    >
                       <td style={s.td}>
                         {l.descripcion}
                         {l.es_mayoreo ? <span style={{ ...s.badge, marginLeft: 6 }}>mayoreo</span> : ""}
-                        {!l.producto_id ? <span style={{ ...s.badge, marginLeft: 6, background: "#fef3c7", color: "#92400e" }}>no registrado</span> : ""}
+                        {!l.producto_id ? <span style={{ ...s.badge, marginLeft: 6, background: c.amarilloFondo, color: c.amarillo }}>no registrado</span> : ""}
                       </td>
                       <td style={s.td}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <button style={stepperBtn} onClick={() => cambiarCantidad(l, -1)}>−</button>
-                          <span style={{ minWidth: 18, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{l.cantidad}</span>
+                          {lineaEditandoId === l.id ? (
+                            <input
+                              autoFocus
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={cantidadEditandoInput}
+                              onChange={(e) => setCantidadEditandoInput(e.target.value)}
+                              onBlur={() => void confirmarEdicionCantidad(l)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") void confirmarEdicionCantidad(l);
+                                else if (e.key === "Escape") setLineaEditandoId(null);
+                              }}
+                              style={{ ...s.input, width: 64, padding: "4px 6px", textAlign: "center", fontVariantNumeric: "tabular-nums" }}
+                            />
+                          ) : (
+                            <span
+                              onClick={() => editarCantidad(l)}
+                              title="Clic para modificar la cantidad"
+                              style={{ minWidth: 24, textAlign: "center", fontVariantNumeric: "tabular-nums", cursor: "pointer", borderBottom: `1px dashed ${c.gris}` }}
+                            >
+                              {formatearCantidad(l.cantidad)}
+                            </span>
+                          )}
                           <button style={stepperBtn} onClick={() => cambiarCantidad(l, 1)}>+</button>
                         </div>
                       </td>
-                      <td style={s.tdDerecha}>RD$ {l.precio_unitario.toFixed(2)}</td>
-                      <td style={s.tdDerecha}>RD$ {l.subtotal.toFixed(2)}</td>
+                      <td style={s.tdDerecha}>RD$ {money(l.precio_unitario)}</td>
+                      <td style={s.tdDerecha}>RD$ {money(l.subtotal)}</td>
                       <td style={s.td}>
                         <button style={s.botonPeligro} onClick={() => eliminarLinea(l)}>Borrar</button>
                       </td>
@@ -474,14 +1018,56 @@ export function Ventas() {
                 </div>
               ) : (
                 <>
-                  <input style={s.input} placeholder="Buscar cliente…" value={clienteQ}
-                    onChange={(e) => void buscarCliente(e.target.value)} />
-                  {clienteResultados.map((cl) => (
-                    <div key={cl.id} className="sfr-fila-clickeable" onClick={() => asignarCliente(cl)}
-                      style={{ padding: "8px 6px", cursor: "pointer", fontSize: 14, borderRadius: 6 }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      style={s.input}
+                      placeholder="Buscar cliente…"
+                      value={clienteQ}
+                      onChange={(e) => void buscarCliente(e.target.value)}
+                      onKeyDown={(e) => {
+                        if ((e.key === "ArrowDown" || e.key === "ArrowUp") && clienteResultados.length > 0) {
+                          e.preventDefault();
+                          setIndiceResultadoCliente((i) => {
+                            const siguiente = e.key === "ArrowDown" ? i + 1 : i - 1;
+                            return Math.min(Math.max(siguiente, 0), clienteResultados.length - 1);
+                          });
+                          return;
+                        }
+                        if (e.key === "Enter" && indiceResultadoCliente >= 0 && clienteResultados[indiceResultadoCliente]) {
+                          asignarCliente(clienteResultados[indiceResultadoCliente]);
+                        }
+                      }}
+                    />
+                    <button style={s.botonSecundario} onClick={() => setMostrarNuevoCliente((v) => !v)}>+ Nuevo</button>
+                  </div>
+                  {clienteResultados.map((cl, i) => (
+                    <div
+                      key={cl.id}
+                      className="sfr-fila-clickeable"
+                      onClick={() => asignarCliente(cl)}
+                      onMouseEnter={() => setIndiceResultadoCliente(i)}
+                      style={{
+                        padding: "8px 6px",
+                        cursor: "pointer",
+                        fontSize: 14,
+                        borderRadius: 6,
+                        ...(i === indiceResultadoCliente ? { background: c.azulClaro } : {}),
+                      }}
+                    >
                       {cl.nombre} {cl.apellidos ?? ""}
                     </div>
                   ))}
+                  {mostrarNuevoCliente && (
+                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <input autoFocus style={s.input} placeholder="Nombre del cliente" value={nuevoClienteNombre}
+                        onChange={(e) => setNuevoClienteNombre(e.target.value)} />
+                      <input style={s.input} placeholder="Teléfono (opcional)" value={nuevoClienteTelefono}
+                        onChange={(e) => setNuevoClienteTelefono(e.target.value)} />
+                      <button style={s.boton} disabled={!nuevoClienteNombre.trim()} onClick={crearClienteRapido}>
+                        Crear y asignar
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -489,23 +1075,23 @@ export function Ventas() {
             <div style={s.tarjeta}>
               <h4 style={{ marginTop: 0 }}>💲 Totales</h4>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-                <span style={{ color: c.gris }}>Gravado</span><span>RD$ {activo.subtotal_gravado.toFixed(2)}</span>
+                <span style={{ color: c.gris }}>Gravado</span><span>RD$ {money(activo.subtotal_gravado)}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-                <span style={{ color: c.gris }}>Exento</span><span>RD$ {activo.subtotal_exento.toFixed(2)}</span>
+                <span style={{ color: c.gris }}>Exento</span><span>RD$ {money(activo.subtotal_exento)}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 8 }}>
-                <span style={{ color: c.gris }}>ITBIS</span><span>RD$ {activo.total_itbis.toFixed(2)}</span>
+                <span style={{ color: c.gris }}>ITBIS</span><span>RD$ {money(activo.total_itbis)}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 20, fontWeight: 700, borderTop: `1px solid ${c.borde}`, paddingTop: 10 }}>
-                <span>Total</span><span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {activo.total.toFixed(2)}</span>
+                <span>Total</span><span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(activo.total)}</span>
               </div>
               <button
                 style={{ ...s.boton, width: "100%", marginTop: 14, padding: "13px 18px", fontSize: 16 }}
                 disabled={lineas.length === 0}
                 onClick={() => setMostrarCobro(true)}
               >
-                Cobrar
+                Cobrar (F12)
               </button>
               <button style={{ ...s.botonPeligro, width: "100%", marginTop: 8, border: "none", background: "none" }} onClick={eliminarTicketActivo}>
                 Eliminar ticket
@@ -522,9 +1108,191 @@ export function Ventas() {
           notasIniciales={activo.notas ?? ""}
           clienteDocumentoTipo={clienteActivo?.documento_tipo ?? null}
           clienteDocumentoNumero={clienteActivo?.documento_numero ?? null}
-          onCancelar={() => setMostrarCobro(false)}
+          onCancelar={() => { setMostrarCobro(false); enfocarBusqueda(); }}
           onConfirmar={confirmarCobro}
         />
+      )}
+
+      {modalCantidad && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "var(--sfr-overlay)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
+          onClick={cerrarModalCantidad}
+        >
+          <div style={{ ...s.tarjeta, width: 380, maxWidth: "90vw" }} onClick={(e) => e.stopPropagation()}>
+            {!modalCantidad.producto ? (
+              <>
+                <h3 style={{ marginTop: 0, marginBottom: 12 }}>🔢 Buscar producto</h3>
+                <input
+                  autoFocus
+                  style={s.input}
+                  placeholder="Escanear código de barra o buscar producto…"
+                  value={busquedaModalCantidad}
+                  onChange={(e) => setBusquedaModalCantidad(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && resultadosModalCantidad.length > 0) {
+                      e.preventDefault();
+                      setIndiceResultadoModalCantidad((i) => {
+                        const siguiente = e.key === "ArrowDown" ? i + 1 : i - 1;
+                        return Math.min(Math.max(siguiente, 0), resultadosModalCantidad.length - 1);
+                      });
+                      return;
+                    }
+                    if (e.key === "Enter" && busquedaModalCantidad.trim()) {
+                      const exacto = await productos.porCodigoBarra(busquedaModalCantidad.trim());
+                      if (exacto) { elegirProductoModalCantidad(exacto); return; }
+                      if (indiceResultadoModalCantidad >= 0 && resultadosModalCantidad[indiceResultadoModalCantidad]) {
+                        elegirProductoModalCantidad(resultadosModalCantidad[indiceResultadoModalCantidad]);
+                        return;
+                      }
+                      if (resultadosModalCantidad.length === 1) elegirProductoModalCantidad(resultadosModalCantidad[0]);
+                    }
+                  }}
+                />
+                {resultadosModalCantidad.length > 0 && (
+                  <div style={{ marginTop: 8, border: `1px solid ${c.borde}`, borderRadius: 8, overflow: "hidden", maxHeight: 260, overflowY: "auto" }}>
+                    {resultadosModalCantidad.map((p, i) => (
+                      <div
+                        key={p.id}
+                        className="sfr-fila-clickeable"
+                        onClick={() => elegirProductoModalCantidad(p)}
+                        onMouseEnter={() => setIndiceResultadoModalCantidad(i)}
+                        style={{
+                          padding: "10px 12px",
+                          cursor: "pointer",
+                          borderBottom: `1px solid ${c.borde}`,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          ...(i === indiceResultadoModalCantidad ? { background: c.azulClaro } : {}),
+                        }}
+                      >
+                        <span>
+                          {p.favorito === 1 && <span title="Favorito" style={{ color: c.amarillo, marginRight: 4 }}>★</span>}
+                          {p.descripcion}
+                          {p.tipo_venta === "granel" && (
+                            <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo }}>
+                              ⚖️ a granel{p.unidad_medida ? ` (${p.unidad_medida})` : ""}
+                            </span>
+                          )}
+                        </span>
+                        <b style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(precioBase(p))}</b>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={s.formFooter}>
+                  <button style={s.botonSecundario} onClick={cerrarModalCantidad}>Cancelar (Esc)</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 style={{ marginTop: 0, marginBottom: 4 }}>
+                  {modalCantidad.producto.tipo_venta === "granel" ? "⚖️ " : ""}{modalCantidad.producto.descripcion}
+                </h3>
+                <p style={{ color: c.gris, fontSize: 13, marginTop: 0, marginBottom: 12 }}>
+                  Precio: RD$ {money(precioBase(modalCantidad.producto))}
+                  {modalCantidad.producto.unidad_medida ? ` / ${modalCantidad.producto.unidad_medida}` : ""}
+                </p>
+                <label style={s.label}>
+                  Cantidad{modalCantidad.producto.unidad_medida ? ` (${modalCantidad.producto.unidad_medida})` : ""}
+                </label>
+                <input
+                  autoFocus
+                  onFocus={(e) => e.target.select()}
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  style={{ ...s.input, fontSize: 18, textAlign: "center", fontWeight: 700 }}
+                  value={cantidadModalTexto}
+                  onChange={(e) => cambiarCantidadModal(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void confirmarModalCantidad(); }}
+                />
+                <label style={s.label}>Monto (RD$)</label>
+                <input
+                  onFocus={(e) => e.target.select()}
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  style={{ ...s.input, fontSize: 18, textAlign: "center", fontWeight: 700 }}
+                  value={montoModalTexto}
+                  onChange={(e) => cambiarMontoModal(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void confirmarModalCantidad(); }}
+                />
+                <div style={s.formFooter}>
+                  <button style={s.boton} disabled={!(cantidadFinalModal() > 0)} onClick={() => void confirmarModalCantidad()}>
+                    Agregar
+                  </button>
+                  <button style={s.botonSecundario} onClick={cerrarModalCantidad}>Cancelar (Esc)</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {modalConsultaAbierto && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "var(--sfr-overlay)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
+          onClick={cerrarConsultaPrecio}
+        >
+          <div style={{ ...s.tarjeta, width: 420, maxWidth: "90vw" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0, marginBottom: 12 }}>🔍 Consultar precio</h3>
+            <input
+              autoFocus
+              style={s.input}
+              placeholder="Escanear código de barra o buscar producto…"
+              value={busquedaConsulta}
+              onChange={(e) => setBusquedaConsulta(e.target.value)}
+            />
+            {resultadosConsulta.length > 0 && (
+              <div style={{ marginTop: 8, border: `1px solid ${c.borde}`, borderRadius: 8, overflow: "hidden", maxHeight: 300, overflowY: "auto" }}>
+                {resultadosConsulta.map((p) => (
+                  <div key={p.id} style={{ padding: "10px 12px", borderBottom: `1px solid ${c.borde}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>
+                        {p.descripcion}
+                        {p.tipo_venta === "granel" && (
+                          <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo }}>
+                            ⚖️ a granel{p.unidad_medida ? ` (${p.unidad_medida})` : ""}
+                          </span>
+                        )}
+                      </span>
+                      <b style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(p.precio_venta)}</b>
+                    </div>
+                    {p.precio_mayoreo ? (
+                      <div style={{ fontSize: 12, color: c.gris, marginTop: 2 }}>Mayoreo: RD$ {money(p.precio_mayoreo)}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+            {busquedaConsulta.trim() && resultadosConsulta.length === 0 && (
+              <p style={{ color: c.gris, fontSize: 13, marginTop: 8 }}>Sin resultados.</p>
+            )}
+            <div style={s.formFooter}>
+              <button style={s.botonSecundario} onClick={cerrarConsultaPrecio}>Cerrar (Esc)</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {formEdicion && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "var(--sfr-overlay)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
+          onClick={cerrarEdicionProducto}
+        >
+          <div style={{ width: 640, maxWidth: "90vw", maxHeight: "85vh", overflow: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <FormularioProducto
+              form={formEdicion}
+              onCambiar={setFormEdicion}
+              editando
+              inventarioActivo={negocio?.inventario_activo === 1}
+              errores={erroresEdicion}
+              onGuardar={() => void guardarEdicionProducto()}
+              onCancelar={cerrarEdicionProducto}
+            />
+          </div>
+        </div>
       )}
 
       <ChatBot />

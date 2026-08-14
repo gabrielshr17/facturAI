@@ -47,7 +47,7 @@ export class ValidacionError extends Error {
 
 const COLS = `id, codigo_barra, descripcion, tipo_venta, unidad_medida, costo,
   pct_ganancia, precio_venta, precio_mayoreo, departamento_id, impuesto_tipo,
-  tasa_impuesto, existencia, politica_sin_existencia, activo,
+  tasa_impuesto, existencia, politica_sin_existencia, activo, favorito,
   created_at, updated_at, deleted_at`;
 
 export function crearProductoRepo(db: SqlDriver) {
@@ -85,17 +85,18 @@ export function crearProductoRepo(db: SqlDriver) {
         existencia: null, // inventario off en el MVP
         politica_sin_existencia: input.politica_sin_existencia ?? "advertir",
         activo: input.activo === false ? 0 : 1,
+        favorito: 0,
         created_at: ts,
         updated_at: ts,
         deleted_at: null,
       };
 
       await db.run(
-        `INSERT INTO producto (${COLS}) VALUES (${Array(18).fill("?").join(",")})`,
+        `INSERT INTO producto (${COLS}) VALUES (${Array(19).fill("?").join(",")})`,
         [
           p.id, p.codigo_barra, p.descripcion, p.tipo_venta, p.unidad_medida, p.costo,
           p.pct_ganancia, p.precio_venta, p.precio_mayoreo, p.departamento_id, p.impuesto_tipo,
-          p.tasa_impuesto, p.existencia, p.politica_sin_existencia, p.activo,
+          p.tasa_impuesto, p.existencia, p.politica_sin_existencia, p.activo, p.favorito,
           p.created_at, p.updated_at, p.deleted_at,
         ],
       );
@@ -198,22 +199,35 @@ export function crearProductoRepo(db: SqlDriver) {
       );
     },
 
+    /** Marca/desmarca un producto como favorito (§ Ventas: sube al tope de la búsqueda). */
+    async alternarFavorito(id: string, favorito: boolean): Promise<void> {
+      await db.run("UPDATE producto SET favorito=?, updated_at=? WHERE id=?", [favorito ? 1 : 0, now(), id]);
+    },
+
     /**
      * Lista/busca productos. `q` filtra por descripción o código de barra,
      * ignorando acentos y mayúsculas (búsqueda parcial). El filtro se hace en JS
      * porque SQLite no quita diacríticos; a escala de MVP es suficiente.
+     * Los favoritos siempre van primero (dentro de cada grupo, alfabético) —
+     * así aparecen arriba tanto en el listado completo como en los resultados
+     * de una búsqueda, sin tener que escribir la descripción completa.
      */
     async listar(q?: string): Promise<Producto[]> {
       const todos = await db.all<Producto>(
-        `SELECT ${COLS} FROM producto WHERE deleted_at IS NULL ORDER BY descripcion`,
+        `SELECT ${COLS} FROM producto WHERE deleted_at IS NULL ORDER BY favorito DESC, descripcion`,
       );
       if (!q || !q.trim()) return todos;
-      const t = normalizar(q);
-      return todos.filter(
-        (p) =>
-          normalizar(p.descripcion).includes(t) ||
-          (p.codigo_barra ?? "").toLowerCase().includes(q.trim().toLowerCase()),
-      );
+      // Por palabra, no por substring completo: "tropical carne" debe encontrar "carne de
+      // hamburger tropical" aunque el orden no coincida — cada palabra escrita tiene que
+      // aparecer en algún lugar de la descripción, no todas juntas y en ese orden exacto.
+      const palabras = normalizar(q).split(/\s+/).filter(Boolean);
+      return todos.filter((p) => {
+        const descripcion = normalizar(p.descripcion);
+        return (
+          palabras.every((palabra) => descripcion.includes(palabra)) ||
+          (p.codigo_barra ?? "").toLowerCase().includes(q.trim().toLowerCase())
+        );
+      });
     },
   };
 }

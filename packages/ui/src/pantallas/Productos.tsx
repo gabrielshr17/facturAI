@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   type Producto,
   type ProductoInput,
@@ -7,8 +7,10 @@ import {
   ValidacionError,
 } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
-import { s, c } from "../estilos.js";
+import { s, c, money } from "../estilos.js";
 import { ImportarProductos } from "../componentes/ImportarProductos.js";
+import { FormularioProducto } from "../componentes/FormularioProducto.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 const IMPUESTOS: { valor: ImpuestoTipo; etiqueta: string }[] = [
   { valor: "itbis18", etiqueta: "ITBIS 18%" },
@@ -29,6 +31,8 @@ const ETIQUETA_IMPUESTO: Record<ImpuestoTipo, string> = Object.fromEntries(
 const VACIO: ProductoInput = {
   descripcion: "",
   codigo_barra: "",
+  tipo_venta: "unidad",
+  unidad_medida: "",
   costo: 0,
   pct_ganancia: 0,
   precio_venta: null,
@@ -55,6 +59,15 @@ export function Productos() {
 
   const [mostrarImportar, setMostrarImportar] = useState(false);
   const [pagina, setPagina] = useState(1);
+
+  const busquedaRef = useRef<HTMLInputElement>(null);
+  const enfocarBusqueda = useCallback(() => busquedaRef.current?.focus(), []);
+  useAtajosTeclado({
+    F10: enfocarBusqueda,
+    F6: () => nuevo(),
+    "Ctrl+S": () => { if (form) void guardar(); },
+    Escape: () => { if (form) setForm(null); },
+  });
 
   async function recargar(filtro = q) {
     setLista(await repo.listar(filtro));
@@ -101,6 +114,8 @@ export function Productos() {
     setForm({
       descripcion: p.descripcion,
       codigo_barra: p.codigo_barra ?? "",
+      tipo_venta: p.tipo_venta,
+      unidad_medida: p.unidad_medida ?? "",
       costo: p.costo,
       pct_ganancia: p.pct_ganancia,
       precio_venta: p.precio_venta,
@@ -128,6 +143,12 @@ export function Productos() {
   async function eliminar(p: Producto) {
     if (!confirm(`¿Eliminar "${p.descripcion}"?`)) return;
     await repo.eliminar(p.id);
+    await recargar();
+  }
+
+  /** Favorito: sube el producto al tope de la búsqueda en Ventas (§ F10 / F11). */
+  async function alternarFavorito(p: Producto) {
+    await repo.alternarFavorito(p.id, p.favorito !== 1);
     await recargar();
   }
 
@@ -162,13 +183,15 @@ export function Productos() {
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
-        <button style={s.boton} onClick={nuevo}>+ Nuevo producto</button>
+        <button style={s.boton} onClick={nuevo}>+ Nuevo producto (F6)</button>
         <button style={s.botonSecundario} onClick={() => setMostrarImportar(true)}>Importar productos</button>
         <button style={s.botonSecundario} onClick={exportarCsv} disabled={lista.length === 0}>Exportar CSV</button>
         <input
+          ref={busquedaRef}
           style={{ ...s.input, maxWidth: 320 }}
-          placeholder="Buscar por descripción o código…"
+          placeholder="Buscar por descripción o código… (F10)"
           value={q}
+          autoFocus
           onChange={(e) => {
             setQ(e.target.value);
             void recargar(e.target.value);
@@ -178,114 +201,22 @@ export function Productos() {
       </div>
 
       {form && (
-        <div style={{ ...s.tarjeta, marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>📦 {editando ? "Editar producto" : "Nuevo producto"}</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={s.label}>Descripción *</label>
-              <input
-                style={s.input}
-                value={form.descripcion}
-                onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
-              />
-            </div>
-            <div>
-              <label style={s.label}>Código de barra (opcional)</label>
-              <input
-                style={s.input}
-                value={form.codigo_barra ?? ""}
-                onChange={(e) => setForm({ ...form, codigo_barra: e.target.value })}
-              />
-            </div>
-            <div>
-              <label style={s.label}>Costo</label>
-              <input
-                style={s.input}
-                type="number"
-                value={form.costo ?? 0}
-                onChange={(e) => setForm({ ...form, costo: Number(e.target.value) })}
-              />
-            </div>
-            <div>
-              <label style={s.label}>% Ganancia</label>
-              <input
-                style={s.input}
-                type="number"
-                value={form.pct_ganancia ?? 0}
-                onChange={(e) => setForm({ ...form, pct_ganancia: Number(e.target.value) })}
-              />
-            </div>
-            <div>
-              <label style={s.label}>Precio venta (vacío = automático)</label>
-              <input
-                style={s.input}
-                type="number"
-                value={form.precio_venta ?? ""}
-                placeholder="automático desde costo + %"
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    precio_venta: e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label style={s.label}>Precio mayoreo (opcional)</label>
-              <input
-                style={s.input}
-                type="number"
-                value={form.precio_mayoreo ?? ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    precio_mayoreo: e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label style={s.label}>Impuesto</label>
-              <select
-                style={s.input}
-                value={form.impuesto_tipo}
-                onChange={(e) => setForm({ ...form, impuesto_tipo: e.target.value as ImpuestoTipo })}
-              >
-                {IMPUESTOS.map((i) => (
-                  <option key={i.valor} value={i.valor}>{i.etiqueta}</option>
-                ))}
-              </select>
-            </div>
-            {inventarioActivo && (
-              <div>
-                <label style={s.label}>Si se agota la existencia</label>
-                <select
-                  style={s.input}
-                  value={form.politica_sin_existencia ?? "advertir"}
-                  onChange={(e) => setForm({ ...form, politica_sin_existencia: e.target.value as "bloquear" | "advertir" })}
-                >
-                  <option value="advertir">Advertir y permitir la venta</option>
-                  <option value="bloquear">Bloquear la venta</option>
-                </select>
-              </div>
-            )}
-          </div>
-
-          {errores.length > 0 && (
-            <div style={s.errorBox}>{errores.join(" ")}</div>
-          )}
-
-          <div style={s.formFooter}>
-            <button style={s.boton} onClick={guardar}>Guardar</button>
-            <button style={s.botonSecundario} onClick={() => setForm(null)}>Cancelar</button>
-          </div>
-        </div>
+        <FormularioProducto
+          form={form}
+          onCambiar={setForm}
+          editando={!!editando}
+          inventarioActivo={inventarioActivo}
+          errores={errores}
+          onGuardar={guardar}
+          onCancelar={() => setForm(null)}
+        />
       )}
 
       <div style={s.tarjeta}>
         <table style={s.tabla}>
           <thead>
             <tr>
+              <th style={s.th}></th>
               <th style={s.th}>Descripción</th>
               <th style={s.th}>Código</th>
               <th style={s.th}>Costo</th>
@@ -297,15 +228,24 @@ export function Productos() {
           </thead>
           <tbody>
             {lista.length === 0 && (
-              <tr><td style={s.filaVacia} colSpan={inventarioActivo ? 7 : 6}>Sin productos. Crea el primero con “+ Nuevo producto”.</td></tr>
+              <tr><td style={s.filaVacia} colSpan={inventarioActivo ? 8 : 7}>Sin productos. Crea el primero con “+ Nuevo producto”.</td></tr>
             )}
             {visibles.map((p) => (
               <Fragment key={p.id}>
                 <tr>
+                  <td style={s.td}>
+                    <button
+                      onClick={() => void alternarFavorito(p)}
+                      title={p.favorito === 1 ? "Quitar de favoritos" : "Marcar como favorito"}
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 17, padding: 0, lineHeight: 1, color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4 }}
+                    >
+                      {p.favorito === 1 ? "★" : "☆"}
+                    </button>
+                  </td>
                   <td style={s.td}>{p.descripcion}</td>
                   <td style={s.td}>{p.codigo_barra ?? "—"}</td>
-                  <td style={s.tdDerecha}>RD$ {p.costo.toFixed(2)}</td>
-                  <td style={s.tdDerecha}>RD$ {p.precio_venta.toFixed(2)}</td>
+                  <td style={s.tdDerecha}>RD$ {money(p.costo)}</td>
+                  <td style={s.tdDerecha}>RD$ {money(p.precio_venta)}</td>
                   <td style={s.td}><span style={s.badge}>{ETIQUETA_IMPUESTO[p.impuesto_tipo]}</span></td>
                   {inventarioActivo && (
                     <td style={s.td}>
@@ -343,14 +283,14 @@ export function Productos() {
                 </tr>
                 {errorAjuste && ajustando === p.id && (
                   <tr>
-                    <td style={s.td} colSpan={inventarioActivo ? 7 : 6}>
+                    <td style={s.td} colSpan={inventarioActivo ? 8 : 7}>
                       <div style={s.errorBox}>{errorAjuste}</div>
                     </td>
                   </tr>
                 )}
                 {viendoMovimientos === p.id && (
                   <tr>
-                    <td style={s.td} colSpan={inventarioActivo ? 7 : 6}>
+                    <td style={s.td} colSpan={inventarioActivo ? 8 : 7}>
                       {movimientos.length === 0 ? (
                         <span style={{ color: c.gris, fontSize: 13 }}>Sin movimientos registrados.</span>
                       ) : (

@@ -10,6 +10,9 @@ import { Promociones } from "./pantallas/Promociones.js";
 import { Configuracion } from "./pantallas/Configuracion.js";
 import { ErrorBoundary } from "./componentes/ErrorBoundary.js";
 import { c } from "./estilos.js";
+import { useTema } from "./hooks/useTema.js";
+import { useAtajosTeclado } from "./hooks/useAtajosTeclado.js";
+import { useNavegacionFlechas } from "./hooks/useNavegacionFlechas.js";
 
 type Modulo =
   | "Ventas" | "Productos" | "Clientes" | "Facturas" | "Compras"
@@ -39,6 +42,15 @@ const ICONO: Record<Modulo, string> = {
  */
 export function AppShell({ plataforma }: { plataforma: "Escritorio" | "Web" }) {
   const [activo, setActivo] = useState<Modulo>("Ventas");
+  const [tema, alternarTema] = useTema();
+
+  // Alt+1..Alt+9 cambia de pantalla desde cualquier lugar de la app — junto con
+  // `useNavegacionFlechas` (flechas para moverse entre campos en vez de alterar
+  // valores), es lo que hace posible operar todo el sistema sin mouse.
+  useAtajosTeclado(
+    Object.fromEntries(MODULOS.map((m, i) => [`Alt+${i + 1}`, () => setActivo(m)])),
+  );
+  useNavegacionFlechas();
 
   return (
     <div style={styles.root}>
@@ -48,19 +60,30 @@ export function AppShell({ plataforma }: { plataforma: "Escritorio" | "Web" }) {
             <span style={styles.marcaIcono}>🧮</span>
             <span style={styles.marcaTexto}>Facturación</span>
           </div>
-          <span style={styles.badge}>{plataforma}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={styles.badge}>{plataforma}</span>
+            <button
+              onClick={alternarTema}
+              title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+              style={styles.botonTema}
+            >
+              {tema === "oscuro" ? "☀️" : "🌙"}
+            </button>
+          </div>
         </div>
-        {MODULOS.map((m) => (
+        {MODULOS.map((m, i) => (
           <button
             key={m}
             onClick={() => setActivo(m)}
+            title={`Alt+${i + 1}`}
             style={{
               ...styles.navItem,
               ...(activo === m ? styles.navItemActivo : {}),
             }}
           >
             <span style={{ fontSize: 16 }}>{ICONO[m]}</span>
-            {m}
+            <span style={{ flex: 1 }}>{m}</span>
+            <span style={styles.navAtajo}>{i + 1}</span>
           </button>
         ))}
       </aside>
@@ -95,7 +118,7 @@ const styles: Record<string, CSSProperties> = {
   },
   nav: {
     width: 216,
-    background: "white",
+    background: c.superficie,
     borderRight: `1px solid ${c.borde}`,
     padding: "16px 12px",
     display: "flex",
@@ -113,7 +136,20 @@ const styles: Record<string, CSSProperties> = {
     color: c.azulOscuro,
     borderRadius: 999,
     padding: "3px 10px",
-    alignSelf: "flex-start",
+  },
+  botonTema: {
+    background: "none",
+    border: `1px solid ${c.borde}`,
+    borderRadius: 999,
+    width: 26,
+    height: 26,
+    fontSize: 13,
+    lineHeight: 1,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
   },
   navItem: {
     display: "flex",
@@ -134,6 +170,11 @@ const styles: Record<string, CSSProperties> = {
     borderLeft: `3px solid ${c.azul}`,
     color: c.azulOscuro,
     fontWeight: 600,
+  },
+  navAtajo: {
+    fontSize: 11,
+    color: c.gris,
+    opacity: 0.7,
   },
   main: { flex: 1, padding: "24px 32px", overflow: "auto" },
   titulo: { marginTop: 0, marginBottom: 20, fontSize: 22, letterSpacing: -0.3 },

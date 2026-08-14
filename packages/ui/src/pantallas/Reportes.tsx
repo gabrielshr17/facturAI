@@ -7,7 +7,8 @@ import {
   type ResumenPorMetodo,
 } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
-import { s, c } from "../estilos.js";
+import { s, c, money } from "../estilos.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 function hoyIso(): string {
   const d = new Date();
@@ -60,6 +61,8 @@ export function Reportes() {
 
   useEffect(() => { void cargar(); }, [cargar]);
 
+  useAtajosTeclado({ "Ctrl+E": () => { if (ventasPorDia.length > 0) exportarCsv(); } });
+
   const totalVentas = ventasPorDia.reduce((acc, v) => acc + v.totalVentas, 0);
   const maxVenta = Math.max(1, ...ventasPorDia.map((v) => v.totalVentas));
 
@@ -91,7 +94,7 @@ export function Reportes() {
             <input style={s.input} type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
           </div>
           <button style={s.botonSecundario} onClick={exportarCsv} disabled={ventasPorDia.length === 0}>
-            Exportar CSV
+            Exportar CSV (Ctrl+E)
           </button>
           {cargando && <span style={{ color: c.gris, fontSize: 13 }}>Cargando…</span>}
         </div>
@@ -103,18 +106,18 @@ export function Reportes() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
         <div style={s.tarjeta}>
           <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600 }}>💰 Total ventas</h4>
-          <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>RD$ {totalVentas.toFixed(2)}</div>
+          <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>RD$ {money(totalVentas)}</div>
         </div>
         <div style={s.tarjeta}>
           <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600 }}>📈 Ganancia estimada</h4>
-          <div style={{ fontSize: 26, fontWeight: 700, color: c.verde, fontVariantNumeric: "tabular-nums" }}>RD$ {(ganancia?.gananciaEstimada ?? 0).toFixed(2)}</div>
-          <div style={{ fontSize: 12, color: c.gris }}>Costo estimado: RD$ {(ganancia?.costoEstimado ?? 0).toFixed(2)}</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: c.verde, fontVariantNumeric: "tabular-nums" }}>RD$ {money(ganancia?.gananciaEstimada ?? 0)}</div>
+          <div style={{ fontSize: 12, color: c.gris }}>Costo estimado: RD$ {money(ganancia?.costoEstimado ?? 0)}</div>
         </div>
         <div style={s.tarjeta}>
           <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600 }}>🧾 ITBIS recaudado</h4>
-          <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>RD$ {(itbis?.totalItbis ?? 0).toFixed(2)}</div>
+          <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>RD$ {money(itbis?.totalItbis ?? 0)}</div>
           <div style={{ fontSize: 12, color: c.gris }}>
-            Gravado RD$ {(itbis?.totalGravado ?? 0).toFixed(2)} · Exento RD$ {(itbis?.totalExento ?? 0).toFixed(2)}
+            Gravado RD$ {money(itbis?.totalGravado ?? 0)} · Exento RD$ {money(itbis?.totalExento ?? 0)}
           </div>
         </div>
       </div>
@@ -128,7 +131,7 @@ export function Reportes() {
               <div key={v.fecha}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
                   <span>{v.fecha}</span>
-                  <span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {v.totalVentas.toFixed(2)} ({v.cantidadFacturas})</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(v.totalVentas)} ({v.cantidadFacturas})</span>
                 </div>
                 <div style={{ background: c.grisClaro, borderRadius: 999, height: 7, overflow: "hidden" }}>
                   <div style={{ background: c.azul, borderRadius: 999, height: 7, width: `${(v.totalVentas / maxVenta) * 100}%`, transition: "width 200ms ease" }} />
@@ -140,7 +143,7 @@ export function Reportes() {
           <h4 style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${c.borde}` }}>💳 Ventas por método de pago</h4>
           {porMetodo.map((m) => (
             <div key={m.metodo} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "4px 0" }}>
-              <span>{ETIQUETA_METODO[m.metodo] ?? m.metodo}</span><span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {m.total.toFixed(2)}</span>
+              <span>{ETIQUETA_METODO[m.metodo] ?? m.metodo}</span><span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(m.total)}</span>
             </div>
           ))}
         </div>
@@ -163,7 +166,7 @@ export function Reportes() {
                 <tr key={p.productoId ?? i}>
                   <td style={s.td}>{p.descripcion}</td>
                   <td style={s.tdDerecha}>{p.cantidadVendida}</td>
-                  <td style={s.tdDerecha}>RD$ {p.totalVendido.toFixed(2)}</td>
+                  <td style={s.tdDerecha}>RD$ {money(p.totalVendido)}</td>
                 </tr>
               ))}
             </tbody>
