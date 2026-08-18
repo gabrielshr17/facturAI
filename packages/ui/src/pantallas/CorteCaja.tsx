@@ -3,6 +3,7 @@ import { type CorteCaja as CorteCajaTipo, type ResumenPeriodoVentas, calcularCor
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { filtrarNumero } from "../utilidades/numero.js";
 
 /** Fecha local (no UTC): `toISOString` corre el día si la zona horaria está adelantada a UTC. */
 function hoyIso(): string {
@@ -85,11 +86,11 @@ export function CorteCaja() {
           </div>
           <div>
             <label style={s.label}>Fondo de caja inicial</label>
-            <input style={s.input} type="text" inputMode="decimal" value={montoInicial} onChange={(e) => setMontoInicial(e.target.value)} />
+            <input style={s.input} type="text" inputMode="decimal" value={montoInicial} onChange={(e) => setMontoInicial(filtrarNumero(e.target.value))} />
           </div>
           <div>
             <label style={s.label}>Efectivo contado</label>
-            <input style={s.input} type="text" inputMode="decimal" value={efectivoContado} onChange={(e) => setEfectivoContado(e.target.value)} />
+            <input style={s.input} type="text" inputMode="decimal" value={efectivoContado} onChange={(e) => setEfectivoContado(filtrarNumero(e.target.value))} />
           </div>
         </div>
         {error && <div style={s.errorBox}>{error}</div>}

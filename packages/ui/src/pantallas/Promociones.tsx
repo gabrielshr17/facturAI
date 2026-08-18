@@ -11,6 +11,7 @@ import {
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { filtrarNumero } from "../utilidades/numero.js";
 
 function hoyIso(): string {
   const d = new Date();
@@ -106,7 +107,7 @@ export function Promociones() {
             </div>
             <div>
               <label style={s.label}>Valor</label>
-              <input style={s.input} type="text" inputMode="decimal" value={form.valor} onChange={(e) => setForm({ ...form, valor: Number(e.target.value) || 0 })} />
+              <input style={s.input} type="text" inputMode="decimal" value={form.valor} onChange={(e) => setForm({ ...form, valor: Number(filtrarNumero(e.target.value)) || 0 })} />
             </div>
             <div>
               <label style={s.label}>Aplica a</label>

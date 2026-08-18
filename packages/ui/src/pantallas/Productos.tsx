@@ -13,6 +13,7 @@ import { ImportarProductos } from "../componentes/ImportarProductos.js";
 import { FormularioProducto, diferenciasProducto, type CambioProducto } from "../componentes/FormularioProducto.js";
 import { ModalConfirmarCambios } from "../componentes/ModalConfirmarCambios.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { filtrarNumero } from "../utilidades/numero.js";
 
 const IMPUESTOS: { valor: ImpuestoTipo; etiqueta: string }[] = [
   { valor: "itbis18", etiqueta: "ITBIS 18%" },
@@ -44,7 +45,7 @@ const VACIO: ProductoInput = {
 };
 
 export function Productos() {
-  const { producto: repo, negocio: negocioRepo, movimientoInventario } = useRepos();
+  const { producto: repo, negocio: negocioRepo, movimientoInventario, factura: facturaRepo } = useRepos();
   const [lista, setLista] = useState<Producto[]>([]);
   const [q, setQ] = useState("");
   const [editando, setEditando] = useState<Producto | null>(null);
@@ -152,8 +153,23 @@ export function Productos() {
   async function guardarAhora() {
     if (!form) return;
     try {
-      if (editando) await repo.actualizar(editando.id, form);
-      else await repo.crear(form);
+      if (editando) {
+        await repo.actualizar(editando.id, form);
+        // Un ticket abierto pudo agregar este producto ANTES de la corrección — sin esto se
+        // quedaría cobrando el precio viejo aunque el catálogo ya muestre el nuevo.
+        const actualizado = await repo.obtener(editando.id);
+        if (actualizado) {
+          await facturaRepo.actualizarPrecioEnTicketsAbiertos({
+            productoId: actualizado.id,
+            precioVenta: actualizado.precio_venta,
+            precioMayoreo: actualizado.precio_mayoreo,
+            impuestoTipo: actualizado.impuesto_tipo,
+            tasaImpuesto: actualizado.tasa_impuesto,
+          });
+        }
+      } else {
+        await repo.crear(form);
+      }
       setForm(null);
       setEditando(null);
       setCambiosPendientes(null);
@@ -281,7 +297,7 @@ export function Productos() {
                             type="text"
                             inputMode="decimal"
                             value={nuevaExistencia}
-                            onChange={(e) => setNuevaExistencia(e.target.value)}
+                            onChange={(e) => setNuevaExistencia(filtrarNumero(e.target.value))}
                           />
                           <button style={s.botonSecundario} onClick={() => confirmarAjuste(p)}>OK</button>
                           <button style={s.botonSecundario} onClick={() => setAjustando(null)}>×</button>

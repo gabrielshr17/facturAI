@@ -93,6 +93,28 @@ describe("facturaRepo — armar ticket (§7.1)", () => {
     expect(factura?.total).toBe(20);
   });
 
+  it("restaurar línea revierte el borrado lógico y recalcula (§ deshacer en Ventas)", async () => {
+    const repo = crearFacturaRepo(db);
+    const t = await repo.abrirTicket();
+    const l1 = await repo.agregarLinea(t.id, {
+      descripcion: "A", cantidad: 2, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+    });
+    await repo.agregarLinea(t.id, {
+      descripcion: "B", cantidad: 1, precioUnitario: 20, impuestoTipo: "exento", tasaImpuesto: 0,
+    });
+
+    await repo.eliminarLinea(l1.id);
+    await repo.restaurarLinea(l1.id);
+
+    const lineas = await repo.obtenerLineas(t.id);
+    expect(lineas).toHaveLength(2);
+    const restaurada = lineas.find((l) => l.id === l1.id);
+    expect(restaurada?.cantidad).toBe(2);
+    expect(restaurada?.precio_unitario).toBe(50);
+    const factura = await repo.obtener(t.id);
+    expect(factura?.total).toBe(120);
+  });
+
   it("asigna cliente y notas al ticket", async () => {
     const repo = crearFacturaRepo(db);
     const clientes = crearClienteRepo(db);

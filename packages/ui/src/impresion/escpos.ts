@@ -9,9 +9,10 @@ import type { ReciboDatos } from "./recibo.js";
  * Referencia de comandos usados (estándar Epson ESC/POS, compatible con la
  * inmensa mayoría de térmicas genéricas de 58/80mm):
  *   ESC @         (1B 40)          inicializar impresora
+ *   ESC M n       (1B 4D n)        fuente: 0 = Fuente A (12x24, grande), 1 = Fuente B (9x17, chica)
  *   ESC a n       (1B 61 n)        alinear: 0 izq, 1 centro, 2 der
  *   ESC E n       (1B 45 n)        negrita on/off
- *   GS ! n        (1D 21 n)        tamaño de fuente (n=0x01 doble alto, ancho normal)
+ *   GS ! n        (1D 21 n)        tamaño de fuente (n=0x01 doble alto, n=0x11 doble alto y ancho)
  *   GS V m        (1D 56 m)        cortar papel (m=1 corte parcial)
  *   ESC p m t1 t2 (1B 70 00 19 FA) abrir gaveta (pulso al conector RJ11)
  */
@@ -58,7 +59,11 @@ class ConstructorEscPos {
   }
 
   init(): this {
-    return this.bytes([ESC, 0x40]);
+    // ESC @ reinicia todo; ESC M 0 fuerza la Fuente A (12x24, la más grande de las dos fuentes
+    // estándar de una térmica ESC/POS). Sin esto, algunas impresoras (sobre todo clones) arrancan
+    // en la Fuente B (9x17, más chica y condensada) por defecto, y el recibo sale con letra
+    // diminuta sin que el resto del código tenga forma de saberlo ni corregirlo.
+    return this.bytes([ESC, 0x40, ESC, 0x4d, 0x00]);
   }
 
   alinear(modo: "izq" | "centro" | "der"): this {
@@ -70,18 +75,30 @@ class ConstructorEscPos {
     return this.bytes([ESC, 0x45, activa ? 1 : 0]);
   }
 
-  /** Doble alto (ancho normal, para no romper el conteo de caracteres por línea de `columnas()`). */
-  tamano(doble: boolean): this {
-    return this.bytes([GS, 0x21, doble ? 0x01 : 0x00]);
+  /** Tamaño de fuente: "normal", "alto" (doble alto, ancho normal — no rompe el conteo de
+   *  caracteres por línea de `columnas()`) o "grande" (doble alto Y ancho, para títulos/totales
+   *  cortos que valen la pena resaltar — si se usa junto con `columnas()`, hay que pasarle la
+   *  MITAD del ancho normal, porque cada carácter ahora ocupa el doble de espacio físico). */
+  tamano(modo: "normal" | "alto" | "grande"): this {
+    const n = modo === "normal" ? 0x00 : modo === "alto" ? 0x01 : 0x11;
+    return this.bytes([GS, 0x21, n]);
   }
 
   separador(ancho: number): this {
     return this.linea("-".repeat(ancho));
   }
 
-  /** Dos columnas justificadas a los extremos, como en el HTML `.linea`. */
+  /** Dos columnas justificadas a los extremos, como en el HTML `.linea`. Si no caben en una sola
+   *  línea de `ancho` caracteres, se parte en dos (izquierda arriba, derecha abajo pegada al margen
+   *  derecho) en vez de aplastarlas con un solo espacio de separación — eso último hacía que la
+   *  línea completa excediera el ancho real de la impresora, que la envuelve sola donde le
+   *  convenga (a mitad de un número, casi siempre) y desalinea todo lo que sigue debajo. */
   columnas(izq: string, der: string, ancho: number): this {
-    const espacio = Math.max(1, ancho - izq.length - der.length);
+    if (izq.length + der.length + 1 > ancho) {
+      this.linea(izq);
+      return this.linea(" ".repeat(Math.max(0, ancho - der.length)) + der);
+    }
+    const espacio = ancho - izq.length - der.length;
     return this.linea(izq + " ".repeat(espacio) + der);
   }
 
@@ -112,9 +129,11 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
   const { negocio, factura, lineas, pagos, cliente, comprobante } = datos;
   const ancho = anchoCaracteres(negocio.ancho_impresora_default);
   const fecha = new Date(factura.fecha_hora);
-  const b = new ConstructorEscPos().init().tamano(true);
+  const b = new ConstructorEscPos().init().tamano("alto");
 
-  b.alinear("centro").negrita(true).linea(negocio.nombre_comercial).negrita(false);
+  // El nombre del negocio va a tamaño real doble (alto Y ancho) — es una sola línea corta, así que
+  // se lo puede permitir sin arriesgar el conteo de caracteres de las columnas de más abajo.
+  b.alinear("centro").tamano("grande").negrita(true).linea(negocio.nombre_comercial).negrita(false).tamano("alto");
   if (negocio.rnc) b.linea(`RNC: ${negocio.rnc}`);
   if (negocio.direccion) b.linea(negocio.direccion);
   if (negocio.telefono) b.linea(`Tel: ${negocio.telefono}`);
@@ -144,7 +163,10 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
   b.columnas("Gravado", `RD$ ${money(factura.subtotal_gravado)}`, ancho);
   b.columnas("Exento", `RD$ ${money(factura.subtotal_exento)}`, ancho);
   b.columnas("ITBIS", `RD$ ${money(factura.total_itbis)}`, ancho);
-  b.negrita(true).columnas("TOTAL", `RD$ ${money(factura.total)}`, ancho).negrita(false);
+  // El TOTAL también a tamaño real doble — es el número que el cliente busca primero. A doble
+  // ancho cada carácter ocupa el doble de espacio físico, así que `columnas()` recibe la MITAD
+  // del ancho normal para no exceder el ancho real del papel.
+  b.negrita(true).tamano("grande").columnas("TOTAL", `RD$ ${money(factura.total)}`, Math.floor(ancho / 2)).tamano("alto").negrita(false);
   b.separador(ancho);
 
   for (const p of pagos) {
@@ -176,7 +198,7 @@ export function generarTicketPrueba(): Uint8Array {
   const ahora = new Date();
   return new ConstructorEscPos()
     .init()
-    .tamano(true)
+    .tamano("alto")
     .alinear("centro")
     .negrita(true)
     .linea("PRUEBA DE IMPRESION")

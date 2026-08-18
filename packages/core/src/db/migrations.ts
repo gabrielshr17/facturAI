@@ -452,4 +452,51 @@ export const migrations: Migration[] = [
       CREATE INDEX ix_producto_favorito ON producto(favorito);
     `,
   },
+  {
+    id: 10,
+    nombre: "cotizaciones",
+    sql: /* sql */ `
+      -- Cotizaciones (§ Ventas): precio ofrecido a un cliente antes de la venta.
+      -- A propósito NO es una factura: sin pagos, sin comprobante fiscal, sin
+      -- afectar existencia. "estado" solo distingue vigente/anulada/convertida —
+      -- "vencida" se calcula al mostrarla comparando fecha_vencimiento con hoy,
+      -- no se guarda (evita tener que correr un job para mantenerlo al día).
+      CREATE TABLE cotizacion (
+        id                TEXT PRIMARY KEY,
+        numero_interno    INTEGER,
+        fecha_hora        TEXT NOT NULL,
+        fecha_vencimiento TEXT NOT NULL, -- fecha ISO (date)
+        cliente_id        TEXT REFERENCES cliente(id),
+        usuario_id        TEXT REFERENCES usuario(id),
+        subtotal_gravado  REAL NOT NULL DEFAULT 0,
+        subtotal_exento   REAL NOT NULL DEFAULT 0,
+        total_itbis       REAL NOT NULL DEFAULT 0,
+        total             REAL NOT NULL DEFAULT 0,
+        notas             TEXT,
+        estado            TEXT NOT NULL DEFAULT 'vigente', -- vigente|convertida|anulada
+        factura_id        TEXT REFERENCES factura(id), -- si se convirtió en venta
+        created_at        TEXT NOT NULL,
+        updated_at        TEXT NOT NULL,
+        deleted_at        TEXT
+      );
+      CREATE INDEX ix_cotizacion_fecha ON cotizacion(fecha_hora);
+
+      CREATE TABLE cotizacion_linea (
+        id              TEXT PRIMARY KEY,
+        cotizacion_id   TEXT NOT NULL REFERENCES cotizacion(id),
+        producto_id     TEXT REFERENCES producto(id),
+        descripcion     TEXT NOT NULL,
+        cantidad        REAL NOT NULL DEFAULT 1,
+        precio_unitario REAL NOT NULL DEFAULT 0,
+        impuesto_tipo   TEXT NOT NULL DEFAULT 'itbis18',
+        tasa_impuesto   REAL NOT NULL DEFAULT 0.18,
+        monto_itbis     REAL NOT NULL DEFAULT 0,
+        subtotal        REAL NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        deleted_at      TEXT
+      );
+      CREATE INDEX ix_cotizacion_linea_cotizacion ON cotizacion_linea(cotizacion_id);
+    `,
+  },
 ];

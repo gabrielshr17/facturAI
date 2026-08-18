@@ -1,5 +1,6 @@
 import { type Producto, type ProductoInput, type ImpuestoTipo, type TipoVenta, tasaDe, pctGananciaDesdePrecio, calcularPrecioVenta } from "@sfr/core";
 import { s, money } from "../estilos.js";
+import { filtrarNumero } from "../utilidades/numero.js";
 
 const IMPUESTOS: { valor: ImpuestoTipo; etiqueta: string }[] = [
   { valor: "itbis18", etiqueta: "ITBIS 18%" },
@@ -124,7 +125,7 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             inputMode="decimal"
             value={form.costo ?? 0}
             onChange={(e) => {
-              const costo = Number(e.target.value) || 0;
+              const costo = Number(filtrarNumero(e.target.value)) || 0;
               // Costo, % Ganancia e Impuesto son los "insumos" de la fórmula — cualquiera de los
               // tres recalcula el precio en vivo. Precio venta pasa a ser el insumo (y % Ganancia
               // el reflejo) solo cuando se escribe directamente ahí abajo — así cambiar la ganancia
@@ -143,7 +144,7 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             inputMode="decimal"
             value={form.pct_ganancia ?? 0}
             onChange={(e) => {
-              const pct_ganancia = Number(e.target.value) || 0;
+              const pct_ganancia = Number(filtrarNumero(e.target.value)) || 0;
               const tasa = tasaDe(form.impuesto_tipo ?? "itbis18");
               const precio_venta = calcularPrecioVenta({ costo: form.costo ?? 0, pctGanancia: pct_ganancia, tasaImpuesto: tasa, precioManual: null });
               onCambiar({ ...form, pct_ganancia, precio_venta });
@@ -158,7 +159,8 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             inputMode="decimal"
             value={form.precio_venta ?? ""}
             onChange={(e) => {
-              const precio_venta = e.target.value === "" ? null : Number(e.target.value) || 0;
+              const texto = filtrarNumero(e.target.value);
+              const precio_venta = texto === "" ? null : Number(texto) || 0;
               const pct_ganancia = precio_venta != null
                 ? pctGananciaDesdePrecio(form.costo ?? 0, precio_venta, tasaDe(form.impuesto_tipo ?? "itbis18"))
                 : form.pct_ganancia;
@@ -173,12 +175,13 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             type="text"
             inputMode="decimal"
             value={form.precio_mayoreo ?? ""}
-            onChange={(e) =>
+            onChange={(e) => {
+              const texto = filtrarNumero(e.target.value);
               onCambiar({
                 ...form,
-                precio_mayoreo: e.target.value === "" ? null : Number(e.target.value) || 0,
-              })
-            }
+                precio_mayoreo: texto === "" ? null : Number(texto) || 0,
+              });
+            }}
           />
         </div>
         <div>

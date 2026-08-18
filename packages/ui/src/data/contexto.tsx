@@ -20,6 +20,7 @@ import {
   crearReportesRepo,
   crearPromocionRepo,
   crearBackupRepo,
+  crearCotizacionRepo,
 } from "@sfr/core";
 
 /** Conjunto de repos disponibles para las pantallas. */
@@ -41,6 +42,7 @@ export interface Repos {
   reportes: ReturnType<typeof crearReportesRepo>;
   promocion: ReturnType<typeof crearPromocionRepo>;
   backup: ReturnType<typeof crearBackupRepo>;
+  cotizacion: ReturnType<typeof crearCotizacionRepo>;
   /**
    * *** SIMULADO — no transmite nada real a la DGII. *** Placeholder hasta
    * decidir PAC vs integración directa (ver plan.md). Sustituir aquí por la
@@ -74,6 +76,7 @@ export function ProveedorDatos({ db, children }: { db: SqlDriver; children: Reac
     reportes: crearReportesRepo(db),
     promocion: crearPromocionRepo(db),
     backup: crearBackupRepo(db),
+    cotizacion: crearCotizacionRepo(db),
     proveedorFiscal: crearProveedorFiscalSimulado(),
   };
   return <ReposContext.Provider value={repos}>{children}</ReposContext.Provider>;

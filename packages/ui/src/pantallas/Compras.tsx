@@ -12,6 +12,7 @@ import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { analizarComprobante, type DatosExtraidosComprobante } from "../data/chatbotCliente.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { filtrarNumero } from "../utilidades/numero.js";
 
 interface LineaLocal {
   producto_id: string | null;
@@ -359,7 +360,7 @@ export function Compras() {
           <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
             <input autoFocus style={s.input} placeholder="Descripción" value={sueltoDesc} onChange={(e) => setSueltoDesc(e.target.value)} />
             <input style={{ ...s.input, maxWidth: 140 }} placeholder="Costo unitario" type="text" inputMode="decimal" value={sueltoCosto}
-              onChange={(e) => setSueltoCosto(e.target.value)} />
+              onChange={(e) => setSueltoCosto(filtrarNumero(e.target.value))} />
             <button style={s.boton} onClick={agregarLineaSuelta}>Agregar</button>
           </div>
         )}
@@ -386,11 +387,11 @@ export function Compras() {
                 </td>
                 <td style={s.td}>
                   <input style={{ ...s.input, width: 70 }} type="text" inputMode="decimal" value={l.cantidad}
-                    onChange={(e) => actualizarLinea(i, { cantidad: Number(e.target.value) || 0 })} />
+                    onChange={(e) => actualizarLinea(i, { cantidad: Number(filtrarNumero(e.target.value)) || 0 })} />
                 </td>
                 <td style={s.td}>
                   <input style={{ ...s.input, width: 100 }} type="text" inputMode="decimal" value={l.costoUnitario}
-                    onChange={(e) => actualizarLinea(i, { costoUnitario: Number(e.target.value) || 0 })} />
+                    onChange={(e) => actualizarLinea(i, { costoUnitario: Number(filtrarNumero(e.target.value)) || 0 })} />
                 </td>
                 <td style={s.tdDerecha}>RD$ {money(l.cantidad * l.costoUnitario)}</td>
                 <td style={s.td}><button style={s.botonPeligro} onClick={() => quitarLinea(i)}>Borrar</button></td>

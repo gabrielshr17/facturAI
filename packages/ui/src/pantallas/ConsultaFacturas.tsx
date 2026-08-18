@@ -14,6 +14,13 @@ import { s, c, money } from "../estilos.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
 import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { ConsultaCotizaciones } from "./ConsultaCotizaciones.js";
+
+/** Recorta el ruido de punto flotante antes de mostrar una cantidad (§ recibo.ts) — sin esto, un
+ *  producto a granel como 3+1/3 lb se ve "3.3333333333333335". */
+function cantidad(n: number): string {
+  return Number(n.toFixed(4)).toString();
+}
 
 /** Fila enriquecida con los datos que no vienen directo en `factura` (§ Consulta de facturas). */
 interface FilaFactura {
@@ -29,7 +36,7 @@ const TIPOS: { valor: "" | "normal" | "fiscal"; etiqueta: string }[] = [
 ];
 
 /** Consulta de facturas ya cobradas: filtrar, ver detalle y reimprimir. */
-export function ConsultaFacturas() {
+function FacturasCobradas() {
   const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo } = useRepos();
 
   const [desde, setDesde] = useState("");
@@ -234,7 +241,7 @@ export function ConsultaFacturas() {
               <tbody>
                 {lineasSel.map((l) => (
                   <tr key={l.id}>
-                    <td style={s.td}>{l.descripcion} × {l.cantidad}</td>
+                    <td style={s.td}>{l.descripcion} × {cantidad(l.cantidad)}</td>
                     <td style={s.tdDerecha}>RD$ {money(l.subtotal)}</td>
                   </tr>
                 ))}
@@ -274,6 +281,41 @@ export function ConsultaFacturas() {
           onCompletada={() => void recargarDespuesDeDevolucion()}
         />
       )}
+    </div>
+  );
+}
+
+/** Envuelve facturas cobradas y cotizaciones (§ ConsultaCotizaciones) en una sola pantalla con
+ *  pestañas — evita sumar un décimo ítem al menú lateral, que rompería el esquema de atajos
+ *  Alt+1..9 (§ AppShell). */
+export function ConsultaFacturas() {
+  const [tab, setTab] = useState<"facturas" | "cotizaciones">("facturas");
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        <button
+          onClick={() => setTab("facturas")}
+          style={{
+            ...s.botonSecundario,
+            borderRadius: 999,
+            ...(tab === "facturas" ? { background: c.azulClaro, color: c.azulOscuro, border: `1px solid ${c.azul}`, fontWeight: 600 } : {}),
+          }}
+        >
+          🧾 Facturas
+        </button>
+        <button
+          onClick={() => setTab("cotizaciones")}
+          style={{
+            ...s.botonSecundario,
+            borderRadius: 999,
+            ...(tab === "cotizaciones" ? { background: c.azulClaro, color: c.azulOscuro, border: `1px solid ${c.azul}`, fontWeight: 600 } : {}),
+          }}
+        >
+          📋 Cotizaciones
+        </button>
+      </div>
+      {tab === "facturas" ? <FacturasCobradas /> : <ConsultaCotizaciones />}
     </div>
   );
 }

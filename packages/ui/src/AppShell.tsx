@@ -112,7 +112,7 @@ const styles: Record<string, CSSProperties> = {
   root: {
     display: "flex",
     minHeight: "100vh",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    fontFamily: "'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
     color: c.texto,
     background: c.fondo,
   },

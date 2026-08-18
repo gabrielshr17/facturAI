@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from "react";
 import { type MetodoPago, type TipoEcf, ETIQUETA_TIPO_ECF, tipoEcfSugerido, procesarCobro } from "@sfr/core";
 import { s, c, sombra, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { filtrarNumero } from "../utilidades/numero.js";
 
 const METODOS: { valor: MetodoPago; etiqueta: string }[] = [
   { valor: "efectivo", etiqueta: "Efectivo" },
@@ -23,6 +24,10 @@ export interface FiscalInput {
   receptorDocumentoNumero: string | null;
 }
 
+/** Qué hacer con el recibo al cerrar la venta: imprimirlo (térmica/GDI/navegador, § recibo.ts),
+ *  guardarlo como PDF de verdad (§ impresion/pdf.ts), o nada. */
+export type SalidaCobro = "imprimir" | "pdf" | "ninguna";
+
 export interface ModalCobroProps {
   total: number;
   cantidadArticulos: number;
@@ -31,11 +36,11 @@ export interface ModalCobroProps {
   clienteDocumentoTipo?: "rnc" | "cedula" | null;
   clienteDocumentoNumero?: string | null;
   onCancelar: () => void;
-  /** El padre hace el cobro real (repo.cobrar / cobrarConFiscal) e imprime si corresponde. */
+  /** El padre hace el cobro real (repo.cobrar / cobrarConFiscal) e imprime/genera el PDF según `salida`. */
   onConfirmar: (
     pagos: { metodo: MetodoPago; monto: number }[],
     notas: string,
-    imprimir: boolean,
+    salida: SalidaCobro,
     fiscal: FiscalInput | null,
   ) => Promise<void>;
 }
@@ -62,8 +67,9 @@ export function ModalCobro({
 
   useAtajosTeclado({
     Escape: onCancelar,
-    F1: () => { if (!guardando) void confirmar(true); },
-    F2: () => { if (!guardando) void confirmar(false); },
+    F1: () => { if (!guardando) void confirmar("imprimir"); },
+    F2: () => { if (!guardando) void confirmar("ninguna"); },
+    F3: () => { if (!guardando) void confirmar("pdf"); },
   });
 
   const pagos = filas.map((f) => ({ metodo: f.metodo, monto: Number(f.monto) || 0 }));
@@ -79,7 +85,7 @@ export function ModalCobro({
     setFilas((prev) => prev.filter((_, idx) => idx !== i));
   }
 
-  async function confirmar(imprimir: boolean) {
+  async function confirmar(salida: SalidaCobro) {
     setError(null);
     if (!resultado.suficiente) {
       setError(`Falta por pagar RD$ ${money(resultado.faltante)}.`);
@@ -95,7 +101,7 @@ export function ModalCobro({
 
     setGuardando(true);
     try {
-      await onConfirmar(pagos, notas, imprimir, fiscal);
+      await onConfirmar(pagos, notas, salida, fiscal);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -130,7 +136,7 @@ export function ModalCobro({
               autoFocus={i === 0}
               onFocus={(e) => e.target.select()}
               value={f.monto}
-              onChange={(e) => actualizarFila(i, { monto: e.target.value })}
+              onChange={(e) => actualizarFila(i, { monto: filtrarNumero(e.target.value) })}
             />
             {filas.length > 1 && (
               <button style={s.botonPeligro} onClick={() => quitarFila(i)}>×</button>
@@ -187,12 +193,15 @@ export function ModalCobro({
 
         {error && <div style={s.errorBox}>{error}</div>}
 
-        <div style={s.formFooter}>
-          <button style={s.boton} disabled={guardando} onClick={() => confirmar(true)}>
+        <div style={{ ...s.formFooter, flexWrap: "wrap" }}>
+          <button style={s.boton} disabled={guardando} onClick={() => confirmar("imprimir")}>
             Cobrar e imprimir (F1)
           </button>
-          <button style={s.botonSecundario} disabled={guardando} onClick={() => confirmar(false)}>
+          <button style={s.botonSecundario} disabled={guardando} onClick={() => confirmar("ninguna")}>
             Cobrar sin imprimir (F2)
+          </button>
+          <button style={s.botonSecundario} disabled={guardando} onClick={() => confirmar("pdf")}>
+            Cobrar y guardar PDF (F3)
           </button>
           <button style={s.botonSecundario} disabled={guardando} onClick={onCancelar}>
             Cancelar (Esc)
@@ -216,7 +225,7 @@ const overlay: CSSProperties = {
 
 const tarjeta: CSSProperties = {
   ...s.tarjeta,
-  width: 420,
+  width: 460,
   maxWidth: "90vw",
   maxHeight: "90vh",
   overflow: "auto",

@@ -26,6 +26,7 @@ export {
   crearFacturaRepo,
   type AbrirTicketInput,
   type AgregarLineaInput,
+  type SincronizarPrecioProductoInput,
   type FiltroFacturasCobradas,
   type FacturaRepo,
 } from "./factura-repo.js";
@@ -100,3 +101,10 @@ export {
   type RespaldoCompleto,
   type BackupRepo,
 } from "./backup-repo.js";
+export {
+  crearCotizacionRepo,
+  type LineaCotizacionInput,
+  type CrearCotizacionInput,
+  type FiltroCotizaciones,
+  type CotizacionRepo,
+} from "./cotizacion-repo.js";

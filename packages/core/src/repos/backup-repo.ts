@@ -15,6 +15,7 @@ const TABLAS = [
   "bitacora_accion",
   "devolucion", "devolucion_linea",
   "promocion",
+  "cotizacion", "cotizacion_linea",
 ] as const;
 
 export interface RespaldoCompleto {

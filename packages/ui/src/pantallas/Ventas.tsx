@@ -14,14 +14,17 @@ import {
 } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money, sombra } from "../estilos.js";
-import { ModalCobro, type FiscalInput } from "../componentes/ModalCobro.js";
+import { ModalCobro, type FiscalInput, type SalidaCobro } from "../componentes/ModalCobro.js";
+import { ModalCotizacion } from "../componentes/ModalCotizacion.js";
 import { FormularioProducto, diferenciasProducto, type CambioProducto } from "../componentes/FormularioProducto.js";
 import { ModalConfirmarCambios } from "../componentes/ModalConfirmarCambios.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
+import { generarPdfRecibo, generarPdfCotizacion, guardarPdf } from "../impresion/pdf.js";
 import { abrirGavetaTermica } from "../impresion/termica.js";
 import { BotonVoz } from "../componentes/BotonVoz.js";
 import { ChatBot } from "../componentes/ChatBot.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { filtrarNumero } from "../utilidades/numero.js";
 import type { CSSProperties } from "react";
 
 const stepperBtn: CSSProperties = {
@@ -47,6 +50,18 @@ function formatearCantidad(n: number): string {
   return Number(n.toFixed(4)).toString();
 }
 
+/** Un paso de deshacer/rehacer (§ Ctrl+Z/Ctrl+Y) sobre las líneas del ticket. Cada acción visible del
+ *  usuario (agregar, quitar, cambiar cantidad, alternar mayoreo) puede traducirse en uno o más de estos
+ *  pasos atómicos — p.ej. alternar mayoreo con fusión es a la vez un "cantidad" en la línea existente y
+ *  un "eliminar" en la línea vieja — y se deshacen/rehacen siempre juntos, como una sola unidad.
+ *  "eliminar"/"crear" reusan el borrado LÓGICO de `factura_linea`: como la fila conserva sus datos
+ *  originales, deshacer un borrado es simplemente restaurarla (mismo id, mismo precio/cantidad), sin
+ *  tener que reconstruirla a mano. */
+type AccionLinea =
+  | { tipo: "cantidad"; lineaId: string; antes: number; despues: number }
+  | { tipo: "crear"; lineaId: string }
+  | { tipo: "eliminar"; lineaId: string };
+
 /**
  * Pantalla de Ventas (§7.1): construye el ticket. El cobro (§7.2, con NCF
  * opcional §6) marca la factura `cobrada` (o `fiscal` si se emite comprobante).
@@ -61,6 +76,7 @@ export function Ventas() {
     comprobanteFiscal,
     proveedorFiscal,
     promocion: promocionRepo,
+    cotizacion: cotizacionRepo,
   } = useRepos();
 
   const [tickets, setTickets] = useState<Factura[]>([]);
@@ -91,6 +107,10 @@ export function Ventas() {
   const [error, setError] = useState<string | null>(null);
   const [promoAplicada, setPromoAplicada] = useState<string | null>(null);
 
+  // Deshacer/rehacer (Ctrl+Z/Ctrl+Y) de cambios en las líneas del ticket activo — § AccionLinea.
+  const [pilaDeshacer, setPilaDeshacer] = useState<AccionLinea[][]>([]);
+  const [pilaRehacer, setPilaRehacer] = useState<AccionLinea[][]>([]);
+
   const [editandoProducto, setEditandoProducto] = useState<Producto | null>(null);
   const [formEdicion, setFormEdicion] = useState<ProductoInput | null>(null);
   const [erroresEdicion, setErroresEdicion] = useState<string[]>([]);
@@ -111,6 +131,7 @@ export function Ventas() {
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   const [mostrarCobro, setMostrarCobro] = useState(false);
+  const [mostrarCotizacion, setMostrarCotizacion] = useState(false);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [reimprimiendo, setReimprimiendo] = useState(false);
 
@@ -122,6 +143,7 @@ export function Ventas() {
   useAtajosTeclado({
     F10: enfocarBusqueda,
     F12: () => { if (lineas.length > 0) setMostrarCobro(true); },
+    F5: () => { if (lineas.length > 0) setMostrarCotizacion(true); },
     F6: () => void nuevoTicket(),
     F7: () => setMostrarSuelto((v) => !v),
     // Apuntando (con el mouse, sin hacer clic) a una línea del ticket: F8 alterna el precio
@@ -131,6 +153,12 @@ export function Ventas() {
     F9: () => abrirConsultaPrecio(),
     F11: () => abrirModalCantidad(),
     "Ctrl+P": () => { if (!reimprimiendo) void reimprimirUltimo(); },
+    // Deshacer/rehacer de cambios en el ticket (agregar/quitar/cantidad/mayoreo, § AccionLinea).
+    // Se registran ambos atajos de rehacer porque las dos convenciones son comunes en Windows:
+    // Ctrl+Y (Office) y Ctrl+Shift+Z (navegadores, VS Code, la mayoría del software moderno).
+    "Ctrl+Z": () => void deshacer(),
+    "Ctrl+Y": () => void rehacer(),
+    "Ctrl+Shift+Z": () => void rehacer(),
     // "+"/"-" solo se registran mientras hay una línea resaltada: si estuvieran siempre en el
     // mapa, el hook les haría preventDefault() en CUALQUIER campo de texto (aunque el manejador
     // no hiciera nada), y esos caracteres dejarían de poderse escribir en toda la pantalla.
@@ -140,7 +168,7 @@ export function Ventas() {
           "-": () => cambiarCantidad(lineaResaltada, -1),
         }
       : {}),
-  }, !mostrarCobro && !modalCantidad && !modalConsultaAbierto && !formEdicion);
+  }, !mostrarCobro && !mostrarCotizacion && !modalCantidad && !modalConsultaAbierto && !formEdicion);
 
   useAtajosTeclado({
     Escape: () => cerrarConsultaPrecio(),
@@ -166,7 +194,7 @@ export function Ventas() {
   // campos deben poder recibir su propio tecleo sin que salte a la búsqueda. "+"/"-" se excluyen
   // a propósito porque ya tienen su propio significado (cambiar cantidad de la línea resaltada).
   useEffect(() => {
-    if (mostrarCobro || modalCantidad || modalConsultaAbierto || formEdicion) return;
+    if (mostrarCobro || mostrarCotizacion || modalCantidad || modalConsultaAbierto || formEdicion) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key.length !== 1 || e.key === "+" || e.key === "-") return;
@@ -175,11 +203,11 @@ export function Ventas() {
       if (enCampoDeTexto) return;
       e.preventDefault();
       busquedaRef.current?.focus();
-      void buscarProducto(e.key);
+      buscarProducto(e.key);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mostrarCobro, modalCantidad, modalConsultaAbierto, formEdicion]);
+  }, [mostrarCobro, mostrarCotizacion, modalCantidad, modalConsultaAbierto, formEdicion]);
 
   useEffect(() => {
     const id = setInterval(() => setAhora(new Date()), 1000 * 30);
@@ -243,6 +271,10 @@ export function Ventas() {
 
   useEffect(() => {
     setError(null);
+    // Las pilas de deshacer/rehacer guardan ids de línea del ticket activo — se reinician al
+    // cambiar de ticket para no arriesgarse a deshacer/rehacer algo en el ticket equivocado.
+    setPilaDeshacer([]);
+    setPilaRehacer([]);
     cargarLineas().catch((e) => setErrorCarga(String(e)));
   }, [activoId]);
 
@@ -250,11 +282,16 @@ export function Ventas() {
   // sobre `lineaResaltada`) y las flechas arriba/abajo (§ onKeyDown de la búsqueda) siempre tienen
   // sobre qué línea trabajar, sin depender de que el mouse esté encima de una fila. Si la línea
   // resaltada ya no existe (se borró, o se cambió de ticket), cae a la primera de la lista.
+  //
+  // IMPORTANTE: hay que resincronizar con el objeto FRESCO de `lineas`, no quedarse con el viejo
+  // aunque el id siga existiendo — si no, `cambiarCantidad` (+/−) sigue leyendo la cantidad de
+  // ANTES del último cambio, y cada `+` de ahí en adelante recalcula el mismo valor ya guardado
+  // en vez de sumar de nuevo (se "traba" después del primer +).
   useEffect(() => {
     setLineaResaltada((actual) => {
       if (lineas.length === 0) return null;
-      if (actual && lineas.some((l) => l.id === actual.id)) return actual;
-      return lineas[0];
+      const vigente = actual && lineas.find((l) => l.id === actual.id);
+      return vigente || lineas[0];
     });
   }, [lineas]);
 
@@ -275,6 +312,50 @@ export function Ventas() {
     return await cargarLineas();
   }
 
+  /** Registra un paso de deshacer para la acción que se acaba de hacer (§ AccionLinea) y descarta
+   *  cualquier "rehacer" pendiente — como en cualquier editor, hacer algo nuevo después de deshacer
+   *  invalida el futuro que se había deshecho. */
+  function registrarAccionTicket(pasos: AccionLinea[]) {
+    setPilaDeshacer((p) => [...p, pasos]);
+    setPilaRehacer([]);
+  }
+
+  async function deshacer() {
+    const pasos = pilaDeshacer[pilaDeshacer.length - 1];
+    if (!pasos) return;
+    setError(null);
+    try {
+      for (const paso of [...pasos].reverse()) {
+        if (paso.tipo === "cantidad") await repo.actualizarCantidadLinea(paso.lineaId, paso.antes);
+        else if (paso.tipo === "crear") await repo.eliminarLinea(paso.lineaId);
+        else await repo.restaurarLinea(paso.lineaId);
+      }
+      setPilaDeshacer((p) => p.slice(0, -1));
+      setPilaRehacer((p) => [...p, pasos]);
+      await refrescarTicketActivo();
+    } catch (e) {
+      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+    }
+  }
+
+  async function rehacer() {
+    const pasos = pilaRehacer[pilaRehacer.length - 1];
+    if (!pasos) return;
+    setError(null);
+    try {
+      for (const paso of pasos) {
+        if (paso.tipo === "cantidad") await repo.actualizarCantidadLinea(paso.lineaId, paso.despues);
+        else if (paso.tipo === "crear") await repo.restaurarLinea(paso.lineaId);
+        else await repo.eliminarLinea(paso.lineaId);
+      }
+      setPilaRehacer((p) => p.slice(0, -1));
+      setPilaDeshacer((p) => [...p, pasos]);
+      await refrescarTicketActivo();
+    } catch (e) {
+      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+    }
+  }
+
   async function nuevoTicket() {
     const t = await repo.abrirTicket();
     setTickets((prev) => [...prev, t]);
@@ -289,12 +370,40 @@ export function Ventas() {
     await cargarTickets();
   }
 
-  async function buscarProducto(q: string) {
+  function buscarProducto(q: string) {
     setBusqueda(q);
     setOcultarResultados(false);
-    const res = q.trim() ? await productos.listar(q) : [];
-    setResultados(res);
-    setIndiceResultado(res.length > 0 ? 0 : -1);
+    setError(null);
+  }
+
+  /** Busca con un pequeño debounce (§ mismo motivo que la búsqueda de "Agregar cantidad"): sin esto,
+   *  cada tecla que dispara un escáner de código de barra hace una consulta y abre el desplegable de
+   *  resultados con el texto todavía a medio escribir, así que se ve un parpadeo del desplegable justo
+   *  antes de que el Enter del escáner lo cierre de nuevo. Esperar a una pausa evita ese parpadeo sin
+   *  afectar el escaneo en sí, que igual resuelve por código exacto al presionar Enter. */
+  useEffect(() => {
+    const q = busqueda;
+    if (!q.trim()) {
+      setResultados([]);
+      setIndiceResultado(-1);
+      return;
+    }
+    const id = setTimeout(() => {
+      void productos.listar(q).then((res) => {
+        setResultados(res);
+        setIndiceResultado(res.length > 0 ? 0 : -1);
+      });
+    }, 250);
+    return () => clearTimeout(id);
+  }, [busqueda, productos]);
+
+  /** Favorito: sube el producto al tope de la búsqueda (§ Productos). Se puede marcar/desmarcar
+   *  directo desde la búsqueda de Ventas, sin salir del ticket que se está armando. */
+  async function alternarFavoritoProducto(p: Producto) {
+    const favorito = p.favorito === 1 ? 0 : 1;
+    await productos.alternarFavorito(p.id, favorito === 1);
+    setResultados((rs) => rs.map((r) => (r.id === p.id ? { ...r, favorito } : r)));
+    setResultadosModalCantidad((rs) => rs.map((r) => (r.id === p.id ? { ...r, favorito } : r)));
   }
 
   async function agregarProducto(p: Producto, cantidad: number) {
@@ -315,8 +424,11 @@ export function Ventas() {
       );
       let lineaId: string;
       if (existente) {
-        await repo.actualizarCantidadLinea(existente.id, existente.cantidad + cantidad);
+        const antes = existente.cantidad;
+        const despues = antes + cantidad;
+        await repo.actualizarCantidadLinea(existente.id, despues);
         lineaId = existente.id;
+        registrarAccionTicket([{ tipo: "cantidad", lineaId, antes, despues }]);
       } else {
         const nueva = await repo.agregarLinea(activoId, {
           producto_id: p.id,
@@ -328,6 +440,7 @@ export function Ventas() {
           tasaImpuesto: p.tasa_impuesto,
         });
         lineaId = nueva.id;
+        registrarAccionTicket([{ tipo: "crear", lineaId }]);
       }
       setBusqueda("");
       setResultados([]);
@@ -404,8 +517,21 @@ export function Ventas() {
     if (!editandoProducto || !formEdicion) return;
     try {
       await productos.actualizar(editandoProducto.id, formEdicion);
+      // Un ticket abierto (este mismo u otro) pudo agregar el producto ANTES de la corrección —
+      // sin esto se quedaría cobrando el precio viejo aunque el catálogo ya muestre el nuevo.
+      const actualizado = await productos.obtener(editandoProducto.id);
+      if (actualizado) {
+        await repo.actualizarPrecioEnTicketsAbiertos({
+          productoId: actualizado.id,
+          precioVenta: actualizado.precio_venta,
+          precioMayoreo: actualizado.precio_mayoreo,
+          impuestoTipo: actualizado.impuesto_tipo,
+          tasaImpuesto: actualizado.tasa_impuesto,
+        });
+      }
       cerrarEdicionProducto();
-      await buscarProducto(busqueda);
+      buscarProducto(busqueda);
+      await refrescarTicketActivo();
     } catch (e) {
       setCambiosPendientesEdicion(null);
       setErroresEdicion(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje) : [String(e)]);
@@ -465,10 +591,11 @@ export function Ventas() {
   }
 
   function cambiarCantidadModal(texto: string) {
+    const limpio = filtrarNumero(texto);
     setCampoModalActivo("cantidad");
-    setCantidadModalTexto(texto);
+    setCantidadModalTexto(limpio);
     const p = modalCantidad?.producto;
-    const cantidad = Number(texto);
+    const cantidad = Number(limpio);
     if (p && Number.isFinite(cantidad)) {
       const precio = precioBase(p);
       setMontoModalTexto(precio > 0 ? (cantidad * precio).toFixed(2) : "");
@@ -476,10 +603,11 @@ export function Ventas() {
   }
 
   function cambiarMontoModal(texto: string) {
+    const limpio = filtrarNumero(texto);
     setCampoModalActivo("monto");
-    setMontoModalTexto(texto);
+    setMontoModalTexto(limpio);
     const p = modalCantidad?.producto;
-    const monto = Number(texto);
+    const monto = Number(limpio);
     const precio = p ? precioBase(p) : 0;
     if (p && Number.isFinite(monto) && precio > 0) {
       setCantidadModalTexto((monto / precio).toFixed(2));
@@ -551,7 +679,7 @@ export function Ventas() {
     if (!activoId) return;
     setError(null);
     try {
-      await repo.agregarLinea(activoId, {
+      const nueva = await repo.agregarLinea(activoId, {
         producto_id: null,
         descripcion: sueltoDesc,
         cantidad: Math.max(1, Number(sueltoCantidad) || 1),
@@ -559,6 +687,7 @@ export function Ventas() {
         impuestoTipo: "itbis18",
         tasaImpuesto: 0.18,
       });
+      registrarAccionTicket([{ tipo: "crear", lineaId: nueva.id }]);
       setSueltoDesc("");
       setSueltoPrecio("");
       setSueltoCantidad("1");
@@ -574,6 +703,7 @@ export function Ventas() {
     setError(null);
     try {
       await repo.actualizarCantidadLinea(l.id, cantidad);
+      registrarAccionTicket([{ tipo: "cantidad", lineaId: l.id, antes: l.cantidad, despues: cantidad }]);
       await refrescarTicketActivo();
     } catch (e) {
       setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
@@ -607,6 +737,7 @@ export function Ventas() {
 
   async function eliminarLinea(l: FacturaLinea) {
     await repo.eliminarLinea(l.id);
+    registrarAccionTicket([{ tipo: "eliminar", lineaId: l.id }]);
     // No hace falta soltar `lineaResaltada` a mano aquí: el efecto que la mantiene siempre válida
     // (§ arriba) la reconcilia en cuanto `lineas` se actualiza, cayendo a otra línea si existía.
     await refrescarTicketActivo();
@@ -628,11 +759,17 @@ export function Ventas() {
         (x) => x.id !== l.id && x.producto_id === l.producto_id && x.es_mayoreo === (nuevoMayoreo ? 1 : 0) && x.precio_unitario === nuevoPrecio,
       );
       if (existente) {
-        await repo.actualizarCantidadLinea(existente.id, existente.cantidad + l.cantidad);
+        const antes = existente.cantidad;
+        const despues = antes + l.cantidad;
+        await repo.actualizarCantidadLinea(existente.id, despues);
         await repo.eliminarLinea(l.id);
+        registrarAccionTicket([
+          { tipo: "cantidad", lineaId: existente.id, antes, despues },
+          { tipo: "eliminar", lineaId: l.id },
+        ]);
       } else {
         await repo.eliminarLinea(l.id);
-        await repo.agregarLinea(activoId, {
+        const nueva = await repo.agregarLinea(activoId, {
           producto_id: l.producto_id,
           descripcion: l.descripcion,
           cantidad: l.cantidad,
@@ -641,6 +778,10 @@ export function Ventas() {
           impuestoTipo: l.impuesto_tipo,
           tasaImpuesto: l.tasa_impuesto,
         });
+        registrarAccionTicket([
+          { tipo: "eliminar", lineaId: l.id },
+          { tipo: "crear", lineaId: nueva.id },
+        ]);
       }
       setLineaResaltada(null);
       await refrescarTicketActivo();
@@ -686,11 +827,11 @@ export function Ventas() {
     ancho_impresora_default: 80,
   };
 
-  /** Confirma el cobro (normal o con NCF), imprime si corresponde, y libera el ticket. */
+  /** Confirma el cobro (normal o con NCF), imprime/genera el PDF si corresponde, y libera el ticket. */
   async function confirmarCobro(
     pagos: { metodo: MetodoPago; monto: number }[],
     notas: string,
-    imprimir: boolean,
+    salida: SalidaCobro,
     fiscal: FiscalInput | null,
   ) {
     if (!activoId) return;
@@ -715,20 +856,59 @@ export function Ventas() {
       factura = resultado.factura;
     }
 
-    if (imprimir) {
-      imprimirRecibo({
-        negocio: negocio ?? negocioReciboDefault,
-        factura,
-        lineas,
-        pagos,
-        cliente: clienteActivo,
-        comprobante: comprobanteRecibo,
-      });
+    const datosRecibo = {
+      negocio: negocio ?? negocioReciboDefault,
+      factura,
+      lineas,
+      pagos,
+      cliente: clienteActivo,
+      comprobante: comprobanteRecibo,
+    };
+    if (salida === "imprimir") {
+      imprimirRecibo(datosRecibo);
+    } else if (salida === "pdf") {
+      guardarPdf(generarPdfRecibo(datosRecibo), `Factura-${factura.numero_interno}.pdf`);
     }
     if (pagos.some((p) => p.metodo === "efectivo")) void abrirGavetaTermica();
     setMostrarCobro(false);
     setActivoId(null);
     await cargarTickets();
+    enfocarBusqueda();
+  }
+
+  /** Genera una cotización a partir del ticket actual: guarda el registro (§ cotizacion-repo) y el
+   *  PDF. A diferencia de Cobrar, no toca el ticket — sigue abierto tal como estaba. */
+  async function crearCotizacion(notas: string, diasVigencia: number) {
+    const c = await cotizacionRepo.crear({
+      cliente_id: clienteActivo?.id ?? null,
+      notas: notas.trim() || null,
+      diasVigencia,
+      lineas: lineas.map((l) => ({
+        producto_id: l.producto_id,
+        descripcion: l.descripcion,
+        cantidad: l.cantidad,
+        precioUnitario: l.precio_unitario,
+        impuestoTipo: l.impuesto_tipo,
+        tasaImpuesto: l.tasa_impuesto,
+      })),
+    });
+    guardarPdf(
+      generarPdfCotizacion({
+        negocio: negocio ?? negocioReciboDefault,
+        numero: c.numero_interno,
+        fecha: c.fecha_hora,
+        fechaVencimiento: c.fecha_vencimiento,
+        cliente: clienteActivo,
+        lineas,
+        subtotalGravado: c.subtotal_gravado,
+        subtotalExento: c.subtotal_exento,
+        totalItbis: c.total_itbis,
+        total: c.total,
+        notas: c.notas,
+      }),
+      `Cotizacion-${c.numero_interno}.pdf`,
+    );
+    setMostrarCotizacion(false);
     enfocarBusqueda();
   }
 
@@ -822,7 +1002,7 @@ export function Ventas() {
                   placeholder="Escanear código de barra o buscar producto… (F10)"
                   value={busqueda}
                   autoFocus
-                  onChange={(e) => void buscarProducto(e.target.value)}
+                  onChange={(e) => buscarProducto(e.target.value)}
                   onKeyDown={async (e) => {
                     if (e.key === "Escape" && resultados.length > 0 && !ocultarResultados) {
                       e.preventDefault();
@@ -846,10 +1026,19 @@ export function Ventas() {
                       return;
                     }
                     if (e.key === "Enter" && busqueda.trim()) {
+                      // `e.currentTarget` deja de ser válido después del `await` (React limpia el
+                      // evento sintético) — hay que guardar el nodo del DOM antes de esperar.
+                      const campo = e.currentTarget;
                       const exacto = await productos.porCodigoBarra(busqueda.trim());
                       if (exacto) { seleccionarProducto(exacto); return; }
                       if (indiceResultado >= 0 && resultados[indiceResultado]) { seleccionarProducto(resultados[indiceResultado]); return; }
-                      if (resultados.length === 1) seleccionarProducto(resultados[0]);
+                      if (resultados.length === 1) { seleccionarProducto(resultados[0]); return; }
+                      if (resultados.length === 0) {
+                        setError("Producto no encontrado.");
+                        // Deja el código seleccionado (sin borrarlo) para que el siguiente
+                        // escaneo/tecleo lo reemplace solo, sin tener que borrarlo a mano primero.
+                        campo.select();
+                      }
                     }
                   }}
                 />
@@ -863,7 +1052,7 @@ export function Ventas() {
                 >
                   {esMayoreo ? "✓ " : ""}Precio mayoreo (F8)
                 </button>
-                <BotonVoz onResultado={(texto) => void buscarProducto(texto)} />
+                <BotonVoz onResultado={(texto) => buscarProducto(texto)} />
                 <button style={s.botonSecundario} onClick={() => setMostrarSuelto((v) => !v)}>
                   + Artículo no registrado (F7)
                 </button>
@@ -910,7 +1099,13 @@ export function Ventas() {
                       }}
                     >
                       <span>
-                        {p.favorito === 1 && <span title="Favorito" style={{ color: c.amarillo, marginRight: 4 }}>★</span>}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); void alternarFavoritoProducto(p); }}
+                          title={p.favorito === 1 ? "Quitar de favoritos" : "Marcar como favorito"}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, padding: 0, marginRight: 4, lineHeight: 1, verticalAlign: "middle", color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4 }}
+                        >
+                          {p.favorito === 1 ? "★" : "☆"}
+                        </button>
                         {p.descripcion} {p.codigo_barra ? <span style={{ color: c.gris, fontSize: 12 }}>({p.codigo_barra})</span> : ""}
                         {p.tipo_venta === "granel" && (
                           <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo }}>
@@ -942,11 +1137,14 @@ export function Ventas() {
               {mostrarSuelto && (
                 <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
                   <input autoFocus style={s.input} placeholder="Descripción" value={sueltoDesc}
-                    onChange={(e) => setSueltoDesc(e.target.value)} />
+                    onChange={(e) => setSueltoDesc(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") void agregarSuelto(); }} />
                   <input style={{ ...s.input, maxWidth: 120 }} placeholder="Precio" type="text" inputMode="decimal" value={sueltoPrecio}
-                    onChange={(e) => setSueltoPrecio(e.target.value)} />
+                    onChange={(e) => setSueltoPrecio(filtrarNumero(e.target.value))}
+                    onKeyDown={(e) => { if (e.key === "Enter") void agregarSuelto(); }} />
                   <input style={{ ...s.input, maxWidth: 80 }} placeholder="Cant." type="text" inputMode="decimal" value={sueltoCantidad}
-                    onChange={(e) => setSueltoCantidad(e.target.value)} />
+                    onChange={(e) => setSueltoCantidad(filtrarNumero(e.target.value))}
+                    onKeyDown={(e) => { if (e.key === "Enter") void agregarSuelto(); }} />
                   <button style={s.boton} onClick={agregarSuelto}>Agregar</button>
                 </div>
               )}
@@ -963,6 +1161,7 @@ export function Ventas() {
               <table style={s.tabla}>
                 <thead>
                   <tr>
+                    <th style={s.th}>#</th>
                     <th style={s.th}>Descripción</th>
                     <th style={s.th}>Cant.</th>
                     <th style={s.th}>Precio</th>
@@ -972,15 +1171,16 @@ export function Ventas() {
                 </thead>
                 <tbody>
                   {lineas.length === 0 && (
-                    <tr><td style={s.filaVacia} colSpan={5}>Sin artículos. Escanea o busca un producto arriba.</td></tr>
+                    <tr><td style={s.filaVacia} colSpan={6}>Sin artículos. Escanea o busca un producto arriba.</td></tr>
                   )}
-                  {lineas.map((l) => (
+                  {lineas.map((l, i) => (
                     <tr
                       key={l.id}
                       onMouseEnter={() => setLineaResaltada(l)}
                       title={l.producto_id ? "↑/↓: moverse · +/−: cambiar cantidad · F8: alternar mayoreo (sin hacer clic)" : "↑/↓: moverse · +/−: cambiar cantidad (sin hacer clic)"}
                       style={lineaResaltada?.id === l.id ? { background: c.azulClaro } : undefined}
                     >
+                      <td style={{ ...s.td, color: c.gris, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                       <td style={s.td}>
                         {l.descripcion}
                         {l.es_mayoreo ? <span style={{ ...s.badge, marginLeft: 6 }}>mayoreo</span> : ""}
@@ -996,7 +1196,7 @@ export function Ventas() {
                               type="text"
                               inputMode="decimal"
                               value={cantidadEditandoInput}
-                              onChange={(e) => setCantidadEditandoInput(e.target.value)}
+                              onChange={(e) => setCantidadEditandoInput(filtrarNumero(e.target.value))}
                               onBlur={() => void confirmarEdicionCantidad(l)}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") void confirmarEdicionCantidad(l);
@@ -1019,12 +1219,25 @@ export function Ventas() {
                       <td style={s.tdDerecha}>RD$ {money(l.precio_unitario)}</td>
                       <td style={s.tdDerecha}>RD$ {money(l.subtotal)}</td>
                       <td style={s.td}>
-                        <button style={s.botonPeligro} onClick={() => eliminarLinea(l)}>Borrar</button>
+                        <button
+                          style={s.botonPeligro}
+                          onClick={() => { if (confirm(`¿Borrar "${l.descripcion}" del ticket?`)) void eliminarLinea(l); }}
+                        >
+                          Borrar
+                        </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {lineas.length > 0 && (() => {
+                const totalArticulos = lineas.reduce((acc, l) => acc + l.cantidad, 0);
+                return (
+                  <div style={{ padding: "8px 4px 0", textAlign: "right", fontSize: 12, color: c.gris }}>
+                    {lineas.length} línea{lineas.length === 1 ? "" : "s"} · {formatearCantidad(totalArticulos)} artículo{totalArticulos === 1 ? "" : "s"} en total
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -1114,6 +1327,13 @@ export function Ventas() {
               >
                 Cobrar (F12)
               </button>
+              <button
+                style={{ ...s.botonSecundario, width: "100%", marginTop: 8 }}
+                disabled={lineas.length === 0}
+                onClick={() => setMostrarCotizacion(true)}
+              >
+                📋 Cotización (F5)
+              </button>
               <button style={{ ...s.botonPeligro, width: "100%", marginTop: 8, border: "none", background: "none" }} onClick={eliminarTicketActivo}>
                 Eliminar ticket
               </button>
@@ -1131,6 +1351,16 @@ export function Ventas() {
           clienteDocumentoNumero={clienteActivo?.documento_numero ?? null}
           onCancelar={() => { setMostrarCobro(false); enfocarBusqueda(); }}
           onConfirmar={confirmarCobro}
+        />
+      )}
+
+      {mostrarCotizacion && activo && (
+        <ModalCotizacion
+          total={activo.total}
+          cantidadArticulos={lineas.length}
+          notasIniciales={activo.notas ?? ""}
+          onCancelar={() => { setMostrarCotizacion(false); enfocarBusqueda(); }}
+          onConfirmar={crearCotizacion}
         />
       )}
 
@@ -1188,7 +1418,13 @@ export function Ventas() {
                         }}
                       >
                         <span>
-                          {p.favorito === 1 && <span title="Favorito" style={{ color: c.amarillo, marginRight: 4 }}>★</span>}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); void alternarFavoritoProducto(p); }}
+                            title={p.favorito === 1 ? "Quitar de favoritos" : "Marcar como favorito"}
+                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, padding: 0, marginRight: 4, lineHeight: 1, verticalAlign: "middle", color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4 }}
+                          >
+                            {p.favorito === 1 ? "★" : "☆"}
+                          </button>
                           {p.descripcion}
                           {p.tipo_venta === "granel" && (
                             <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo }}>
@@ -1262,14 +1498,21 @@ export function Ventas() {
               placeholder="Escanear código de barra o buscar producto…"
               value={busquedaConsulta}
               onChange={(e) => setBusquedaConsulta(e.target.value)}
-              onKeyDown={(e) => {
-                // Enter = "ya vi el precio, siguiente" — limpia para el próximo escaneo/búsqueda
-                // en vez de dejar el texto anterior ahí (§ hay que poder consultar varios seguidos
-                // sin seleccionar y borrar a mano cada vez).
-                if (e.key === "Enter") {
-                  setBusquedaConsulta("");
-                  setResultadosConsulta([]);
-                }
+              onKeyDown={async (e) => {
+                if (e.key !== "Enter" || !busquedaConsulta.trim()) return;
+                // `e.currentTarget` deja de ser válido después del `await` (React limpia el evento
+                // sintético) — hay que guardar el nodo del DOM antes de esperar, no después.
+                const campo = e.currentTarget;
+                // Un escáner escribe el código entero y manda Enter casi al instante — mucho antes
+                // de que el debounce de arriba (250ms) llegue a buscar, así que sin esto Enter no
+                // encontraba nada todavía que mostrar. Se busca el código exacto ya mismo, sin
+                // esperar el debounce.
+                const exacto = await productos.porCodigoBarra(busquedaConsulta.trim());
+                if (exacto) setResultadosConsulta([exacto]);
+                // No se borra el texto: hay que poder LEER el precio antes de que desaparezca. En
+                // vez de eso se selecciona todo — así el siguiente escaneo/tecleo lo reemplaza solo
+                // (como pasar el mouse y escribir encima), sin tener que borrar a mano primero.
+                campo.select();
               }}
             />
             {resultadosConsulta.length > 0 && (

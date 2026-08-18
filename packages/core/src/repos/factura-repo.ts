@@ -35,6 +35,14 @@ export interface FiltroFacturasCobradas {
   tipo?: "normal" | "fiscal" | null;
 }
 
+export interface SincronizarPrecioProductoInput {
+  productoId: string;
+  precioVenta: number;
+  precioMayoreo: number | null;
+  impuestoTipo: ImpuestoTipo;
+  tasaImpuesto: number;
+}
+
 export interface AgregarLineaInput {
   /** null = artículo no registrado en el catálogo. */
   producto_id?: string | null;
@@ -305,6 +313,22 @@ export function crearFacturaRepo(db: SqlDriver) {
       await recalcularTotales(linea.factura_id);
     },
 
+    /** Revierte el borrado lógico de una línea (§ deshacer/rehacer en Ventas, Ctrl+Z/Ctrl+Y) y
+     *  recalcula. Como el borrado es lógico, la fila conserva sus datos originales tal cual — restaurar
+     *  es exactamente el inverso de `eliminarLinea`, sin perder cantidad/precio/régimen mayoreo. */
+    async restaurarLinea(lineaId: string): Promise<void> {
+      const linea = await db.get<FacturaLinea>(
+        `SELECT ${COLS_LINEA} FROM factura_linea WHERE id=?`,
+        [lineaId],
+      );
+      if (!linea) return;
+      if (linea.producto_id) await verificarDisponibilidad(linea.producto_id, linea.cantidad);
+      await db.run("UPDATE factura_linea SET deleted_at=NULL, updated_at=? WHERE id=?", [
+        now(), lineaId,
+      ]);
+      await recalcularTotales(linea.factura_id);
+    },
+
     /** Asigna (o quita, con null) el cliente del ticket. */
     async asignarCliente(facturaId: string, clienteId: string | null): Promise<void> {
       await db.run("UPDATE factura SET cliente_id=?, updated_at=? WHERE id=?", [
@@ -314,6 +338,42 @@ export function crearFacturaRepo(db: SqlDriver) {
 
     async actualizarNotas(facturaId: string, notas: string): Promise<void> {
       await db.run("UPDATE factura SET notas=?, updated_at=? WHERE id=?", [notas, now(), facturaId]);
+    },
+
+    /**
+     * Al corregir el precio de un producto (§ Productos/Ventas "Modificar"), refleja el precio
+     * nuevo en las líneas de tickets TODAVÍA ABIERTOS que ya tenían ese producto agregado — así
+     * quien lo agregó antes de la corrección no paga el precio viejo. Ventas ya `cobrada`s nunca
+     * se tocan: cambiar el monto de una venta cerrada alteraría un registro contable ya cerrado
+     * (y en el caso fiscal, ya reportado con un NCF por ese monto exacto).
+     */
+    async actualizarPrecioEnTicketsAbiertos(input: SincronizarPrecioProductoInput): Promise<void> {
+      const lineas = await db.all<{ id: string; factura_id: string; cantidad: number; es_mayoreo: number }>(
+        `SELECT fl.id, fl.factura_id, fl.cantidad, fl.es_mayoreo
+         FROM factura_linea fl
+         JOIN factura f ON f.id = fl.factura_id
+         WHERE fl.producto_id=? AND fl.deleted_at IS NULL AND f.estado='abierta' AND f.deleted_at IS NULL`,
+        [input.productoId],
+      );
+
+      const facturasAfectadas = new Set<string>();
+      for (const l of lineas) {
+        // Una línea a mayoreo usa el precio mayoreo nuevo; si ya no hay uno (se quitó del
+        // producto), se deja la línea como estaba en vez de adivinar un precio.
+        const nuevoPrecio = l.es_mayoreo ? input.precioMayoreo : input.precioVenta;
+        if (nuevoPrecio == null) continue;
+
+        const calc = calcularLinea({ precioUnitario: nuevoPrecio, cantidad: l.cantidad, tasaImpuesto: input.tasaImpuesto });
+        await db.run(
+          `UPDATE factura_linea
+             SET precio_unitario=?, impuesto_tipo=?, tasa_impuesto=?, monto_itbis=?, subtotal=?, updated_at=?
+           WHERE id=?`,
+          [nuevoPrecio, input.impuestoTipo, input.tasaImpuesto, calc.montoItbis, calc.subtotal, now(), l.id],
+        );
+        facturasAfectadas.add(l.factura_id);
+      }
+
+      for (const facturaId of facturasAfectadas) await recalcularTotales(facturaId);
     },
 
     /** Elimina el ticket completo (factura + sus líneas), borrado lógico. */

@@ -10,11 +10,17 @@ type ManejadorAtajo = (e: KeyboardEvent) => void;
  */
 export type MapaAtajos = Record<string, ManejadorAtajo>;
 
+/** Shift ya va "horneado" en `e.key` para símbolos: en un teclado US, Shift+"=" produce
+ *  `e.key === "+"`, no "=". Sumar "Shift" al nombre ahí también lo contaría dos veces — un atajo
+ *  registrado como "+" (p.ej. sumar cantidad en Ventas) nunca matchearía en la fila principal del
+ *  teclado, solo desde el "+" del numérico (que no necesita Shift). Shift sí importa para letras
+ *  (mayúscula intencional), así que ahí sigue agregándose. */
 function normalizarTecla(e: KeyboardEvent): string {
   const partes: string[] = [];
   if (e.ctrlKey || e.metaKey) partes.push("Ctrl");
   if (e.altKey) partes.push("Alt");
-  if (e.shiftKey) partes.push("Shift");
+  const esLetra = e.key.length === 1 && /[a-zA-Z]/.test(e.key);
+  if (e.shiftKey && esLetra) partes.push("Shift");
   const tecla = e.key.length === 1 ? e.key.toUpperCase() : e.key;
   partes.push(tecla);
   return partes.join("+");

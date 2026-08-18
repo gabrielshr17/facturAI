@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from "react";
 import { type FacturaLinea, type Factura, ValidacionError, calcularLinea, registrarDevolucionConFiscal } from "@sfr/core";
 import { useRepos } from "../data/contexto.js";
 import { s, c, sombra, money } from "../estilos.js";
+import { filtrarNumero } from "../utilidades/numero.js";
 
 export interface ModalDevolucionProps {
   factura: Factura;
@@ -94,7 +95,7 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
                     type="text"
                     inputMode="decimal"
                     value={cantidades[l.id] ?? "0"}
-                    onChange={(e) => setCantidades((prev) => ({ ...prev, [l.id]: e.target.value }))}
+                    onChange={(e) => setCantidades((prev) => ({ ...prev, [l.id]: filtrarNumero(e.target.value) }))}
                   />
                 </td>
               </tr>
