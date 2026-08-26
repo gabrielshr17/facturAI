@@ -101,6 +101,11 @@ function tiparCelda(texto: string): string | number | null {
   const t = texto.trim();
   if (t === "") return null;
   const limpio = t.replace(/^RD\$?\s?/i, "").replace(/[$\s]/g, "");
+  // Un entero con cero(s) a la izquierda (ej. "0123456789012") casi siempre es un código de barra,
+  // no un número real — nadie escribe "0500" para la cantidad 500, pero un EAN/UPC sí empieza en 0
+  // seguido. Convertirlo con `Number()` se come ese cero para siempre (`Number("0123") === 123`),
+  // así que un código así importado deja de coincidir con el mismo código al escanearlo después.
+  if (/^-?0\d/.test(limpio)) return t;
   if (/^-?\d{1,3}(,\d{3})*(\.\d+)?$/.test(limpio)) return Number(limpio.replace(/,/g, ""));
   if (/^-?\d+(,\d+)?$/.test(limpio)) return Number(limpio.replace(",", "."));
   return t;

@@ -3,12 +3,15 @@ import { type Cotizacion, type CotizacionLinea, type Cliente, type Negocio, norm
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { generarPdfCotizacion, guardarPdf } from "../impresion/pdf.js";
+import { imprimirCotizacion } from "../impresion/cotizacion.js";
+import { useAlertas } from "../contexto/Alertas.js";
+import { ClipboardList } from "lucide-react";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 
 /** Recorta el ruido de punto flotante antes de mostrar una cantidad (§ recibo.ts) — sin esto, un
  *  producto a granel como 3+1/3 lb se ve "3.3333333333333335". */
 function cantidad(n: number): string {
-  return Number(n.toFixed(4)).toString();
+  return Number(n.toFixed(2)).toString();
 }
 
 /** Fila enriquecida con el cliente, que no viene directo en `cotizacion` (§ Consulta de cotizaciones). */
@@ -50,6 +53,7 @@ function formatearFechaIso(fechaIso: string): string {
  *  cotización nunca fue una venta. */
 export function ConsultaCotizaciones() {
   const { cotizacion: repo, cliente: clientes, negocio: negocioRepo } = useRepos();
+  const { confirmar } = useAlertas();
 
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
@@ -106,7 +110,7 @@ export function ConsultaCotizaciones() {
   }, [repo, seleccionadaId]);
 
   async function anular(fila: FilaCotizacion) {
-    if (!confirm(`¿Anular la cotización #${fila.cotizacion.numero_interno}?`)) return;
+    if (!(await confirmar(`¿Anular la cotización #${fila.cotizacion.numero_interno}?`, { textoConfirmar: "Anular" }))) return;
     await repo.anular(fila.cotizacion.id);
     await cargar();
   }
@@ -128,23 +132,28 @@ export function ConsultaCotizaciones() {
     ancho_impresora_default: 80,
   };
 
+  function datosImpresionCotizacion(fila: FilaCotizacion) {
+    return {
+      negocio: negocio ?? negocioReciboDefault,
+      numero: fila.cotizacion.numero_interno,
+      fecha: fila.cotizacion.fecha_hora,
+      fechaVencimiento: fila.cotizacion.fecha_vencimiento,
+      cliente: fila.cliente,
+      lineas: lineasSel,
+      subtotalGravado: fila.cotizacion.subtotal_gravado,
+      subtotalExento: fila.cotizacion.subtotal_exento,
+      totalItbis: fila.cotizacion.total_itbis,
+      total: fila.cotizacion.total,
+      notas: fila.cotizacion.notas,
+    };
+  }
+
   function descargarPdf(fila: FilaCotizacion) {
-    guardarPdf(
-      generarPdfCotizacion({
-        negocio: negocio ?? negocioReciboDefault,
-        numero: fila.cotizacion.numero_interno,
-        fecha: fila.cotizacion.fecha_hora,
-        fechaVencimiento: fila.cotizacion.fecha_vencimiento,
-        cliente: fila.cliente,
-        lineas: lineasSel,
-        subtotalGravado: fila.cotizacion.subtotal_gravado,
-        subtotalExento: fila.cotizacion.subtotal_exento,
-        totalItbis: fila.cotizacion.total_itbis,
-        total: fila.cotizacion.total,
-        notas: fila.cotizacion.notas,
-      }),
-      `Cotizacion-${fila.cotizacion.numero_interno}.pdf`,
-    );
+    guardarPdf(generarPdfCotizacion(datosImpresionCotizacion(fila)), `Cotizacion-${fila.cotizacion.numero_interno}.pdf`);
+  }
+
+  function imprimir(fila: FilaCotizacion) {
+    imprimirCotizacion(datosImpresionCotizacion(fila));
   }
 
   return (
@@ -215,7 +224,7 @@ export function ConsultaCotizaciones() {
 
         {seleccionada && (
           <div style={s.tarjeta}>
-            <h4 style={{ marginTop: 0 }}>📋 Cotización #{seleccionada.cotizacion.numero_interno}</h4>
+            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><ClipboardList size={16} /> Cotización #{seleccionada.cotizacion.numero_interno}</h4>
             <p style={{ color: c.gris, fontSize: 13, margin: "4px 0" }}>
               {new Date(seleccionada.cotizacion.fecha_hora).toLocaleString("es-DO")}
             </p>
@@ -246,7 +255,10 @@ export function ConsultaCotizaciones() {
             )}
 
             <div style={s.formFooter}>
-              <button style={{ ...s.boton, flex: 1 }} onClick={() => descargarPdf(seleccionada)}>
+              <button style={{ ...s.boton, flex: 1 }} onClick={() => imprimir(seleccionada)}>
+                Imprimir
+              </button>
+              <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => descargarPdf(seleccionada)}>
                 Guardar PDF (Ctrl+P)
               </button>
               {seleccionada.cotizacion.estado === "vigente" && (

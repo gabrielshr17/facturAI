@@ -1,4 +1,8 @@
-import { useState, type CSSProperties } from "react";
+import { useState, type CSSProperties, type ComponentType } from "react";
+import {
+  Calculator, ShoppingCart, Package, Users, Receipt, Truck,
+  Banknote, ChartColumn, Tag, Settings, Sun, Moon, type LucideProps,
+} from "lucide-react";
 import { Ventas } from "./pantallas/Ventas.js";
 import { Productos } from "./pantallas/Productos.js";
 import { Clientes } from "./pantallas/Clientes.js";
@@ -9,6 +13,7 @@ import { Reportes } from "./pantallas/Reportes.js";
 import { Promociones } from "./pantallas/Promociones.js";
 import { Configuracion } from "./pantallas/Configuracion.js";
 import { ErrorBoundary } from "./componentes/ErrorBoundary.js";
+import { ProveedorAlertas } from "./contexto/Alertas.js";
 import { c } from "./estilos.js";
 import { useTema } from "./hooks/useTema.js";
 import { useAtajosTeclado } from "./hooks/useAtajosTeclado.js";
@@ -23,16 +28,16 @@ const MODULOS: Modulo[] = [
   "Corte de caja", "Reportes", "Promociones", "Configuración",
 ];
 
-const ICONO: Record<Modulo, string> = {
-  "Ventas": "🛒",
-  "Productos": "📦",
-  "Clientes": "👥",
-  "Facturas": "🧾",
-  "Compras": "🚚",
-  "Corte de caja": "💵",
-  "Reportes": "📊",
-  "Promociones": "🏷️",
-  "Configuración": "⚙️",
+const ICONO: Record<Modulo, ComponentType<LucideProps>> = {
+  "Ventas": ShoppingCart,
+  "Productos": Package,
+  "Clientes": Users,
+  "Facturas": Receipt,
+  "Compras": Truck,
+  "Corte de caja": Banknote,
+  "Reportes": ChartColumn,
+  "Promociones": Tag,
+  "Configuración": Settings,
 };
 
 /**
@@ -53,11 +58,12 @@ export function AppShell({ plataforma }: { plataforma: "Escritorio" | "Web" }) {
   useNavegacionFlechas();
 
   return (
+    <ProveedorAlertas>
     <div style={styles.root}>
       <aside style={styles.nav}>
         <div style={styles.marca}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={styles.marcaIcono}>🧮</span>
+            <Calculator size={20} />
             <span style={styles.marcaTexto}>Facturación</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -67,30 +73,33 @@ export function AppShell({ plataforma }: { plataforma: "Escritorio" | "Web" }) {
               title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
               style={styles.botonTema}
             >
-              {tema === "oscuro" ? "☀️" : "🌙"}
+              {tema === "oscuro" ? <Sun size={14} /> : <Moon size={14} />}
             </button>
           </div>
         </div>
-        {MODULOS.map((m, i) => (
-          <button
-            key={m}
-            onClick={() => setActivo(m)}
-            title={`Alt+${i + 1}`}
-            style={{
-              ...styles.navItem,
-              ...(activo === m ? styles.navItemActivo : {}),
-            }}
-          >
-            <span style={{ fontSize: 16 }}>{ICONO[m]}</span>
-            <span style={{ flex: 1 }}>{m}</span>
-            <span style={styles.navAtajo}>{i + 1}</span>
-          </button>
-        ))}
+        {MODULOS.map((m, i) => {
+          const Icono = ICONO[m];
+          return (
+            <button
+              key={m}
+              onClick={() => setActivo(m)}
+              title={`Alt+${i + 1}`}
+              style={{
+                ...styles.navItem,
+                ...(activo === m ? styles.navItemActivo : {}),
+              }}
+            >
+              <Icono size={16} />
+              <span style={{ flex: 1 }}>{m}</span>
+              <span style={styles.navAtajo}>{i + 1}</span>
+            </button>
+          );
+        })}
       </aside>
 
       <main style={styles.main}>
-        <h2 style={styles.titulo}>
-          <span>{ICONO[activo]}</span> {activo}
+        <h2 style={{ ...styles.titulo, display: "flex", alignItems: "center", gap: 10 }}>
+          {(() => { const Icono = ICONO[activo]; return <Icono size={22} />; })()} {activo}
         </h2>
         <ErrorBoundary key={activo}>
           {activo === "Ventas" && <Ventas />}
@@ -105,19 +114,21 @@ export function AppShell({ plataforma }: { plataforma: "Escritorio" | "Web" }) {
         </ErrorBoundary>
       </main>
     </div>
+    </ProveedorAlertas>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
   root: {
     display: "flex",
-    minHeight: "100vh",
+    height: "100vh",
     fontFamily: "'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
     color: c.texto,
     background: c.fondo,
   },
   nav: {
     width: 216,
+    flexShrink: 0,
     background: c.superficie,
     borderRight: `1px solid ${c.borde}`,
     padding: "16px 12px",
@@ -125,9 +136,9 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     gap: 2,
     boxShadow: "1px 0 3px rgba(15, 23, 42, 0.04)",
+    overflowY: "auto",
   },
   marca: { padding: "4px 8px 20px", display: "flex", flexDirection: "column", gap: 10 },
-  marcaIcono: { fontSize: 20 },
   marcaTexto: { fontSize: 17, fontWeight: 700, letterSpacing: -0.2 },
   badge: {
     fontSize: 11,
@@ -176,6 +187,6 @@ const styles: Record<string, CSSProperties> = {
     color: c.gris,
     opacity: 0.7,
   },
-  main: { flex: 1, padding: "24px 32px", overflow: "auto" },
+  main: { flex: 1, minHeight: 0, padding: "24px 32px", overflow: "auto" },
   titulo: { marginTop: 0, marginBottom: 20, fontSize: 22, letterSpacing: -0.3 },
 };

@@ -17,7 +17,8 @@
     "@sfr/core": "workspace:*",
     "exceljs": "^4.4.0",
     "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8"
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.33.0"
   },
   "peerDependencies": {
     "react": "^18.3.1",

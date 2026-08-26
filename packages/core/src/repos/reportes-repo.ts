@@ -26,6 +26,11 @@ export interface ResumenGanancia {
   ingresos: number;
   costoEstimado: number;
   gananciaEstimada: number;
+  /** Parte de `ingresos` que viene de líneas sin producto vinculado (venta rápida/artículo
+   *  suelto): su costo real es desconocido, así que NO suma a `costoEstimado` y la ganancia
+   *  mostrada queda inflada en esa proporción. Se expone aparte para que la pantalla lo advierta
+   *  en vez de dejar que el número final se vea "correcto" sin serlo. */
+  ingresosSinCosto: number;
 }
 
 export interface ResumenItbis {
@@ -85,9 +90,22 @@ export function crearReportesRepo(db: SqlDriver) {
            AND date(f.fecha_hora) >= date(?) AND date(f.fecha_hora) <= date(?)`,
         [desde, hasta],
       );
+      const sinCosto = await db.get<{ total: number | null }>(
+        `SELECT SUM(fl.subtotal) as total
+         FROM factura_linea fl JOIN factura f ON f.id = fl.factura_id
+         WHERE f.estado='cobrada' AND f.deleted_at IS NULL AND fl.deleted_at IS NULL
+           AND fl.producto_id IS NULL
+           AND date(f.fecha_hora) >= date(?) AND date(f.fecha_hora) <= date(?)`,
+        [desde, hasta],
+      );
       const ing = ingresos?.total ?? 0;
       const cos = costo?.total ?? 0;
-      return { ingresos: redondear2(ing), costoEstimado: redondear2(cos), gananciaEstimada: redondear2(ing - cos) };
+      return {
+        ingresos: redondear2(ing),
+        costoEstimado: redondear2(cos),
+        gananciaEstimada: redondear2(ing - cos),
+        ingresosSinCosto: redondear2(sinCosto?.total ?? 0),
+      };
     },
 
     async resumenItbis(desde: string, hasta: string): Promise<ResumenItbis> {

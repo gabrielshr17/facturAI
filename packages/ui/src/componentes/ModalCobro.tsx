@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { type MetodoPago, type TipoEcf, ETIQUETA_TIPO_ECF, tipoEcfSugerido, procesarCobro } from "@sfr/core";
+import { CreditCard } from "lucide-react";
 import { s, c, sombra, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { filtrarNumero } from "../utilidades/numero.js";
@@ -112,7 +113,7 @@ export function ModalCobro({
   return (
     <div style={overlay} onClick={onCancelar}>
       <div style={tarjeta} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0, marginBottom: 4 }}>💳 Cobrar</h3>
+        <h3 style={{ marginTop: 0, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><CreditCard size={18} /> Cobrar</h3>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${c.borde}` }}>
           <span style={{ color: c.gris, fontSize: 14 }}>{cantidadArticulos} artículo(s)</span>
           <span style={{ fontSize: 24, fontWeight: 700, color: c.texto }}>RD$ {money(total)}</span>

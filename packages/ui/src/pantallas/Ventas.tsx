@@ -15,16 +15,20 @@ import {
 import { useRepos } from "../data/contexto.js";
 import { s, c, money, sombra } from "../estilos.js";
 import { ModalCobro, type FiscalInput, type SalidaCobro } from "../componentes/ModalCobro.js";
-import { ModalCotizacion } from "../componentes/ModalCotizacion.js";
+import { ModalCotizacion, type SalidaCotizacion } from "../componentes/ModalCotizacion.js";
 import { FormularioProducto, diferenciasProducto, type CambioProducto } from "../componentes/FormularioProducto.js";
 import { ModalConfirmarCambios } from "../componentes/ModalConfirmarCambios.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
+import { imprimirCotizacion } from "../impresion/cotizacion.js";
 import { generarPdfRecibo, generarPdfCotizacion, guardarPdf } from "../impresion/pdf.js";
 import { abrirGavetaTermica } from "../impresion/termica.js";
+import { Hash, Search, Pencil, User, DollarSign, ClipboardList, Weight, TriangleAlert, Star } from "lucide-react";
 import { BotonVoz } from "../componentes/BotonVoz.js";
 import { ChatBot } from "../componentes/ChatBot.js";
+import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { filtrarNumero } from "../utilidades/numero.js";
+import { moverIndiceFila, moverAccionFila } from "../utilidades/navegacionFilas.js";
 import type { CSSProperties } from "react";
 
 const stepperBtn: CSSProperties = {
@@ -47,7 +51,7 @@ function hoyIso(): string {
 /** Recorta el ruido de punto flotante (ej. una cantidad calculada como monto/precio puede llegar como
  *  "3.3333333333333335") para mostrarla en pantalla, sin tocar el valor guardado en la línea. */
 function formatearCantidad(n: number): string {
-  return Number(n.toFixed(4)).toString();
+  return Number(n.toFixed(2)).toString();
 }
 
 /** Un paso de deshacer/rehacer (§ Ctrl+Z/Ctrl+Y) sobre las líneas del ticket. Cada acción visible del
@@ -78,6 +82,7 @@ export function Ventas() {
     promocion: promocionRepo,
     cotizacion: cotizacionRepo,
   } = useRepos();
+  const { confirmar, avisar, elegir } = useAlertas();
 
   const [tickets, setTickets] = useState<Factura[]>([]);
   const [activoId, setActivoId] = useState<string | null>(null);
@@ -87,6 +92,10 @@ export function Ventas() {
   const [busqueda, setBusqueda] = useState("");
   const [resultados, setResultados] = useState<Producto[]>([]);
   const [indiceResultado, setIndiceResultado] = useState(-1);
+  // Qué acción del resultado resaltado dispara Enter: la fila entera (agregarlo al ticket, default),
+  // o una de sus dos acciones secundarias (favorito/modificar) — ←/→ se mueve entre las tres sin
+  // soltar el teclado. Se resetea a "fila" cada vez que ↑/↓ cambia de resultado.
+  const [accionResultado, setAccionResultado] = useState<"fila" | "favorito" | "modificar">("fila");
   // Escape esconde el desplegable de resultados sin perder la búsqueda escrita ni tocar `resultados`
   // — así se puede ver la lista del ticket debajo por un momento, y en cuanto se sigue escribiendo
   // (§ buscarProducto) el desplegable vuelve a aparecer solo.
@@ -96,6 +105,7 @@ export function Ventas() {
   const [busquedaModalCantidad, setBusquedaModalCantidad] = useState("");
   const [resultadosModalCantidad, setResultadosModalCantidad] = useState<Producto[]>([]);
   const [indiceResultadoModalCantidad, setIndiceResultadoModalCantidad] = useState(-1);
+  const [accionResultadoModalCantidad, setAccionResultadoModalCantidad] = useState<"fila" | "favorito">("fila");
   const [cantidadModalTexto, setCantidadModalTexto] = useState("");
   const [montoModalTexto, setMontoModalTexto] = useState("");
   const [modalConsultaAbierto, setModalConsultaAbierto] = useState(false);
@@ -140,6 +150,26 @@ export function Ventas() {
   const busquedaRef = useRef<HTMLInputElement>(null);
   const enfocarBusqueda = useCallback(() => busquedaRef.current?.focus(), []);
 
+  // Campos de "Artículo no registrado" (§ F7): arriba/abajo se maneja acá mismo, en vez de confiar
+  // en `useNavegacionFlechas`, porque esos campos viven dentro de una fila horizontal donde el orden
+  // visual (izquierda→derecha) no es el mismo que el orden vertical que arriba/abajo sugiere — así
+  // queda garantizado moverse Descripción → Precio → Cant. → Agregar sin importar el layout.
+  const sueltoDescRef = useRef<HTMLInputElement>(null);
+  const sueltoPrecioRef = useRef<HTMLInputElement>(null);
+  const sueltoCantidadRef = useRef<HTMLInputElement>(null);
+  const sueltoAgregarRef = useRef<HTMLButtonElement>(null);
+  function manejarFlechaSuelto(e: { key: string; preventDefault(): void }, siguiente: HTMLElement | null, anterior: HTMLElement | null) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      siguiente?.focus();
+      if (siguiente instanceof HTMLInputElement) siguiente.select();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      anterior?.focus();
+      if (anterior instanceof HTMLInputElement) anterior.select();
+    }
+  }
+
   useAtajosTeclado({
     F10: enfocarBusqueda,
     F12: () => { if (lineas.length > 0) setMostrarCobro(true); },
@@ -151,7 +181,7 @@ export function Ventas() {
     // régimen por defecto para el próximo producto que se agregue.
     F8: () => { if (lineaResaltada) void alternarMayoreoLinea(lineaResaltada); else setEsMayoreo((v) => !v); },
     F9: () => abrirConsultaPrecio(),
-    F11: () => abrirModalCantidad(),
+    Insert: () => abrirModalCantidad(),
     "Ctrl+P": () => { if (!reimprimiendo) void reimprimirUltimo(); },
     // Deshacer/rehacer de cambios en el ticket (agregar/quitar/cantidad/mayoreo, § AccionLinea).
     // Se registran ambos atajos de rehacer porque las dos convenciones son comunes en Windows:
@@ -364,7 +394,7 @@ export function Ventas() {
 
   async function eliminarTicketActivo() {
     if (!activoId) return;
-    if (!confirm("¿Eliminar este ticket?")) return;
+    if (!(await confirmar("¿Eliminar este ticket?", { textoConfirmar: "Eliminar" }))) return;
     await repo.eliminarTicket(activoId);
     setActivoId(null);
     await cargarTickets();
@@ -386,12 +416,14 @@ export function Ventas() {
     if (!q.trim()) {
       setResultados([]);
       setIndiceResultado(-1);
+      setAccionResultado("fila");
       return;
     }
     const id = setTimeout(() => {
       void productos.listar(q).then((res) => {
         setResultados(res);
         setIndiceResultado(res.length > 0 ? 0 : -1);
+        setAccionResultado("fila");
       });
     }, 250);
     return () => clearTimeout(id);
@@ -445,6 +477,7 @@ export function Ventas() {
       setBusqueda("");
       setResultados([]);
       setIndiceResultado(-1);
+      setAccionResultado("fila");
       // El producto recién agregado (o la línea a la que se sumó) queda "resaltado" para poder
       // ajustar cantidad/mayoreo con +/−/F8 sin tocar el mouse — el foco del teclado se queda en
       // la búsqueda (para seguir escaneando), y las flechas arriba/abajo desde ahí mueven el
@@ -544,6 +577,7 @@ export function Ventas() {
     setBusquedaModalCantidad("");
     setResultadosModalCantidad([]);
     setIndiceResultadoModalCantidad(-1);
+    setAccionResultadoModalCantidad("fila");
   }
 
   /** Busca con un pequeño debounce y, en cuanto el texto deja un solo producto posible, pasa directo
@@ -559,12 +593,14 @@ export function Ventas() {
     if (!q.trim()) {
       setResultadosModalCantidad([]);
       setIndiceResultadoModalCantidad(-1);
+      setAccionResultadoModalCantidad("fila");
       return;
     }
     const id = setTimeout(() => {
       void productos.listar(q).then((resultados) => {
         setResultadosModalCantidad(resultados);
         setIndiceResultadoModalCantidad(-1);
+        setAccionResultadoModalCantidad("fila");
         if (resultados.length === 1) elegirProductoModalCantidad(resultados[0]);
       });
     }, 250);
@@ -699,7 +735,12 @@ export function Ventas() {
   }
 
   async function establecerCantidad(l: FacturaLinea, cantidad: number) {
-    if (!(cantidad > 0)) return eliminarLinea(l);
+    if (!(cantidad > 0)) {
+      // Bajar a 0 (con el − o editando a mano) borra la línea — mismo efecto que el botón de
+      // basura, así que pide la misma confirmación en vez de borrar en silencio.
+      if (!(await confirmar(`¿Borrar "${l.descripcion}" del ticket?`, { textoConfirmar: "Borrar" }))) return;
+      return eliminarLinea(l);
+    }
     setError(null);
     try {
       await repo.actualizarCantidadLinea(l.id, cantidad);
@@ -876,9 +917,10 @@ export function Ventas() {
     enfocarBusqueda();
   }
 
-  /** Genera una cotización a partir del ticket actual: guarda el registro (§ cotizacion-repo) y el
-   *  PDF. A diferencia de Cobrar, no toca el ticket — sigue abierto tal como estaba. */
-  async function crearCotizacion(notas: string, diasVigencia: number) {
+  /** Genera una cotización a partir del ticket actual: guarda el registro (§ cotizacion-repo) e
+   *  imprime/genera el PDF según `salida` (§ mismo patrón que confirmarCobro). A diferencia de
+   *  Cobrar, no toca el ticket — sigue abierto tal como estaba. */
+  async function crearCotizacion(notas: string, diasVigencia: number, salida: SalidaCotizacion) {
     const c = await cotizacionRepo.crear({
       cliente_id: clienteActivo?.id ?? null,
       notas: notas.trim() || null,
@@ -892,22 +934,24 @@ export function Ventas() {
         tasaImpuesto: l.tasa_impuesto,
       })),
     });
-    guardarPdf(
-      generarPdfCotizacion({
-        negocio: negocio ?? negocioReciboDefault,
-        numero: c.numero_interno,
-        fecha: c.fecha_hora,
-        fechaVencimiento: c.fecha_vencimiento,
-        cliente: clienteActivo,
-        lineas,
-        subtotalGravado: c.subtotal_gravado,
-        subtotalExento: c.subtotal_exento,
-        totalItbis: c.total_itbis,
-        total: c.total,
-        notas: c.notas,
-      }),
-      `Cotizacion-${c.numero_interno}.pdf`,
-    );
+    const datosCotizacion = {
+      negocio: negocio ?? negocioReciboDefault,
+      numero: c.numero_interno,
+      fecha: c.fecha_hora,
+      fechaVencimiento: c.fecha_vencimiento,
+      cliente: clienteActivo,
+      lineas,
+      subtotalGravado: c.subtotal_gravado,
+      subtotalExento: c.subtotal_exento,
+      totalItbis: c.total_itbis,
+      total: c.total,
+      notas: c.notas,
+    };
+    if (salida === "imprimir") {
+      imprimirCotizacion(datosCotizacion);
+    } else {
+      guardarPdf(generarPdfCotizacion(datosCotizacion), `Cotizacion-${c.numero_interno}.pdf`);
+    }
     setMostrarCotizacion(false);
     enfocarBusqueda();
   }
@@ -918,16 +962,22 @@ export function Ventas() {
     try {
       const ultima = await repo.obtenerUltimaCobrada();
       if (!ultima) {
-        alert("Todavía no hay ninguna venta cobrada para reimprimir.");
+        await avisar("Todavía no hay ninguna venta cobrada para reimprimir.", { variante: "info" });
         return;
       }
+      const salida = await elegir("¿Cómo quieres reimprimir el último ticket cobrado?", [
+        { valor: "imprimir", etiqueta: "Imprimir" },
+        { valor: "pdf", etiqueta: "Guardar PDF" },
+      ], { titulo: "Reimprimir ticket" });
+      if (!salida) return;
+
       const [lineasUltima, pagosUltima, clienteUltima, comprobanteUltimo] = await Promise.all([
         repo.obtenerLineas(ultima.id),
         repo.obtenerPagos(ultima.id),
         ultima.cliente_id ? clientes.obtener(ultima.cliente_id) : Promise.resolve(undefined),
         ultima.comprobante_id ? comprobanteFiscal.obtener(ultima.comprobante_id) : Promise.resolve(undefined),
       ]);
-      imprimirRecibo({
+      const datosRecibo = {
         negocio: negocio ?? negocioReciboDefault,
         factura: ultima,
         lineas: lineasUltima,
@@ -940,7 +990,12 @@ export function Ventas() {
               codigoSeguridad: comprobanteUltimo.codigo_seguridad,
             }
           : null,
-      });
+      };
+      if (salida === "imprimir") {
+        imprimirRecibo(datosRecibo);
+      } else {
+        guardarPdf(generarPdfRecibo(datosRecibo), `Factura-${ultima.numero_interno}.pdf`);
+      }
     } finally {
       setReimprimiendo(false);
     }
@@ -1011,10 +1066,16 @@ export function Ventas() {
                     }
                     if ((e.key === "ArrowDown" || e.key === "ArrowUp") && resultados.length > 0 && !ocultarResultados) {
                       e.preventDefault();
-                      setIndiceResultado((i) => {
-                        const siguiente = e.key === "ArrowDown" ? i + 1 : i - 1;
-                        return Math.min(Math.max(siguiente, 0), resultados.length - 1);
-                      });
+                      setAccionResultado("fila");
+                      setIndiceResultado((i) => moverIndiceFila(i, e.key === "ArrowDown" ? 1 : -1, resultados.length));
+                      return;
+                    }
+                    // Con un resultado resaltado, ←/→ se mueve entre sus acciones (fila → favorito →
+                    // modificar) sin soltar el teclado — Enter dispara la acción resaltada en vez de
+                    // agregar el producto (§ abajo).
+                    if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && indiceResultado >= 0 && resultados.length > 0 && !ocultarResultados) {
+                      e.preventDefault();
+                      setAccionResultado((a) => moverAccionFila(a, e.key === "ArrowRight" ? 1 : -1, ["favorito", "modificar"]));
                       return;
                     }
                     // Sin un desplegable de resultados visible, arriba/abajo mueve el resaltado
@@ -1023,6 +1084,12 @@ export function Ventas() {
                     if ((e.key === "ArrowDown" || e.key === "ArrowUp") && lineas.length > 0) {
                       e.preventDefault();
                       moverResaltado(e.key === "ArrowDown" ? 1 : -1);
+                      return;
+                    }
+                    if (e.key === "Enter" && indiceResultado >= 0 && resultados[indiceResultado] && accionResultado !== "fila") {
+                      e.preventDefault();
+                      if (accionResultado === "favorito") void alternarFavoritoProducto(resultados[indiceResultado]);
+                      else abrirEdicionProducto(resultados[indiceResultado]);
                       return;
                     }
                     if (e.key === "Enter" && busqueda.trim()) {
@@ -1056,11 +1123,11 @@ export function Ventas() {
                 <button style={s.botonSecundario} onClick={() => setMostrarSuelto((v) => !v)}>
                   + Artículo no registrado (F7)
                 </button>
-                <button style={s.botonSecundario} onClick={abrirModalCantidad}>
-                  🔢 Agregar cantidad (F11)
+                <button style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={abrirModalCantidad}>
+                  <Hash size={15} /> Agregar cantidad (Insert)
                 </button>
-                <button style={s.botonSecundario} onClick={abrirConsultaPrecio}>
-                  🔍 Consultar precio (F9)
+                <button style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={abrirConsultaPrecio}>
+                  <Search size={15} /> Consultar precio (F9)
                 </button>
               </div>
 
@@ -1085,6 +1152,7 @@ export function Ventas() {
                   {resultados.map((p, i) => (
                     <div
                       key={p.id}
+                      ref={i === indiceResultado ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                       className="sfr-fila-clickeable"
                       onClick={() => seleccionarProducto(p)}
                       onMouseEnter={() => setIndiceResultado(i)}
@@ -1101,31 +1169,38 @@ export function Ventas() {
                       <span>
                         <button
                           onClick={(e) => { e.stopPropagation(); void alternarFavoritoProducto(p); }}
-                          title={p.favorito === 1 ? "Quitar de favoritos" : "Marcar como favorito"}
-                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, padding: 0, marginRight: 4, lineHeight: 1, verticalAlign: "middle", color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4 }}
+                          title={p.favorito === 1 ? "Quitar de favoritos (←/→ + Enter)" : "Marcar como favorito (←/→ + Enter)"}
+                          style={{
+                            background: "none", border: "none", cursor: "pointer", padding: 2, marginRight: 4, lineHeight: 1, verticalAlign: "middle", borderRadius: 6,
+                            color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4,
+                            ...(i === indiceResultado && accionResultado === "favorito" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1, opacity: 1 } : {}),
+                          }}
                         >
-                          {p.favorito === 1 ? "★" : "☆"}
+                          <Star size={19} fill={p.favorito === 1 ? "currentColor" : "none"} />
                         </button>
                         {p.descripcion} {p.codigo_barra ? <span style={{ color: c.gris, fontSize: 12 }}>({p.codigo_barra})</span> : ""}
                         {p.tipo_venta === "granel" && (
-                          <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo }}>
-                            ⚖️ a granel{p.unidad_medida ? ` (${p.unidad_medida})` : ""}
+                          <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <Weight size={12} /> a granel{p.unidad_medida ? ` (${p.unidad_medida})` : ""}
                           </span>
                         )}
                         {negocio?.inventario_activo === 1 && (
-                          <span style={{ color: (p.existencia ?? 0) <= 0 ? c.rojo : c.gris, fontSize: 12, marginLeft: 8 }}>
-                            {(p.existencia ?? 0) <= 0 ? "⚠ sin existencia" : `${p.existencia} disponibles`}
+                          <span style={{ color: (p.existencia ?? 0) <= 0 ? c.rojo : c.gris, fontSize: 12, marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            {(p.existencia ?? 0) <= 0 ? <><TriangleAlert size={12} /> sin existencia</> : `${p.existencia} disponibles`}
                           </span>
                         )}
                       </span>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <b style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(esMayoreo && p.precio_mayoreo ? p.precio_mayoreo : p.precio_venta)}</b>
                         <button
-                          style={s.botonSecundario}
-                          title="Corregir este producto sin salir del ticket"
+                          style={{
+                            ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6,
+                            ...(i === indiceResultado && accionResultado === "modificar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}),
+                          }}
+                          title="Corregir este producto sin salir del ticket (←/→ + Enter)"
                           onClick={(e) => { e.stopPropagation(); abrirEdicionProducto(p); }}
                         >
-                          ✏️ Modificar
+                          <Pencil size={14} /> Modificar
                         </button>
                       </div>
                     </div>
@@ -1136,16 +1211,28 @@ export function Ventas() {
 
               {mostrarSuelto && (
                 <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                  <input autoFocus style={s.input} placeholder="Descripción" value={sueltoDesc}
+                  <input ref={sueltoDescRef} autoFocus style={s.input} placeholder="Descripción" value={sueltoDesc}
                     onChange={(e) => setSueltoDesc(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") void agregarSuelto(); }} />
-                  <input style={{ ...s.input, maxWidth: 120 }} placeholder="Precio" type="text" inputMode="decimal" value={sueltoPrecio}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { void agregarSuelto(); return; }
+                      manejarFlechaSuelto(e, sueltoPrecioRef.current, null);
+                    }} />
+                  <input ref={sueltoPrecioRef} style={{ ...s.input, maxWidth: 120 }} placeholder="Precio" type="text" inputMode="decimal" value={sueltoPrecio}
                     onChange={(e) => setSueltoPrecio(filtrarNumero(e.target.value))}
-                    onKeyDown={(e) => { if (e.key === "Enter") void agregarSuelto(); }} />
-                  <input style={{ ...s.input, maxWidth: 80 }} placeholder="Cant." type="text" inputMode="decimal" value={sueltoCantidad}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { void agregarSuelto(); return; }
+                      manejarFlechaSuelto(e, sueltoCantidadRef.current, sueltoDescRef.current);
+                    }} />
+                  <input ref={sueltoCantidadRef} style={{ ...s.input, maxWidth: 80 }} placeholder="Cant." type="text" inputMode="decimal" value={sueltoCantidad}
                     onChange={(e) => setSueltoCantidad(filtrarNumero(e.target.value))}
-                    onKeyDown={(e) => { if (e.key === "Enter") void agregarSuelto(); }} />
-                  <button style={s.boton} onClick={agregarSuelto}>Agregar</button>
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { void agregarSuelto(); return; }
+                      manejarFlechaSuelto(e, sueltoAgregarRef.current, sueltoPrecioRef.current);
+                    }} />
+                  <button ref={sueltoAgregarRef} style={s.boton} onClick={agregarSuelto}
+                    onKeyDown={(e) => manejarFlechaSuelto(e, null, sueltoCantidadRef.current)}>
+                    Agregar
+                  </button>
                 </div>
               )}
 
@@ -1221,7 +1308,7 @@ export function Ventas() {
                       <td style={s.td}>
                         <button
                           style={s.botonPeligro}
-                          onClick={() => { if (confirm(`¿Borrar "${l.descripcion}" del ticket?`)) void eliminarLinea(l); }}
+                          onClick={async () => { if (await confirmar(`¿Borrar "${l.descripcion}" del ticket?`, { textoConfirmar: "Borrar" })) void eliminarLinea(l); }}
                         >
                           Borrar
                         </button>
@@ -1244,7 +1331,7 @@ export function Ventas() {
           {/* Columna lateral: cliente + totales */}
           <div>
             <div style={{ ...s.tarjeta, marginBottom: 12 }}>
-              <h4 style={{ marginTop: 0 }}>👤 Cliente</h4>
+              <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><User size={16} /> Cliente</h4>
               {clienteActivo ? (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <p style={{ margin: 0 }}>{clienteActivo.nombre} {clienteActivo.apellidos ?? ""}</p>
@@ -1277,6 +1364,7 @@ export function Ventas() {
                   {clienteResultados.map((cl, i) => (
                     <div
                       key={cl.id}
+                      ref={i === indiceResultadoCliente ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                       className="sfr-fila-clickeable"
                       onClick={() => asignarCliente(cl)}
                       onMouseEnter={() => setIndiceResultadoCliente(i)}
@@ -1294,9 +1382,11 @@ export function Ventas() {
                   {mostrarNuevoCliente && (
                     <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
                       <input autoFocus style={s.input} placeholder="Nombre del cliente" value={nuevoClienteNombre}
-                        onChange={(e) => setNuevoClienteNombre(e.target.value)} />
+                        onChange={(e) => setNuevoClienteNombre(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") void crearClienteRapido(); }} />
                       <input style={s.input} placeholder="Teléfono (opcional)" value={nuevoClienteTelefono}
-                        onChange={(e) => setNuevoClienteTelefono(e.target.value)} />
+                        onChange={(e) => setNuevoClienteTelefono(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") void crearClienteRapido(); }} />
                       <button style={s.boton} disabled={!nuevoClienteNombre.trim()} onClick={crearClienteRapido}>
                         Crear y asignar
                       </button>
@@ -1307,7 +1397,7 @@ export function Ventas() {
             </div>
 
             <div style={s.tarjeta}>
-              <h4 style={{ marginTop: 0 }}>💲 Totales</h4>
+              <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><DollarSign size={16} /> Totales</h4>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
                 <span style={{ color: c.gris }}>Gravado</span><span>RD$ {money(activo.subtotal_gravado)}</span>
               </div>
@@ -1328,11 +1418,11 @@ export function Ventas() {
                 Cobrar (F12)
               </button>
               <button
-                style={{ ...s.botonSecundario, width: "100%", marginTop: 8 }}
+                style={{ ...s.botonSecundario, width: "100%", marginTop: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
                 disabled={lineas.length === 0}
                 onClick={() => setMostrarCotizacion(true)}
               >
-                📋 Cotización (F5)
+                <ClipboardList size={15} /> Cotización (F5)
               </button>
               <button style={{ ...s.botonPeligro, width: "100%", marginTop: 8, border: "none", background: "none" }} onClick={eliminarTicketActivo}>
                 Eliminar ticket
@@ -1372,7 +1462,7 @@ export function Ventas() {
           <div style={{ ...s.tarjeta, width: 380, maxWidth: "90vw" }} onClick={(e) => e.stopPropagation()}>
             {!modalCantidad.producto ? (
               <>
-                <h3 style={{ marginTop: 0, marginBottom: 12 }}>🔢 Buscar producto</h3>
+                <h3 style={{ marginTop: 0, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Hash size={18} /> Buscar producto</h3>
                 <input
                   autoFocus
                   style={s.input}
@@ -1382,10 +1472,17 @@ export function Ventas() {
                   onKeyDown={async (e) => {
                     if ((e.key === "ArrowDown" || e.key === "ArrowUp") && resultadosModalCantidad.length > 0) {
                       e.preventDefault();
-                      setIndiceResultadoModalCantidad((i) => {
-                        const siguiente = e.key === "ArrowDown" ? i + 1 : i - 1;
-                        return Math.min(Math.max(siguiente, 0), resultadosModalCantidad.length - 1);
-                      });
+                      setAccionResultadoModalCantidad("fila");
+                      setIndiceResultadoModalCantidad((i) => moverIndiceFila(i, e.key === "ArrowDown" ? 1 : -1, resultadosModalCantidad.length));
+                      return;
+                    }
+                    if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && indiceResultadoModalCantidad >= 0 && resultadosModalCantidad.length > 0) {
+                      e.preventDefault();
+                      setAccionResultadoModalCantidad((a) => moverAccionFila(a, e.key === "ArrowRight" ? 1 : -1, ["favorito"]));
+                      return;
+                    }
+                    if (e.key === "Enter" && accionResultadoModalCantidad === "favorito" && resultadosModalCantidad[indiceResultadoModalCantidad]) {
+                      void alternarFavoritoProducto(resultadosModalCantidad[indiceResultadoModalCantidad]);
                       return;
                     }
                     if (e.key === "Enter" && busquedaModalCantidad.trim()) {
@@ -1404,6 +1501,7 @@ export function Ventas() {
                     {resultadosModalCantidad.map((p, i) => (
                       <div
                         key={p.id}
+                        ref={i === indiceResultadoModalCantidad ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                         className="sfr-fila-clickeable"
                         onClick={() => elegirProductoModalCantidad(p)}
                         onMouseEnter={() => setIndiceResultadoModalCantidad(i)}
@@ -1420,15 +1518,19 @@ export function Ventas() {
                         <span>
                           <button
                             onClick={(e) => { e.stopPropagation(); void alternarFavoritoProducto(p); }}
-                            title={p.favorito === 1 ? "Quitar de favoritos" : "Marcar como favorito"}
-                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, padding: 0, marginRight: 4, lineHeight: 1, verticalAlign: "middle", color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4 }}
+                            title={p.favorito === 1 ? "Quitar de favoritos (←/→ + Enter)" : "Marcar como favorito (←/→ + Enter)"}
+                            style={{
+                              background: "none", border: "none", cursor: "pointer", padding: 2, marginRight: 4, lineHeight: 1, verticalAlign: "middle", borderRadius: 6,
+                              color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4,
+                              ...(i === indiceResultadoModalCantidad && accionResultadoModalCantidad === "favorito" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1, opacity: 1 } : {}),
+                            }}
                           >
-                            {p.favorito === 1 ? "★" : "☆"}
+                            <Star size={19} fill={p.favorito === 1 ? "currentColor" : "none"} />
                           </button>
                           {p.descripcion}
                           {p.tipo_venta === "granel" && (
-                            <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo }}>
-                              ⚖️ a granel{p.unidad_medida ? ` (${p.unidad_medida})` : ""}
+                            <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <Weight size={12} /> a granel{p.unidad_medida ? ` (${p.unidad_medida})` : ""}
                             </span>
                           )}
                         </span>
@@ -1443,8 +1545,8 @@ export function Ventas() {
               </>
             ) : (
               <>
-                <h3 style={{ marginTop: 0, marginBottom: 4 }}>
-                  {modalCantidad.producto.tipo_venta === "granel" ? "⚖️ " : ""}{modalCantidad.producto.descripcion}
+                <h3 style={{ marginTop: 0, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+                  {modalCantidad.producto.tipo_venta === "granel" && <Weight size={16} />}{modalCantidad.producto.descripcion}
                 </h3>
                 <p style={{ color: c.gris, fontSize: 13, marginTop: 0, marginBottom: 12 }}>
                   Precio: RD$ {money(precioBase(modalCantidad.producto))}
@@ -1491,7 +1593,7 @@ export function Ventas() {
           onClick={cerrarConsultaPrecio}
         >
           <div style={{ ...s.tarjeta, width: 420, maxWidth: "90vw" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0, marginBottom: 12 }}>🔍 Consultar precio</h3>
+            <h3 style={{ marginTop: 0, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Search size={18} /> Consultar precio</h3>
             <input
               autoFocus
               style={s.input}
@@ -1523,8 +1625,8 @@ export function Ventas() {
                       <span>
                         {p.descripcion}
                         {p.tipo_venta === "granel" && (
-                          <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo }}>
-                            ⚖️ a granel{p.unidad_medida ? ` (${p.unidad_medida})` : ""}
+                          <span style={{ ...s.badge, marginLeft: 8, background: c.amarilloFondo, color: c.amarillo, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <Weight size={12} /> a granel{p.unidad_medida ? ` (${p.unidad_medida})` : ""}
                           </span>
                         )}
                       </span>

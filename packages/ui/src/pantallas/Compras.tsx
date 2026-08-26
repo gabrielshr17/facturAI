@@ -8,6 +8,7 @@ import {
   type ImpuestoTipo,
   ValidacionError,
 } from "@sfr/core";
+import { Truck, Star, Sparkles } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { analizarComprobante, type DatosExtraidosComprobante } from "../data/chatbotCliente.js";
@@ -261,7 +262,7 @@ export function Compras() {
   return (
     <div>
       <div style={{ ...s.tarjeta, marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0 }}>🚚 Nueva compra</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Truck size={18} /> Nueva compra</h3>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
           <div>
@@ -350,7 +351,7 @@ export function Compras() {
               <div key={p.id} className="sfr-fila-clickeable" onClick={() => agregarLineaProducto(p)}
                 onMouseEnter={() => setIndiceResultadoProducto(i)}
                 style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${c.borde}`, display: "flex", justifyContent: "space-between", ...(i === indiceResultadoProducto ? { background: c.azulClaro } : {}) }}>
-                <span>{p.favorito === 1 && <span title="Favorito" style={{ color: c.amarillo, marginRight: 4 }}>★</span>}{p.descripcion} {p.codigo_barra ? <span style={{ color: c.gris, fontSize: 12 }}>({p.codigo_barra})</span> : ""}</span>
+                <span>{p.favorito === 1 && <span title="Favorito" style={{ color: c.amarillo, marginRight: 4, display: "inline-flex", verticalAlign: "middle" }}><Star size={12} fill="currentColor" /></span>}{p.descripcion} {p.codigo_barra ? <span style={{ color: c.gris, fontSize: 12 }}>({p.codigo_barra})</span> : ""}</span>
                 <span style={{ color: c.gris, fontVariantNumeric: "tabular-nums" }}>costo actual RD$ {money(p.costo)}</span>
               </div>
             ))}
@@ -413,8 +414,8 @@ export function Compras() {
               setErrorIA(null);
             }} />
             {archivo && archivo.type.startsWith("image/") && (
-              <button type="button" style={s.botonSecundario} disabled={analizando} onClick={() => void analizarConIA()}>
-                {analizando ? "Analizando…" : "🔎 Analizar con IA"}
+              <button type="button" style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} disabled={analizando} onClick={() => void analizarConIA()}>
+                {analizando ? "Analizando…" : <><Sparkles size={15} /> Analizar con IA</>}
               </button>
             )}
           </div>
@@ -490,7 +491,7 @@ export function Compras() {
 
         {seleccionada && (
           <div style={s.tarjeta}>
-            <h4 style={{ marginTop: 0 }}>🚚 Compra del {new Date(seleccionada.fecha).toLocaleDateString("es-DO")}</h4>
+            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><Truck size={16} /> Compra del {new Date(seleccionada.fecha).toLocaleDateString("es-DO")}</h4>
             {seleccionada.ncf_proveedor && <p style={{ margin: "4px 0", fontSize: 13 }}>NCF proveedor: {seleccionada.ncf_proveedor}</p>}
             <table style={{ ...s.tabla, marginTop: 8 }}>
               <tbody>

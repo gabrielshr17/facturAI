@@ -1,7 +1,9 @@
 import { useState, type CSSProperties } from "react";
 import { normalizar, ValidacionError, type ProductoInput } from "@sfr/core";
+import { Upload, TriangleAlert } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, sombra } from "../estilos.js";
+import { useAlertas } from "../contexto/Alertas.js";
 import { parseArchivoProductos, type ArchivoParseado } from "../importacion/parseArchivo.js";
 import { adivinarMapeo, normalizarImpuesto, normalizarTipoVenta, columnaDe, ETIQUETA_CAMPO, type CampoDestino } from "../importacion/mapeo.js";
 
@@ -45,6 +47,7 @@ function aNumero(v: string | number | null): number | null {
  */
 export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => void; onImportado: () => void }) {
   const { producto: productos, departamento: departamentos } = useRepos();
+  const { confirmar } = useAlertas();
 
   const [paso, setPaso] = useState<Paso>("seleccion");
   const [archivo, setArchivo] = useState<ArchivoParseado | null>(null);
@@ -78,10 +81,11 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
       return;
     }
     if (!columnaDe(mapeo, "precio_venta") && !columnaDe(mapeo, "costo")) {
-      const continuar = confirm(
+      const continuar = await confirmar(
         "No asignaste ninguna columna a 'Precio de venta' ni 'Costo': " +
         "TODOS los productos se importarán con precio RD$0.00. " +
         "¿Seguro que quieres continuar así?",
+        { textoConfirmar: "Continuar así" },
       );
       if (!continuar) return;
     }
@@ -169,7 +173,7 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
   return (
     <div style={overlay} onClick={onCerrar}>
       <div style={tarjeta} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0 }}>📥 Importar productos</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Upload size={18} /> Importar productos</h3>
 
         {paso === "seleccion" && (
           <>
@@ -234,9 +238,10 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
             </label>
 
             {!columnaDe(mapeo, "precio_venta") && !columnaDe(mapeo, "costo") && (
-              <div style={{ background: c.amarilloFondo, border: `1px solid ${c.amarillo}`, color: c.amarillo, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 10 }}>
-                ⚠️ Ninguna columna está asignada a "Precio de venta" ni "Costo": todos los productos se
-                importarán con precio RD$0.00. Revisa el mapeo si tu archivo sí tiene precios.
+              <div style={{ background: c.amarilloFondo, border: `1px solid ${c.amarillo}`, color: c.amarillo, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 10, display: "flex", alignItems: "flex-start", gap: 6 }}>
+                <TriangleAlert size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>Ninguna columna está asignada a "Precio de venta" ni "Costo": todos los productos se
+                importarán con precio RD$0.00. Revisa el mapeo si tu archivo sí tiene precios.</span>
               </div>
             )}
 

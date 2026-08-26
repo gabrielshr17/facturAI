@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { TriangleAlert } from "lucide-react";
 import { s, c, sombra } from "../estilos.js";
 import type { CambioProducto } from "./FormularioProducto.js";
 
@@ -15,7 +16,7 @@ export function ModalConfirmarCambios({ cambios, onConfirmar, onCancelar }: Moda
   return (
     <div style={overlay} onClick={onCancelar}>
       <div style={tarjeta} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0, marginBottom: 4 }}>⚠️ Confirmar cambios</h3>
+        <h3 style={{ marginTop: 0, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><TriangleAlert size={18} /> Confirmar cambios</h3>
         <p style={{ color: c.gris, fontSize: 13, marginTop: 0, marginBottom: 12 }}>
           Se va a guardar lo siguiente:
         </p>

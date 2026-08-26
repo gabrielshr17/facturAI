@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { type FacturaLinea, type Factura, ValidacionError, calcularLinea, registrarDevolucionConFiscal } from "@sfr/core";
+import { Undo2 } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, sombra, money } from "../estilos.js";
 import { filtrarNumero } from "../utilidades/numero.js";
@@ -68,7 +69,7 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
   return (
     <div style={overlay} onClick={onCerrar}>
       <div style={tarjeta} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0 }}>↩️ Devolver artículos</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Undo2 size={18} /> Devolver artículos</h3>
         <p style={{ color: c.gris, fontSize: 13 }}>
           Ticket #{factura.numero_interno}
           {factura.tipo === "fiscal" ? " — venta fiscal: se emitirá una Nota de Crédito (E34)." : ""}

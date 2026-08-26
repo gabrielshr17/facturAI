@@ -7,13 +7,16 @@ import {
   ValidacionError,
   pctGananciaDesdePrecio,
 } from "@sfr/core";
+import { Star, TriangleAlert, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { ImportarProductos } from "../componentes/ImportarProductos.js";
 import { FormularioProducto, diferenciasProducto, type CambioProducto } from "../componentes/FormularioProducto.js";
 import { ModalConfirmarCambios } from "../componentes/ModalConfirmarCambios.js";
+import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { filtrarNumero } from "../utilidades/numero.js";
+import { moverIndiceFila, moverAccionFila } from "../utilidades/navegacionFilas.js";
 
 const IMPUESTOS: { valor: ImpuestoTipo; etiqueta: string }[] = [
   { valor: "itbis18", etiqueta: "ITBIS 18%" },
@@ -46,6 +49,7 @@ const VACIO: ProductoInput = {
 
 export function Productos() {
   const { producto: repo, negocio: negocioRepo, movimientoInventario, factura: facturaRepo } = useRepos();
+  const { confirmar } = useAlertas();
   const [lista, setLista] = useState<Producto[]>([]);
   const [q, setQ] = useState("");
   const [editando, setEditando] = useState<Producto | null>(null);
@@ -63,6 +67,12 @@ export function Productos() {
 
   const [mostrarImportar, setMostrarImportar] = useState(false);
   const [pagina, setPagina] = useState(1);
+
+  // ↑/↓ resalta una fila de la tabla, ←/→ se mueve entre sus acciones (favorito/editar/ajustar/
+  // movimientos/eliminar) y Enter dispara la resaltada — mismo patrón que la búsqueda de Ventas.
+  type AccionProducto = "favorito" | "editar" | "ajustar" | "movimientos" | "eliminar";
+  const [indiceFila, setIndiceFila] = useState(-1);
+  const [accionFila, setAccionFila] = useState<AccionProducto | "fila">("fila");
 
   const busquedaRef = useRef<HTMLInputElement>(null);
   const enfocarBusqueda = useCallback(() => busquedaRef.current?.focus(), []);
@@ -85,6 +95,10 @@ export function Productos() {
     void recargar("");
     void negocioRepo.obtener().then((n) => setInventarioActivo(n?.inventario_activo === 1));
   }, []);
+  useEffect(() => {
+    setIndiceFila(-1);
+    setAccionFila("fila");
+  }, [q, pagina]);
 
   function iniciarAjuste(p: Producto) {
     setAjustando(p.id);
@@ -182,15 +196,31 @@ export function Productos() {
   }
 
   async function eliminar(p: Producto) {
-    if (!confirm(`¿Eliminar "${p.descripcion}"?`)) return;
+    if (!(await confirmar(`¿Eliminar "${p.descripcion}"?`, { textoConfirmar: "Eliminar" }))) return;
     await repo.eliminar(p.id);
     await recargar();
   }
 
-  /** Favorito: sube el producto al tope de la búsqueda en Ventas (§ F10 / F11). */
+  /** Favorito: sube el producto al tope de la búsqueda en Ventas (§ F10 / Insert). */
   async function alternarFavorito(p: Producto) {
     await repo.alternarFavorito(p.id, p.favorito !== 1);
     await recargar();
+  }
+
+  /** Acciones disponibles para una fila, en el mismo orden en que aparecen sus botones — "Ajustar" y
+   *  "Movimientos" solo existen con inventario activo, así que no siempre son alcanzables. */
+  function accionesDe(): AccionProducto[] {
+    return inventarioActivo
+      ? ["favorito", "editar", "ajustar", "movimientos", "eliminar"]
+      : ["favorito", "editar", "eliminar"];
+  }
+
+  function dispararAccion(p: Producto, accion: AccionProducto) {
+    if (accion === "favorito") void alternarFavorito(p);
+    else if (accion === "editar") editar(p);
+    else if (accion === "ajustar") iniciarAjuste(p);
+    else if (accion === "movimientos") void alternarMovimientos(p);
+    else if (accion === "eliminar") void eliminar(p);
   }
 
   /** Exporta el catálogo actual a CSV — mismas columnas que "Importar productos" espera, para poder ir y volver. */
@@ -237,6 +267,23 @@ export function Productos() {
             setQ(e.target.value);
             void recargar(e.target.value);
           }}
+          onKeyDown={(e) => {
+            if ((e.key === "ArrowDown" || e.key === "ArrowUp") && visibles.length > 0) {
+              e.preventDefault();
+              setAccionFila("fila");
+              setIndiceFila((i) => moverIndiceFila(i, e.key === "ArrowDown" ? 1 : -1, visibles.length));
+              return;
+            }
+            if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && indiceFila >= 0 && visibles[indiceFila]) {
+              e.preventDefault();
+              setAccionFila((a) => moverAccionFila(a, e.key === "ArrowRight" ? 1 : -1, accionesDe()));
+              return;
+            }
+            if (e.key === "Enter" && accionFila !== "fila" && indiceFila >= 0 && visibles[indiceFila]) {
+              e.preventDefault();
+              dispararAccion(visibles[indiceFila], accionFila);
+            }
+          }}
         />
         <span style={{ color: c.gris, fontSize: 13 }}>{lista.length} producto(s)</span>
       </div>
@@ -271,16 +318,23 @@ export function Productos() {
             {lista.length === 0 && (
               <tr><td style={s.filaVacia} colSpan={inventarioActivo ? 8 : 7}>Sin productos. Crea el primero con “+ Nuevo producto”.</td></tr>
             )}
-            {visibles.map((p) => (
+            {visibles.map((p, i) => (
               <Fragment key={p.id}>
-                <tr>
+                <tr
+                  ref={i === indiceFila ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                  style={i === indiceFila ? { background: c.azulClaro } : undefined}
+                >
                   <td style={s.td}>
                     <button
                       onClick={() => void alternarFavorito(p)}
-                      title={p.favorito === 1 ? "Quitar de favoritos" : "Marcar como favorito"}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 17, padding: 0, lineHeight: 1, color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4 }}
+                      title={p.favorito === 1 ? "Quitar de favoritos (←/→ + Enter)" : "Marcar como favorito (←/→ + Enter)"}
+                      style={{
+                        background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 1, borderRadius: 6,
+                        color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4, display: "flex",
+                        ...(i === indiceFila && accionFila === "favorito" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1, opacity: 1 } : {}),
+                      }}
                     >
-                      {p.favorito === 1 ? "★" : "☆"}
+                      <Star size={21} fill={p.favorito === 1 ? "currentColor" : "none"} />
                     </button>
                   </td>
                   <td style={s.td}>{p.descripcion}</td>
@@ -306,21 +360,45 @@ export function Productos() {
                         <>
                           {p.existencia ?? 0}
                           {p.existencia != null && p.existencia <= 0 && (
-                            <span style={{ color: c.rojo, marginLeft: 6, fontSize: 12 }}>⚠ agotado</span>
+                            <span style={{ color: c.rojo, marginLeft: 6, fontSize: 12, display: "inline-flex", alignItems: "center", gap: 3 }}><TriangleAlert size={11} /> agotado</span>
                           )}
                         </>
                       )}
                     </td>
                   )}
                   <td style={{ ...s.td, whiteSpace: "nowrap" }}>
-                    <button style={s.botonSecundario} onClick={() => editar(p)}>Editar</button>{" "}
+                    <button
+                      style={{ ...s.botonSecundario, ...(i === indiceFila && accionFila === "editar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                      title="←/→ + Enter"
+                      onClick={() => editar(p)}
+                    >
+                      Editar
+                    </button>{" "}
                     {inventarioActivo && (
                       <>
-                        <button style={s.botonSecundario} onClick={() => iniciarAjuste(p)}>Ajustar</button>{" "}
-                        <button style={s.botonSecundario} onClick={() => alternarMovimientos(p)}>Movimientos</button>{" "}
+                        <button
+                          style={{ ...s.botonSecundario, ...(i === indiceFila && accionFila === "ajustar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                          title="←/→ + Enter"
+                          onClick={() => iniciarAjuste(p)}
+                        >
+                          Ajustar
+                        </button>{" "}
+                        <button
+                          style={{ ...s.botonSecundario, ...(i === indiceFila && accionFila === "movimientos" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                          title="←/→ + Enter"
+                          onClick={() => alternarMovimientos(p)}
+                        >
+                          Movimientos
+                        </button>{" "}
                       </>
                     )}
-                    <button style={s.botonPeligro} onClick={() => eliminar(p)}>Eliminar</button>
+                    <button
+                      style={{ ...s.botonPeligro, ...(i === indiceFila && accionFila === "eliminar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                      title="←/→ + Enter"
+                      onClick={() => eliminar(p)}
+                    >
+                      Eliminar
+                    </button>
                   </td>
                 </tr>
                 {errorAjuste && ajustando === p.id && (
@@ -361,8 +439,8 @@ export function Productos() {
               Página {paginaSegura} de {totalPaginas} — mostrando {visibles.length} de {lista.length}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
-              <button style={s.botonSecundario} disabled={paginaSegura <= 1} onClick={() => setPagina(paginaSegura - 1)}>← Anterior</button>
-              <button style={s.botonSecundario} disabled={paginaSegura >= totalPaginas} onClick={() => setPagina(paginaSegura + 1)}>Siguiente →</button>
+              <button style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 4 }} disabled={paginaSegura <= 1} onClick={() => setPagina(paginaSegura - 1)}><ChevronLeft size={15} /> Anterior</button>
+              <button style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 4 }} disabled={paginaSegura >= totalPaginas} onClick={() => setPagina(paginaSegura + 1)}>Siguiente <ChevronRight size={15} /></button>
             </div>
           </div>
         )}

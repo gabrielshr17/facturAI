@@ -7,6 +7,7 @@ import {
   UMBRAL_BAJO,
   ValidacionError,
 } from "@sfr/core";
+import { Receipt, TriangleAlert } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c } from "../estilos.js";
 
@@ -53,7 +54,7 @@ export function SeccionSecuenciasNcf() {
   return (
     <div style={{ ...s.tarjeta, marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 style={{ marginTop: 0 }}>🧾 Secuencias NCF (e-CF)</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Receipt size={18} /> Secuencias NCF (e-CF)</h3>
         <button style={s.botonSecundario} onClick={() => { setForm({ ...VACIO }); setErrores([]); }}>
           + Cargar secuencia
         </button>
@@ -116,7 +117,7 @@ export function SeccionSecuenciasNcf() {
               <td style={s.tdDerecha}>
                 {restantes(sec)}
                 {sec.estado === "disponible" && restantes(sec) <= UMBRAL_BAJO && (
-                  <span style={{ color: c.rojo, marginLeft: 6, fontSize: 12 }}>⚠ umbral bajo</span>
+                  <span style={{ color: c.rojo, marginLeft: 6, fontSize: 12, display: "inline-flex", alignItems: "center", gap: 3 }}><TriangleAlert size={11} /> umbral bajo</span>
                 )}
               </td>
               <td style={s.td}>{sec.vencimiento}</td>

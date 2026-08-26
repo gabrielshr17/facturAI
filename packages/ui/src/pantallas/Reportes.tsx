@@ -6,6 +6,7 @@ import {
   type ResumenItbis,
   type ResumenPorMetodo,
 } from "@sfr/core";
+import { Wallet, TrendingUp, TriangleAlert, Receipt, CalendarDays, CreditCard, Trophy } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
@@ -105,16 +106,23 @@ export function Reportes() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
         <div style={s.tarjeta}>
-          <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600 }}>💰 Total ventas</h4>
+          <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><Wallet size={15} /> Total ventas</h4>
           <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>RD$ {money(totalVentas)}</div>
         </div>
         <div style={s.tarjeta}>
-          <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600 }}>📈 Ganancia estimada</h4>
+          <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><TrendingUp size={15} /> Ganancia estimada</h4>
           <div style={{ fontSize: 26, fontWeight: 700, color: c.verde, fontVariantNumeric: "tabular-nums" }}>RD$ {money(ganancia?.gananciaEstimada ?? 0)}</div>
           <div style={{ fontSize: 12, color: c.gris }}>Costo estimado: RD$ {money(ganancia?.costoEstimado ?? 0)}</div>
+          {(ganancia?.ingresosSinCosto ?? 0) > 0 && (
+            <div style={{ fontSize: 12, color: c.amarillo, marginTop: 6, fontWeight: 600, display: "flex", alignItems: "flex-start", gap: 5 }}>
+              <TriangleAlert size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>RD$ {money(ganancia!.ingresosSinCosto)} en ventas sin producto vinculado — su costo real
+              se desconoce y NO está restado arriba, así que la ganancia real es MENOR a la mostrada.</span>
+            </div>
+          )}
         </div>
         <div style={s.tarjeta}>
-          <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600 }}>🧾 ITBIS recaudado</h4>
+          <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><Receipt size={15} /> ITBIS recaudado</h4>
           <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>RD$ {money(itbis?.totalItbis ?? 0)}</div>
           <div style={{ fontSize: 12, color: c.gris }}>
             Gravado RD$ {money(itbis?.totalGravado ?? 0)} · Exento RD$ {money(itbis?.totalExento ?? 0)}
@@ -124,7 +132,7 @@ export function Reportes() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div style={s.tarjeta}>
-          <h4 style={{ marginTop: 0 }}>📅 Ventas por día</h4>
+          <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><CalendarDays size={16} /> Ventas por día</h4>
           {ventasPorDia.length === 0 && <p style={{ color: c.gris }}>Sin ventas en este período.</p>}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {ventasPorDia.map((v) => (
@@ -140,7 +148,7 @@ export function Reportes() {
             ))}
           </div>
 
-          <h4 style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${c.borde}` }}>💳 Ventas por método de pago</h4>
+          <h4 style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${c.borde}`, display: "flex", alignItems: "center", gap: 6 }}><CreditCard size={16} /> Ventas por método de pago</h4>
           {porMetodo.map((m) => (
             <div key={m.metodo} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "4px 0" }}>
               <span>{ETIQUETA_METODO[m.metodo] ?? m.metodo}</span><span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(m.total)}</span>
@@ -149,7 +157,7 @@ export function Reportes() {
         </div>
 
         <div style={s.tarjeta}>
-          <h4 style={{ marginTop: 0 }}>🏆 Productos más vendidos</h4>
+          <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><Trophy size={16} /> Productos más vendidos</h4>
           <table style={s.tabla}>
             <thead>
               <tr>

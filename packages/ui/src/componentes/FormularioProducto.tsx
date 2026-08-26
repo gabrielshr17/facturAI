@@ -1,4 +1,5 @@
 import { type Producto, type ProductoInput, type ImpuestoTipo, type TipoVenta, tasaDe, pctGananciaDesdePrecio, calcularPrecioVenta } from "@sfr/core";
+import { Package } from "lucide-react";
 import { s, money } from "../estilos.js";
 import { filtrarNumero } from "../utilidades/numero.js";
 
@@ -75,7 +76,7 @@ export interface FormularioProductoProps {
 export function FormularioProducto({ form, onCambiar, editando, inventarioActivo, errores, onGuardar, onCancelar }: FormularioProductoProps) {
   return (
     <div style={{ ...s.tarjeta, marginBottom: 16 }}>
-      <h3 style={{ marginTop: 0 }}>📦 {editando ? "Editar producto" : "Nuevo producto"}</h3>
+      <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Package size={18} /> {editando ? "Editar producto" : "Nuevo producto"}</h3>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
           <label style={s.label}>Descripción *</label>

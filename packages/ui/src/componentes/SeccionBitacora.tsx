@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { type BitacoraAccion } from "@sfr/core";
+import { ScrollText } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c } from "../estilos.js";
 
@@ -25,7 +26,7 @@ export function SeccionBitacora() {
   return (
     <div style={{ ...s.tarjeta, marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 style={{ marginTop: 0 }}>📜 Bitácora de auditoría</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><ScrollText size={18} /> Bitácora de auditoría</h3>
         <select style={{ ...s.input, width: 200 }} value={entidad} onChange={(e) => setEntidad(e.target.value)}>
           <option value="">Todas las entidades</option>
           <option value="producto">Producto</option>

@@ -8,10 +8,13 @@ import {
   type AplicaAPromocion,
   ValidacionError,
 } from "@sfr/core";
+import { Tag } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
+import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { filtrarNumero } from "../utilidades/numero.js";
+import { moverIndiceFila, moverAccionFila } from "../utilidades/navegacionFilas.js";
 
 function hoyIso(): string {
   const d = new Date();
@@ -26,6 +29,7 @@ const VACIO: PromocionInput = {
 /** Promociones (§ Fase 3): descuentos por producto/departamento con vigencia, aplicados automáticamente en Ventas. */
 export function Promociones() {
   const { promocion: repo, producto: productos, departamento: departamentos } = useRepos();
+  const { confirmar } = useAlertas();
   const [lista, setLista] = useState<Promocion[]>([]);
   const [listaProductos, setListaProductos] = useState<Producto[]>([]);
   const [listaDepartamentos, setListaDepartamentos] = useState<Departamento[]>([]);
@@ -33,11 +37,42 @@ export function Promociones() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [errores, setErrores] = useState<string[]>([]);
 
+  // Sin un campo de búsqueda siempre enfocado (§ Productos/Clientes) donde enganchar ↑/↓/←/→, esta
+  // pantalla los escucha en `window` directamente — igual que `useAtajosTeclado` — pero solo mientras
+  // no hay un formulario abierto, para no robarle las flechas a sus campos de texto/fecha.
+  type AccionPromocion = "editar" | "eliminar";
+  const [indiceFila, setIndiceFila] = useState(-1);
+  const [accionFila, setAccionFila] = useState<AccionPromocion | "fila">("fila");
+
   useAtajosTeclado({
     F6: () => nueva(),
     "Ctrl+S": () => { if (form) void guardar(); },
     Escape: () => { if (form) setForm(null); },
   });
+
+  useEffect(() => {
+    if (form) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && lista.length > 0) {
+        e.preventDefault();
+        setAccionFila("fila");
+        setIndiceFila((i) => moverIndiceFila(i, e.key === "ArrowDown" ? 1 : -1, lista.length));
+        return;
+      }
+      if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && indiceFila >= 0 && lista[indiceFila]) {
+        e.preventDefault();
+        setAccionFila((a) => moverAccionFila(a, e.key === "ArrowRight" ? 1 : -1, ["editar", "eliminar"]));
+        return;
+      }
+      if (e.key === "Enter" && accionFila !== "fila" && indiceFila >= 0 && lista[indiceFila]) {
+        e.preventDefault();
+        if (accionFila === "editar") editar(lista[indiceFila]);
+        else void eliminar(lista[indiceFila]);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [form, lista, indiceFila, accionFila]);
 
   async function recargar() {
     setLista(await repo.listar());
@@ -77,7 +112,7 @@ export function Promociones() {
   }
 
   async function eliminar(p: Promocion) {
-    if (!confirm(`¿Eliminar la promoción "${p.nombre}"?`)) return;
+    if (!(await confirmar(`¿Eliminar la promoción "${p.nombre}"?`, { textoConfirmar: "Eliminar" }))) return;
     await repo.eliminar(p.id);
     await recargar();
   }
@@ -92,7 +127,7 @@ export function Promociones() {
 
       {form && (
         <div style={{ ...s.tarjeta, marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>🏷️ {editandoId ? "Editar promoción" : "Nueva promoción"}</h3>
+          <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Tag size={18} /> {editandoId ? "Editar promoción" : "Nueva promoción"}</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
               <label style={s.label}>Nombre *</label>
@@ -176,10 +211,14 @@ export function Promociones() {
             {lista.length === 0 && (
               <tr><td style={s.filaVacia} colSpan={6}>Sin promociones. Crea la primera con "+ Nueva promoción".</td></tr>
             )}
-            {lista.map((p) => {
+            {lista.map((p, i) => {
               const vigente = p.activa === 1 && p.fecha_inicio <= hoy && hoy <= p.fecha_fin;
               return (
-                <tr key={p.id}>
+                <tr
+                  key={p.id}
+                  ref={i === indiceFila ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                  style={i === indiceFila ? { background: c.azulClaro } : undefined}
+                >
                   <td style={s.td}>{p.nombre}</td>
                   <td style={s.tdDerecha}>{p.tipo === "porcentaje" ? `${p.valor}%` : `RD$ ${money(p.valor)}`}</td>
                   <td style={s.td}>
@@ -196,8 +235,20 @@ export function Promociones() {
                     </span>
                   </td>
                   <td style={{ ...s.td, whiteSpace: "nowrap" }}>
-                    <button style={s.botonSecundario} onClick={() => editar(p)}>Editar</button>{" "}
-                    <button style={s.botonPeligro} onClick={() => eliminar(p)}>Eliminar</button>
+                    <button
+                      style={{ ...s.botonSecundario, ...(i === indiceFila && accionFila === "editar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                      title="←/→ + Enter"
+                      onClick={() => editar(p)}
+                    >
+                      Editar
+                    </button>{" "}
+                    <button
+                      style={{ ...s.botonPeligro, ...(i === indiceFila && accionFila === "eliminar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                      title="←/→ + Enter"
+                      onClick={() => eliminar(p)}
+                    >
+                      Eliminar
+                    </button>
                   </td>
                 </tr>
               );

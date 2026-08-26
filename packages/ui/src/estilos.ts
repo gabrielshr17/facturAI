@@ -154,11 +154,14 @@ export const s = {
   errorBox: {
     background: c.rojoFondo,
     border: `1px solid ${c.rojo}`,
+    borderLeft: `4px solid ${c.rojo}`,
     color: c.rojo,
     borderRadius: 8,
-    padding: "8px 12px",
-    fontSize: 13,
+    padding: "10px 14px",
+    fontSize: 13.5,
+    fontWeight: 600,
     marginTop: 10,
+    animation: "sfr-alerta-entrada 0.15s ease-out",
   } as CSSProperties,
 };
 

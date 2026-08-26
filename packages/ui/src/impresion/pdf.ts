@@ -18,7 +18,7 @@ function money(n: number): string {
 
 /** Recorta el ruido de punto flotante antes de mostrar una cantidad (§ recibo.ts). */
 function cantidad(n: number): string {
-  return Number(n.toFixed(4)).toString();
+  return Number(n.toFixed(2)).toString();
 }
 
 /** "AAAA-MM-DD" → "DD/MM/AAAA" sin pasar por `Date` — un `new Date("AAAA-MM-DD")` se interpreta

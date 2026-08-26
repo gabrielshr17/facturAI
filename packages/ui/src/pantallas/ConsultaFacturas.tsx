@@ -9,17 +9,20 @@ import {
   ETIQUETA_TIPO_ECF,
   normalizar,
 } from "@sfr/core";
+import { Receipt, ClipboardList } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
+import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
 import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
+import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { ConsultaCotizaciones } from "./ConsultaCotizaciones.js";
 
 /** Recorta el ruido de punto flotante antes de mostrar una cantidad (§ recibo.ts) — sin esto, un
  *  producto a granel como 3+1/3 lb se ve "3.3333333333333335". */
 function cantidad(n: number): string {
-  return Number(n.toFixed(4)).toString();
+  return Number(n.toFixed(2)).toString();
 }
 
 /** Fila enriquecida con los datos que no vienen directo en `factura` (§ Consulta de facturas). */
@@ -38,6 +41,7 @@ const TIPOS: { valor: "" | "normal" | "fiscal"; etiqueta: string }[] = [
 /** Consulta de facturas ya cobradas: filtrar, ver detalle y reimprimir. */
 function FacturasCobradas() {
   const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo } = useRepos();
+  const { elegir } = useAlertas();
 
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
@@ -60,7 +64,7 @@ function FacturasCobradas() {
   const enfocarBusqueda = useCallback(() => busquedaRef.current?.focus(), []);
   useAtajosTeclado({
     F10: enfocarBusqueda,
-    "Ctrl+P": () => { if (seleccionada) reimprimir(seleccionada); },
+    "Ctrl+P": () => { if (seleccionada) void reimprimir(seleccionada); },
     Escape: () => { if (mostrarDevolucion) setMostrarDevolucion(false); else setSeleccionadaId(null); },
   });
 
@@ -131,8 +135,14 @@ function FacturasCobradas() {
     ancho_impresora_default: 80,
   };
 
-  function reimprimir(fila: FilaFactura) {
-    imprimirRecibo({
+  async function reimprimir(fila: FilaFactura) {
+    const salida = await elegir("¿Cómo quieres reimprimir esta factura?", [
+      { valor: "imprimir", etiqueta: "Imprimir" },
+      { valor: "pdf", etiqueta: "Guardar PDF" },
+    ], { titulo: "Reimprimir factura" });
+    if (!salida) return;
+
+    const datosRecibo = {
       negocio: negocio ?? negocioReciboDefault,
       factura: fila.factura,
       lineas: lineasSel,
@@ -145,7 +155,12 @@ function FacturasCobradas() {
             codigoSeguridad: fila.comprobante.codigo_seguridad,
           }
         : null,
-    });
+    };
+    if (salida === "imprimir") {
+      imprimirRecibo(datosRecibo);
+    } else {
+      guardarPdf(generarPdfRecibo(datosRecibo), `Factura-${fila.factura.numero_interno}.pdf`);
+    }
   }
 
   return (
@@ -224,7 +239,7 @@ function FacturasCobradas() {
 
         {seleccionada && (
           <div style={s.tarjeta}>
-            <h4 style={{ marginTop: 0 }}>🧾 Ticket #{seleccionada.factura.numero_interno}</h4>
+            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><Receipt size={16} /> Ticket #{seleccionada.factura.numero_interno}</h4>
             <p style={{ color: c.gris, fontSize: 13, margin: "4px 0" }}>
               {new Date(seleccionada.factura.fecha_hora).toLocaleString("es-DO")}
             </p>
@@ -261,7 +276,7 @@ function FacturasCobradas() {
             </div>
 
             <div style={s.formFooter}>
-              <button style={{ ...s.boton, flex: 1 }} onClick={() => reimprimir(seleccionada)}>
+              <button style={{ ...s.boton, flex: 1 }} onClick={() => void reimprimir(seleccionada)}>
                 Reimprimir (Ctrl+P)
               </button>
               <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => setMostrarDevolucion(true)}>
@@ -298,21 +313,21 @@ export function ConsultaFacturas() {
           onClick={() => setTab("facturas")}
           style={{
             ...s.botonSecundario,
-            borderRadius: 999,
+            borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 6,
             ...(tab === "facturas" ? { background: c.azulClaro, color: c.azulOscuro, border: `1px solid ${c.azul}`, fontWeight: 600 } : {}),
           }}
         >
-          🧾 Facturas
+          <Receipt size={15} /> Facturas
         </button>
         <button
           onClick={() => setTab("cotizaciones")}
           style={{
             ...s.botonSecundario,
-            borderRadius: 999,
+            borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 6,
             ...(tab === "cotizaciones" ? { background: c.azulClaro, color: c.azulOscuro, border: `1px solid ${c.azul}`, fontWeight: 600 } : {}),
           }}
         >
-          📋 Cotizaciones
+          <ClipboardList size={15} /> Cotizaciones
         </button>
       </div>
       {tab === "facturas" ? <FacturasCobradas /> : <ConsultaCotizaciones />}

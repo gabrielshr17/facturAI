@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Printer, RefreshCw, Wallet } from "lucide-react";
 import { s, c } from "../estilos.js";
 import { generarTicketPrueba } from "../impresion/escpos.js";
 import {
@@ -72,7 +73,7 @@ export function SeccionImpresoraTermica() {
 
   return (
     <div style={{ ...s.tarjeta, marginTop: 16 }}>
-      <h3 style={{ marginTop: 0 }}>🖨️ Impresora térmica (ESC/POS)</h3>
+      <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Printer size={18} /> Impresora térmica (ESC/POS)</h3>
       <p style={{ color: c.gris, fontSize: 13 }}>
         Selecciona la impresora térmica instalada en Windows para imprimir los tickets directamente,
         sin el diálogo del navegador. Si no seleccionas ninguna, se sigue usando la impresión normal.
@@ -84,14 +85,14 @@ export function SeccionImpresoraTermica() {
             <option key={nombre} value={nombre}>{nombre}</option>
           ))}
         </select>
-        <button type="button" style={s.botonSecundario} disabled={cargando} onClick={() => void refrescar()}>
-          {cargando ? "Buscando…" : "🔄 Buscar impresoras"}
+        <button type="button" style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} disabled={cargando} onClick={() => void refrescar()}>
+          {cargando ? "Buscando…" : <><RefreshCw size={15} /> Buscar impresoras</>}
         </button>
-        <button type="button" style={s.botonSecundario} disabled={!seleccionada || probando} onClick={() => void probar()}>
-          {probando ? "Imprimiendo…" : "🖨️ Imprimir ticket de prueba"}
+        <button type="button" style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} disabled={!seleccionada || probando} onClick={() => void probar()}>
+          {probando ? "Imprimiendo…" : <><Printer size={15} /> Imprimir ticket de prueba</>}
         </button>
-        <button type="button" style={s.botonSecundario} disabled={!seleccionada} onClick={() => void gaveta()}>
-          💰 Abrir gaveta
+        <button type="button" style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} disabled={!seleccionada} onClick={() => void gaveta()}>
+          <Wallet size={15} /> Abrir gaveta
         </button>
       </div>
       {impresoras.length === 0 && !cargando && (

@@ -1,14 +1,19 @@
 import { useState, type CSSProperties } from "react";
+import { ClipboardList } from "lucide-react";
 import { s, c, sombra, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+
+/** Qué hacer con la cotización al generarla: imprimirla (térmica/GDI/navegador, § cotizacion.ts) o
+ *  solo guardar el PDF (§ mismo concepto que `SalidaCobro` en ModalCobro.tsx). */
+export type SalidaCotizacion = "imprimir" | "pdf";
 
 export interface ModalCotizacionProps {
   total: number;
   cantidadArticulos: number;
   notasIniciales?: string;
   onCancelar: () => void;
-  /** El padre crea el registro (repo.cotizacion.crear) y genera el PDF. */
-  onConfirmar: (notas: string, diasVigencia: number) => Promise<void>;
+  /** El padre crea el registro (repo.cotizacion.crear) e imprime/genera el PDF según `salida`. */
+  onConfirmar: (notas: string, diasVigencia: number, salida: SalidaCotizacion) => Promise<void>;
 }
 
 /** Ventana de cotización (§ Ventas): a diferencia de Cobrar, no cobra nada ni cierra el ticket —
@@ -20,11 +25,11 @@ export function ModalCotizacion({ total, cantidadArticulos, notasIniciales, onCa
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function confirmar() {
+  async function confirmar(salida: SalidaCotizacion) {
     setError(null);
     setGuardando(true);
     try {
-      await onConfirmar(notas, Number(diasVigencia) || 15);
+      await onConfirmar(notas, Number(diasVigencia) || 15, salida);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -34,13 +39,14 @@ export function ModalCotizacion({ total, cantidadArticulos, notasIniciales, onCa
 
   useAtajosTeclado({
     Escape: onCancelar,
-    F1: () => { if (!guardando) void confirmar(); },
+    F1: () => { if (!guardando) void confirmar("imprimir"); },
+    F2: () => { if (!guardando) void confirmar("pdf"); },
   });
 
   return (
     <div style={overlay} onClick={onCancelar}>
       <div style={tarjeta} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0, marginBottom: 4 }}>📋 Cotización</h3>
+        <h3 style={{ marginTop: 0, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><ClipboardList size={18} /> Cotización</h3>
         <p style={{ color: c.gris, fontSize: 13, marginTop: 0, marginBottom: 12 }}>
           Genera un PDF con los precios de este ticket para el cliente — no cobra nada ni cierra el ticket.
         </p>
@@ -68,9 +74,12 @@ export function ModalCotizacion({ total, cantidadArticulos, notasIniciales, onCa
 
         {error && <div style={s.errorBox}>{error}</div>}
 
-        <div style={s.formFooter}>
-          <button style={s.boton} disabled={guardando} onClick={confirmar}>
-            Generar cotización (F1)
+        <div style={{ ...s.formFooter, flexWrap: "wrap" }}>
+          <button style={s.boton} disabled={guardando} onClick={() => confirmar("imprimir")}>
+            Generar e imprimir (F1)
+          </button>
+          <button style={s.botonSecundario} disabled={guardando} onClick={() => confirmar("pdf")}>
+            Generar y guardar PDF (F2)
           </button>
           <button style={s.botonSecundario} disabled={guardando} onClick={onCancelar}>
             Cancelar (Esc)

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Mic } from "lucide-react";
 import { s, c } from "../estilos.js";
 
 /**
@@ -71,12 +72,13 @@ export function BotonVoz({ onResultado, idioma = "es-DO" }: BotonVozProps) {
         type="button"
         style={{
           ...s.botonSecundario,
+          display: "inline-flex", alignItems: "center", gap: 6,
           ...(escuchando ? { background: c.rojo, color: "white", borderColor: c.rojo } : {}),
         }}
         onClick={escuchando ? detener : iniciar}
         title="Buscar por voz"
       >
-        {escuchando ? "🎙️ Escuchando…" : "🎤 Voz"}
+        <Mic size={15} /> {escuchando ? "Escuchando…" : "Voz"}
       </button>
       {error && <span style={{ color: c.rojo, fontSize: 12 }}>{error}</span>}
     </div>

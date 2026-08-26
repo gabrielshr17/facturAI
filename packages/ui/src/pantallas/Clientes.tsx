@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type Cliente, type ClienteInput, ValidacionError } from "@sfr/core";
+import { User } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c } from "../estilos.js";
+import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { moverIndiceFila, moverAccionFila } from "../utilidades/navegacionFilas.js";
 
 const VACIO: ClienteInput = {
   nombre: "",
@@ -17,11 +20,16 @@ const VACIO: ClienteInput = {
 
 export function Clientes() {
   const { cliente: repo } = useRepos();
+  const { confirmar } = useAlertas();
   const [lista, setLista] = useState<Cliente[]>([]);
   const [q, setQ] = useState("");
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [form, setForm] = useState<ClienteInput | null>(null);
   const [errores, setErrores] = useState<string[]>([]);
+
+  type AccionCliente = "editar" | "eliminar";
+  const [indiceFila, setIndiceFila] = useState(-1);
+  const [accionFila, setAccionFila] = useState<AccionCliente | "fila">("fila");
 
   const busquedaRef = useRef<HTMLInputElement>(null);
   const enfocarBusqueda = useCallback(() => busquedaRef.current?.focus(), []);
@@ -38,6 +46,15 @@ export function Clientes() {
   useEffect(() => {
     void recargar("");
   }, []);
+  useEffect(() => {
+    setIndiceFila(-1);
+    setAccionFila("fila");
+  }, [q]);
+
+  function dispararAccion(cl: Cliente, accion: AccionCliente) {
+    if (accion === "editar") editar(cl);
+    else void eliminar(cl);
+  }
 
   function nuevo() {
     setEditando(null);
@@ -78,7 +95,7 @@ export function Clientes() {
   }
 
   async function eliminar(cl: Cliente) {
-    if (!confirm(`¿Eliminar a "${cl.nombre}"?`)) return;
+    if (!(await confirmar(`¿Eliminar a "${cl.nombre}"?`, { textoConfirmar: "Eliminar" }))) return;
     await repo.eliminar(cl.id);
     await recargar();
   }
@@ -97,13 +114,30 @@ export function Clientes() {
             setQ(e.target.value);
             void recargar(e.target.value);
           }}
+          onKeyDown={(e) => {
+            if ((e.key === "ArrowDown" || e.key === "ArrowUp") && lista.length > 0) {
+              e.preventDefault();
+              setAccionFila("fila");
+              setIndiceFila((i) => moverIndiceFila(i, e.key === "ArrowDown" ? 1 : -1, lista.length));
+              return;
+            }
+            if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && indiceFila >= 0 && lista[indiceFila]) {
+              e.preventDefault();
+              setAccionFila((a) => moverAccionFila(a, e.key === "ArrowRight" ? 1 : -1, ["editar", "eliminar"]));
+              return;
+            }
+            if (e.key === "Enter" && accionFila !== "fila" && indiceFila >= 0 && lista[indiceFila]) {
+              e.preventDefault();
+              dispararAccion(lista[indiceFila], accionFila);
+            }
+          }}
         />
         <span style={{ color: c.gris, fontSize: 13 }}>{lista.length} cliente(s)</span>
       </div>
 
       {form && (
         <div style={{ ...s.tarjeta, marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>👤 {editando ? "Editar cliente" : "Nuevo cliente"}</h3>
+          <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><User size={18} /> {editando ? "Editar cliente" : "Nuevo cliente"}</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
               <label style={s.label}>Nombre *</label>
@@ -177,15 +211,31 @@ export function Clientes() {
             {lista.length === 0 && (
               <tr><td style={s.filaVacia} colSpan={5}>Sin clientes. Crea el primero con “+ Nuevo cliente”.</td></tr>
             )}
-            {lista.map((cl) => (
-              <tr key={cl.id}>
+            {lista.map((cl, i) => (
+              <tr
+                key={cl.id}
+                ref={i === indiceFila ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                style={i === indiceFila ? { background: c.azulClaro } : undefined}
+              >
                 <td style={s.td}>{cl.nombre} {cl.apellidos ?? ""}</td>
                 <td style={s.td}>{cl.telefono ?? "—"}</td>
                 <td style={s.td}>{cl.correo ?? "—"}</td>
                 <td style={s.td}>{cl.documento_numero ? <span style={s.badge}>{cl.documento_tipo?.toUpperCase()} {cl.documento_numero}</span> : "—"}</td>
                 <td style={{ ...s.td, whiteSpace: "nowrap" }}>
-                  <button style={s.botonSecundario} onClick={() => editar(cl)}>Editar</button>{" "}
-                  <button style={s.botonPeligro} onClick={() => eliminar(cl)}>Eliminar</button>
+                  <button
+                    style={{ ...s.botonSecundario, ...(i === indiceFila && accionFila === "editar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                    title="←/→ + Enter"
+                    onClick={() => editar(cl)}
+                  >
+                    Editar
+                  </button>{" "}
+                  <button
+                    style={{ ...s.botonPeligro, ...(i === indiceFila && accionFila === "eliminar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                    title="←/→ + Enter"
+                    onClick={() => eliminar(cl)}
+                  >
+                    Eliminar
+                  </button>
                 </td>
               </tr>
             ))}

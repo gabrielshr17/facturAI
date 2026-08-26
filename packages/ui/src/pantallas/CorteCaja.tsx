@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { type CorteCaja as CorteCajaTipo, type ResumenPeriodoVentas, calcularCorteCaja, ValidacionError } from "@sfr/core";
+import { ChartColumn, Banknote, ClipboardList } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
@@ -102,7 +103,7 @@ export function CorteCaja() {
       {resumen && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div style={s.tarjeta}>
-            <h4 style={{ marginTop: 0 }}>📊 Ventas del período</h4>
+            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><ChartColumn size={16} /> Ventas del período</h4>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
               <span style={{ color: c.gris }}>Facturas cobradas</span><span>{resumen.cantidadFacturas}</span>
             </div>
@@ -128,7 +129,7 @@ export function CorteCaja() {
           </div>
 
           <div style={s.tarjeta}>
-            <h4 style={{ marginTop: 0 }}>💵 Efectivo</h4>
+            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><Banknote size={16} /> Efectivo</h4>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
               <span style={{ color: c.gris }}>Fondo inicial</span><span>RD$ {money(Number(montoInicial) || 0)}</span>
             </div>
@@ -161,7 +162,7 @@ export function CorteCaja() {
       )}
 
       <div style={{ ...s.tarjeta, marginTop: 16 }}>
-        <h4 style={{ marginTop: 0 }}>📋 Cortes anteriores</h4>
+        <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><ClipboardList size={16} /> Cortes anteriores</h4>
         <table style={s.tabla}>
           <thead>
             <tr>

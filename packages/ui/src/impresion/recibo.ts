@@ -51,7 +51,7 @@ function money(n: number): string {
 /** Recorta el ruido de punto flotante de cantidades calculadas (ej. monto/precio en la ventanita de
  *  cantidad específica) antes de imprimirlas — el recibo no debe mostrar "3.3333333333333335". */
 function cantidad(n: number): string {
-  return Number(n.toFixed(4)).toString();
+  return Number(n.toFixed(2)).toString();
 }
 
 function generarHtmlRecibo(datos: ReciboDatos): string {

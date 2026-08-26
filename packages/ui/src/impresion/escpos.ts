@@ -1,4 +1,5 @@
 import type { ReciboDatos } from "./recibo.js";
+import type { CotizacionImpresionDatos } from "./cotizacion.js";
 
 /**
  * Generador de comandos ESC/POS crudos para impresoras térmicas (§ hardware,
@@ -34,7 +35,7 @@ function money(n: number): string {
 /** Recorta el ruido de punto flotante de cantidades calculadas (ej. monto/precio en la ventanita de
  *  cantidad específica) antes de imprimirlas — el recibo no debe mostrar "3.3333333333333335". */
 function cantidad(n: number): string {
-  return Number(n.toFixed(4)).toString();
+  return Number(n.toFixed(2)).toString();
 }
 
 class ConstructorEscPos {
@@ -183,6 +184,55 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
   // El cabezal de corte está unos cuantos mm por debajo del cabezal de
   // impresión: si no se avanza suficiente papel antes de cortar, la cuchilla
   // corta a través de la última línea impresa en vez de debajo de ella.
+  b.saltos(6).cortar();
+
+  return b.build();
+}
+
+/** "AAAA-MM-DD" → "DD/MM/AAAA" sin pasar por `Date` (§ mismo bug evitado en pdf.ts/ConsultaCotizaciones.tsx). */
+function formatearFechaIsoLocal(fechaIso: string): string {
+  const [anio, mes, dia] = fechaIso.split("-");
+  return `${dia}/${mes}/${anio}`;
+}
+
+/** Igual que `generarEscPos`, para una cotización: sin pagos ni comprobante fiscal, con fecha de
+ *  vencimiento y el aviso de que no es un documento fiscal en vez del pie "¡Gracias por su compra!". */
+export function generarEscPosCotizacion(datos: CotizacionImpresionDatos): Uint8Array {
+  const { negocio, cliente, lineas, notas } = datos;
+  const ancho = anchoCaracteres(negocio.ancho_impresora_default);
+  const fecha = new Date(datos.fecha);
+  const b = new ConstructorEscPos().init().tamano("alto");
+
+  b.alinear("centro").tamano("grande").negrita(true).linea(negocio.nombre_comercial).negrita(false).tamano("alto");
+  if (negocio.rnc) b.linea(`RNC: ${negocio.rnc}`);
+  if (negocio.direccion) b.linea(negocio.direccion);
+  if (negocio.telefono) b.linea(`Tel: ${negocio.telefono}`);
+  b.alinear("izq").separador(ancho);
+
+  b.alinear("centro").negrita(true).linea("COTIZACIÓN").negrita(false).alinear("izq");
+  b.columnas(`#${datos.numero}`, fecha.toLocaleDateString("es-DO"), ancho);
+  if (cliente) b.linea(`Cliente: ${cliente.nombre} ${cliente.apellidos ?? ""}`.trim());
+
+  b.separador(ancho);
+  for (const l of lineas) {
+    b.linea(l.descripcion);
+    b.columnas(`${cantidad(l.cantidad)} x ${money(l.precio_unitario)}`, money(l.subtotal), ancho);
+  }
+  b.separador(ancho);
+
+  b.columnas("Gravado", `RD$ ${money(datos.subtotalGravado)}`, ancho);
+  b.columnas("Exento", `RD$ ${money(datos.subtotalExento)}`, ancho);
+  b.columnas("ITBIS", `RD$ ${money(datos.totalItbis)}`, ancho);
+  b.negrita(true).tamano("grande").columnas("TOTAL", `RD$ ${money(datos.total)}`, Math.floor(ancho / 2)).tamano("alto").negrita(false);
+  b.separador(ancho);
+
+  if (notas) {
+    b.linea(`Notas: ${notas}`).separador(ancho);
+  }
+
+  b.alinear("centro");
+  b.linea(`Válida hasta ${formatearFechaIsoLocal(datos.fechaVencimiento)}`);
+  b.linea("No es una factura ni comprobante fiscal");
   b.saltos(6).cortar();
 
   return b.build();

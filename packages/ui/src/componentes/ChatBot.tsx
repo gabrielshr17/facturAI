@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { MessageCircle, Bot, X, Camera } from "lucide-react";
 import { enviarMensaje, type MensajeChat } from "../data/chatbotCliente.js";
 import { s, c, sombra } from "../estilos.js";
 import { BotonVoz } from "./BotonVoz.js";
@@ -64,13 +65,13 @@ export function ChatBot() {
         onClick={() => setAbierto(true)}
         style={{
           position: "fixed", bottom: 20, right: 20, zIndex: 100,
-          borderRadius: 999, width: 56, height: 56, fontSize: 24,
+          borderRadius: 999, width: 56, height: 56,
           background: c.azul, color: "white", border: "none", cursor: "pointer",
-          boxShadow: sombra.md,
+          boxShadow: sombra.md, display: "flex", alignItems: "center", justifyContent: "center",
         }}
         title="Asistente"
       >
-        💬
+        <MessageCircle size={24} />
       </button>
     );
   }
@@ -85,8 +86,8 @@ export function ChatBot() {
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: c.azul, color: "white" }}>
-        <strong>🤖 Asistente</strong>
-        <button onClick={() => setAbierto(false)} style={{ background: "none", border: "none", color: "white", fontSize: 18, cursor: "pointer", padding: 0, lineHeight: 1 }}>✕</button>
+        <strong style={{ display: "flex", alignItems: "center", gap: 6 }}><Bot size={17} /> Asistente</strong>
+        <button onClick={() => setAbierto(false)} style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0, lineHeight: 1, display: "flex" }}><X size={18} /></button>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 8, minHeight: 200 }}>
@@ -127,11 +128,11 @@ export function ChatBot() {
         />
         <button
           type="button"
-          style={{ ...s.botonSecundario, padding: "4px 8px" }}
+          style={{ ...s.botonSecundario, padding: "4px 8px", display: "flex" }}
           title="Adjuntar foto"
           onClick={() => inputArchivoRef.current?.click()}
         >
-          📷
+          <Camera size={15} />
         </button>
         <BotonVoz onResultado={(t) => setTexto((prev) => (prev ? `${prev} ${t}` : t))} />
         <input

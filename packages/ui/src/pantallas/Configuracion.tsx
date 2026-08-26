@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { type NegocioInput, ValidacionError } from "@sfr/core";
+import { Store, Printer, Save } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c } from "../estilos.js";
 import { SeccionSecuenciasNcf } from "../componentes/SeccionSecuenciasNcf.js";
@@ -79,7 +80,7 @@ export function Configuracion() {
   return (
     <div style={{ maxWidth: 640 }}>
       <div style={s.tarjeta}>
-        <h3 style={{ marginTop: 0 }}>🏪 Datos del negocio</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Store size={18} /> Datos del negocio</h3>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
             <label style={s.label}>Nombre comercial *</label>
@@ -115,7 +116,7 @@ export function Configuracion() {
       </div>
 
       <div style={{ ...s.tarjeta, marginTop: 16 }}>
-        <h3 style={{ marginTop: 0 }}>🖨️ Impresión y montos</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Printer size={18} /> Impresión y montos</h3>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
             <label style={s.label}>Ancho de impresora</label>
@@ -154,7 +155,7 @@ export function Configuracion() {
       <SeccionSecuenciasNcf />
 
       <div style={{ ...s.tarjeta, marginTop: 16 }}>
-        <h3 style={{ marginTop: 0 }}>💾 Respaldo y exportación</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Save size={18} /> Respaldo y exportación</h3>
         <p style={{ color: c.gris, fontSize: 13 }}>
           Descarga toda la información del negocio (productos, ventas, compras, etc.) en un archivo JSON.
         </p>

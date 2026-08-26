@@ -67,6 +67,17 @@
   color-scheme: dark;
 }
 
+/* Modal de confirmación/aviso centrado (§ contexto/Alertas.tsx), que reemplaza a confirm()/alert()
+   nativos: una entrada breve con "pop" para que sea imposible no notarlo, sin sentirse brusco. */
+@keyframes sfr-alerta-fondo {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sfr-alerta-entrada {
+  from { opacity: 0; transform: scale(0.94) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
 * {
   box-sizing: border-box;
 }

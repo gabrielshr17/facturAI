@@ -68,9 +68,10 @@ describe("reportesRepo", () => {
     expect(r.ingresos).toBe(100);
     expect(r.costoEstimado).toBe(60);
     expect(r.gananciaEstimada).toBe(40);
+    expect(r.ingresosSinCosto).toBe(0);
   });
 
-  it("resumenGanancia ignora líneas sin producto_id en el costo (no ingresos)", async () => {
+  it("resumenGanancia ignora líneas sin producto_id en el costo (no ingresos), y lo expone en ingresosSinCosto", async () => {
     const facturas = crearFacturaRepo(db);
     const reportes = crearReportesRepo(db);
     await venta(facturas, null, "Artículo suelto", 1, 100);
@@ -79,6 +80,7 @@ describe("reportesRepo", () => {
     const r = await reportes.resumenGanancia(hoy, hoy);
     expect(r.ingresos).toBe(100);
     expect(r.costoEstimado).toBe(0);
+    expect(r.ingresosSinCosto).toBe(100);
   });
 
   it("resumenItbis suma gravado, exento e itbis del período", async () => {
