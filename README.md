@@ -1,4 +1,4 @@
-# Sistema de Facturación
+# facturAI
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 

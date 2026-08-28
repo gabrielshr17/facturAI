@@ -71,6 +71,13 @@ pnpm --filter @sfr/desktop build   # release: .exe + instaladores MSI/NSIS
 
 ## Notas
 
-- El `identifier` (`do.facturacion.sistema`) y el `productName` se pueden ajustar
-  antes del primer release.
+- El `productName` es **facturAI**: de ahí salen el nombre del `.exe`, la carpeta
+  de instalación, el acceso directo y el título de la ventana.
+- El `identifier` sigue siendo `do.facturacion.sistema` **a propósito**, aunque el
+  producto ya no se llame así: de él cuelga la carpeta de datos
+  (`%APPDATA%\do.facturacion.sistema\sfr.db`), así que cambiarlo dejaría huérfana
+  la base de cualquier instalación existente. Es un identificador interno, no se
+  le muestra a nadie. Si alguna vez hay que cambiarlo, primero se migra el archivo.
+- Al renombrar el `productName`, una instalación vieja **no** se actualiza: se
+  instala al lado. Hay que desinstalar la anterior a mano.
 - `capabilities/default.json` habilita los permisos base + los del plugin SQL.
