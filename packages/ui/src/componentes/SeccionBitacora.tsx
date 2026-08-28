@@ -42,10 +42,10 @@ export function SeccionBitacora() {
       <table style={s.tabla}>
         <thead>
           <tr>
-            <th style={s.th}>Fecha</th>
-            <th style={s.th}>Acción</th>
-            <th style={s.th}>Entidad</th>
-            <th style={s.th}>Detalle</th>
+            <th scope="col" style={s.th}>Fecha</th>
+            <th scope="col" style={s.th}>Acción</th>
+            <th scope="col" style={s.th}>Entidad</th>
+            <th scope="col" style={s.th}>Detalle</th>
           </tr>
         </thead>
         <tbody>

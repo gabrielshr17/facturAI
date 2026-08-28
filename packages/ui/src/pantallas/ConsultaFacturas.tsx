@@ -17,6 +17,7 @@ import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
 import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
 import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { useEsAngosto } from "../hooks/useBreakpoint.js";
 import { ConsultaCotizaciones } from "./ConsultaCotizaciones.js";
 
 /** Recorta el ruido de punto flotante antes de mostrar una cantidad (§ recibo.ts) — sin esto, un
@@ -42,6 +43,7 @@ const TIPOS: { valor: "" | "normal" | "fiscal"; etiqueta: string }[] = [
 function FacturasCobradas() {
   const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo } = useRepos();
   const { elegir } = useAlertas();
+  const esAngosto = useEsAngosto();
 
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
@@ -186,20 +188,22 @@ function FacturasCobradas() {
             <input ref={busquedaRef} style={s.input} value={busqueda} autoFocus onChange={(e) => setBusqueda(e.target.value)} />
           </div>
         </div>
-        {error && <div style={s.errorBox}>{error}</div>}
+        {error && <div role="alert" style={s.errorBox}>{error}</div>}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: seleccionada ? "1fr 340px" : "1fr", gap: 16 }}>
+      {/* Al angostar, el detalle deja de ser una columna al lado y pasa a apilarse debajo del listado. */}
+      <div style={{ display: "grid", gridTemplateColumns: seleccionada && !esAngosto ? "minmax(0, 1fr) 340px" : "minmax(0, 1fr)", gap: 16 }}>
         <div style={s.tarjeta}>
+          <div className="sfr-tabla-scroll">
           <table style={s.tabla}>
             <thead>
               <tr>
-                <th style={s.th}>#</th>
-                <th style={s.th}>Fecha</th>
-                <th style={s.th}>Cliente</th>
-                <th style={s.th}>Tipo</th>
-                <th style={s.th}>Total</th>
-                <th style={s.th}></th>
+                <th scope="col" style={s.th}>#</th>
+                <th scope="col" style={s.th}>Fecha</th>
+                <th scope="col" style={s.th}>Cliente</th>
+                <th scope="col" style={s.th}>Tipo</th>
+                <th scope="col" style={s.th}>Total</th>
+                <th scope="col" style={s.th}></th>
               </tr>
             </thead>
             <tbody>
@@ -235,6 +239,7 @@ function FacturasCobradas() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         {seleccionada && (

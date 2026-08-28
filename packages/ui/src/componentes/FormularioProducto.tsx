@@ -218,7 +218,7 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
       </div>
 
       {errores.length > 0 && (
-        <div style={s.errorBox}>{errores.join(" ")}</div>
+        <div role="alert" style={s.errorBox}>{errores.join(" ")}</div>
       )}
 
       <div style={s.formFooter}>

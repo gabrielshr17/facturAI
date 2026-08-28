@@ -35,6 +35,9 @@ export const c = {
   texto: "var(--sfr-texto)",
   fondo: "var(--sfr-fondo)",
   superficie: "var(--sfr-superficie)",
+  /** Fila/resultado seleccionado. Neutro a propósito — ver la nota del token en el CSS. */
+  seleccion: "var(--sfr-seleccion)",
+  seleccionTexto: "var(--sfr-seleccion-texto)",
 };
 
 /** Sombras sutiles (misma escala que Tailwind shadow-sm/shadow) para dar sensación de elevación a tarjetas y menús. */
@@ -65,10 +68,16 @@ export const s = {
     fontWeight: 500,
     cursor: "pointer",
   } as CSSProperties,
+  /**
+   * Acción destructiva. Se ve NEUTRA en reposo y solo se pone roja al apuntarla o enfocarla
+   * (§ `button.sfr-peligro:hover` en estilos-globales.css). Antes venía roja de fábrica y, como el
+   * acento de la marca también es rojo, "Borrar" pesaba visualmente lo mismo que "Cobrar" — dos
+   * botones igual de llamativos, uno para cobrar y otro para destruir.
+   */
   botonPeligro: {
-    background: c.superficie,
-    color: c.rojo,
-    border: `1px solid ${c.rojo}`,
+    background: "transparent",
+    color: c.gris,
+    border: `1px solid ${c.borde}`,
     borderRadius: 8,
     padding: "6px 12px",
     fontSize: 13,
@@ -100,7 +109,7 @@ export const s = {
   } as CSSProperties,
   th: {
     textAlign: "left",
-    padding: "10px 12px",
+    padding: "10px 14px",
     borderBottom: `1px solid ${c.borde}`,
     color: c.gris,
     fontWeight: 600,
@@ -109,12 +118,16 @@ export const s = {
     letterSpacing: 0.4,
   } as CSSProperties,
   td: {
-    padding: "10px 12px",
+    // Más aire que un formulario: estas filas se leen de un vistazo mientras hay alguien esperando.
+    padding: "13px 14px",
     borderBottom: `1px solid ${c.borde}`,
+    // Cifras de ancho fijo en TODA celda, no solo en las de monto: sin esto los dígitos bailan de
+    // fila en fila y las columnas numéricas dejan de alinearse verticalmente. En texto no hace nada.
+    fontVariantNumeric: "tabular-nums",
   } as CSSProperties,
   /** Columnas numéricas/monto: alineadas a la derecha para que los montos se puedan comparar de un vistazo. */
   tdDerecha: {
-    padding: "10px 12px",
+    padding: "13px 14px",
     borderBottom: `1px solid ${c.borde}`,
     textAlign: "right",
     fontVariantNumeric: "tabular-nums",

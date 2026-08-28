@@ -20,7 +20,15 @@
   --sfr-acento-oscuro: #7f1d1d;
   --sfr-acento-claro: #fef2f2;
   --sfr-peligro: #b91c1c;
-  --sfr-peligro-fondo: #fef2f2;
+  /* Distinto del #fef2f2 de `--sfr-acento-claro`: eran idénticos, así que una fila
+     seleccionada se veía igual que un cuadro de error. */
+  --sfr-peligro-fondo: #fee2e2;
+  /* Resaltado de fila/resultado. Deliberadamente NEUTRO y no rojo: el rojo es la marca
+     (acento) y también el peligro, así que usarlo para "esto está seleccionado" hacía que
+     seleccionar algo pareciera un error. Más fuerte que `--sfr-tabla-hover` para que se note
+     la diferencia entre "el mouse pasa por acá" y "esto es lo elegido". */
+  --sfr-seleccion: #e2e8f0;
+  --sfr-seleccion-texto: #0f172a;
   --sfr-exito: #16a34a;
   --sfr-exito-fondo: #f0fdf4;
   --sfr-advertencia: #92400e;
@@ -36,7 +44,10 @@
   --sfr-tabla-hover: #f1f5f9;
   --sfr-scroll-fondo: #d1d5db;
   --sfr-scroll-fondo-hover: #9ca3af;
-  --sfr-sombra-focus: rgba(153, 27, 27, 0.35);
+  /* Neutro a propósito: el rojo de la marca es también el del error, así que un campo
+     simplemente enfocado parecía un campo inválido. */
+  --sfr-foco: #64748b;
+  --sfr-sombra-focus: rgba(100, 116, 139, 0.28);
   --sfr-overlay: rgba(15, 23, 42, 0.45);
   color-scheme: light;
 }
@@ -46,7 +57,9 @@
   --sfr-acento-oscuro: #fca5a5;
   --sfr-acento-claro: rgba(193, 18, 31, 0.18);
   --sfr-peligro: #f87171;
-  --sfr-peligro-fondo: rgba(248, 113, 113, 0.14);
+  --sfr-peligro-fondo: rgba(248, 113, 113, 0.18);
+  --sfr-seleccion: rgba(148, 163, 184, 0.22);
+  --sfr-seleccion-texto: #f4f4f5;
   --sfr-exito: #4ade80;
   --sfr-exito-fondo: rgba(74, 222, 128, 0.14);
   --sfr-advertencia: #fbbf24;
@@ -62,7 +75,8 @@
   --sfr-tabla-hover: #222225;
   --sfr-scroll-fondo: #3f3f46;
   --sfr-scroll-fondo-hover: #52525b;
-  --sfr-sombra-focus: rgba(193, 18, 31, 0.35);
+  --sfr-foco: #94a3b8;
+  --sfr-sombra-focus: rgba(148, 163, 184, 0.32);
   --sfr-overlay: rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }
@@ -146,7 +160,7 @@ input, select, textarea {
 input:focus-visible, select:focus-visible, textarea:focus-visible,
 input:focus, select:focus, textarea:focus {
   outline: none;
-  border-color: var(--sfr-acento) !important;
+  border-color: var(--sfr-foco) !important;
   box-shadow: 0 0 0 3px var(--sfr-sombra-focus);
 }
 
@@ -177,4 +191,210 @@ tbody tr:hover {
 }
 .sfr-fila-clickeable:hover {
   background-color: var(--sfr-tabla-hover);
+}
+
+/* ---------------------------------------------------------------------------
+   Reglas responsive/táctiles que los `style={{}}` en línea no pueden expresar.
+   El resto del "responsive" se decide en JS (§ hooks/useBreakpoint.ts); acá van
+   solo las que necesitan de verdad un @media o un selector.
+   --------------------------------------------------------------------------- */
+
+/* Se consulta el PUNTERO, no el ancho: una tablet ronda los 800-1100px (nada de angosta) pero se
+   maneja con el dedo igual que un teléfono, y una ventana de escritorio achicada a 600px sigue
+   teniendo mouse y teclado. Con `max-width` las tablets se quedaban sin este trato. */
+@media (pointer: coarse) {
+  /* iOS hace zoom automático al enfocar cualquier campo con letra <16px, y deja la página
+     descuadrada al salir. `s.input` usa 14px, así que TODOS los campos lo disparaban — en iPhone
+     y en iPad por igual. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Objetivo táctil mínimo recomendado. Los botones de la app rondan los 34px de alto. */
+  button {
+    min-height: 44px;
+  }
+
+  /* Los steppers −/+ de cantidad y los iconos de estrella son cuadrados a propósito: se les
+     respeta el ancho, solo se les sube el alto. */
+  button.sfr-boton-compacto {
+    min-height: 0;
+  }
+}
+
+/* En pantallas táctiles el :hover se queda "pegado" después de tocar (el navegador simula un
+   hover que no se va hasta el próximo toque en otro lado), dejando filas resaltadas de mentira. */
+@media (hover: none) {
+  tbody tr:hover,
+  .sfr-fila-clickeable:hover {
+    background-color: transparent;
+  }
+}
+
+/* Cualquier tabla ancha se desplaza dentro de su propia caja en vez de estirar la página entera. */
+.sfr-tabla-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Red de seguridad para las tablas que todavía no tienen su contenedor `.sfr-tabla-scroll`
+   (pantallas de administración: Compras, Reportes, Corte de caja, Configuración). `display:block`
+   les da scroll propio en vez de estirar la página. Solo en teléfono: es un truco con costo —
+   la tabla deja de repartir el ancho entre sus columnas — y no hace falta donde ya hay contenedor. */
+@media (max-width: 699px) {
+  main table:not(.sfr-tabla-scroll table) {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Accesibilidad
+   --------------------------------------------------------------------------- */
+
+/* Enlace "saltar al contenido": invisible hasta que se tabula. Sin él, quien navega con teclado o
+   lector de pantalla tiene que pasar por los nueve módulos del menú en CADA pantalla antes de
+   llegar a lo que vino a hacer. */
+.sfr-salto-contenido {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 400;
+  padding: 10px 16px;
+  background: var(--sfr-acento);
+  color: #fff;
+  border-radius: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.sfr-salto-contenido:focus {
+  left: 0;
+}
+
+/* Texto solo para lectores de pantalla: se lee, no se ve. */
+.sfr-solo-lector {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Foco siempre visible y con buen contraste. `:focus-visible` (y no `:focus`) para que el anillo
+   aparezca al navegar con teclado pero no al hacer clic con el mouse. */
+:focus-visible {
+  outline: 2px solid var(--sfr-acento);
+  outline-offset: 2px;
+}
+
+/* Respeta "reducir movimiento" del sistema: las animaciones de los modales pueden provocar mareo
+   o desorientación a personas con trastornos vestibulares. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Jerarquía visual
+   --------------------------------------------------------------------------- */
+
+/* Acción destructiva: neutra en reposo, roja recién al apuntarla o enfocarla. Así "Borrar" deja de
+   competir en peso visual con "Cobrar" — que es el rojo que SÍ tiene que saltar a la vista. */
+button.sfr-peligro:hover:not(:disabled),
+button.sfr-peligro:focus-visible {
+  color: var(--sfr-peligro);
+  border-color: var(--sfr-peligro);
+  background: var(--sfr-peligro-fondo);
+  filter: none;
+}
+
+/* Pista de atajo dentro de una etiqueta ("Cobrar ⌜F12⌝"). Como chip apagado se lee como un detalle
+   del sistema; escrita entre paréntesis en el mismo texto se leía como parte del nombre del botón. */
+.sfr-kbd {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border: 1px solid var(--sfr-borde);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--sfr-fondo);
+  color: var(--sfr-gris);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Acción por fila (la papelera del ticket): oculta hasta que el mouse entra en la fila o algo dentro
+   de ella toma el foco. Baja el ruido de la tabla sin esconder nada para el teclado. */
+.sfr-accion-fila {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+tr:hover .sfr-accion-fila,
+tr:focus-within .sfr-accion-fila,
+.sfr-accion-fila:focus-visible {
+  opacity: 1;
+}
+
+/* Sin hover (táctil) no hay forma de revelarla: ahí se muestra siempre. */
+@media (hover: none) {
+  .sfr-accion-fila {
+    opacity: 1;
+  }
+}
+
+/* Grupo −/cantidad/+ como un único control segmentado, en vez de tres piezas sueltas flotando. */
+.sfr-grupo-cantidad {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--sfr-borde);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--sfr-superficie);
+}
+.sfr-grupo-cantidad > button {
+  border: none;
+  background: transparent;
+  color: var(--sfr-gris);
+  width: 30px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+.sfr-grupo-cantidad > button:hover:not(:disabled) {
+  background: var(--sfr-tabla-hover);
+  color: var(--sfr-texto);
+}
+.sfr-grupo-cantidad > input {
+  border: none !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  text-align: center;
+  width: 56px;
+  padding: 6px 2px;
+  background: transparent;
+}
+.sfr-grupo-cantidad > input:focus,
+.sfr-grupo-cantidad > input:focus-visible {
+  outline: none;
+  background: var(--sfr-seleccion);
 }

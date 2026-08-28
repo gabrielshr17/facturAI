@@ -3,6 +3,7 @@ import { type MetodoPago, type TipoEcf, ETIQUETA_TIPO_ECF, tipoEcfSugerido, proc
 import { CreditCard } from "lucide-react";
 import { s, c, sombra, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { useModalAccesible } from "../hooks/useModalAccesible.js";
 import { filtrarNumero } from "../utilidades/numero.js";
 
 const METODOS: { valor: MetodoPago; etiqueta: string }[] = [
@@ -56,6 +57,7 @@ export function ModalCobro({
   onCancelar,
   onConfirmar,
 }: ModalCobroProps) {
+  const tarjetaRef = useModalAccesible<HTMLDivElement>();
   const [filas, setFilas] = useState<FilaPago[]>([{ metodo: "efectivo", monto: total.toFixed(2) }]);
   const [notas, setNotas] = useState(notasIniciales ?? "");
   const [guardando, setGuardando] = useState(false);
@@ -112,8 +114,8 @@ export function ModalCobro({
 
   return (
     <div style={overlay} onClick={onCancelar}>
-      <div style={tarjeta} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><CreditCard size={18} /> Cobrar</h3>
+      <div ref={tarjetaRef} role="dialog" aria-modal="true" aria-labelledby="sfr-cobro-titulo" style={tarjeta} onClick={(e) => e.stopPropagation()}>
+        <h3 id="sfr-cobro-titulo" style={{ marginTop: 0, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><CreditCard size={18} aria-hidden="true" /> Cobrar</h3>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${c.borde}` }}>
           <span style={{ color: c.gris, fontSize: 14 }}>{cantidadArticulos} artículo(s)</span>
           <span style={{ fontSize: 24, fontWeight: 700, color: c.texto }}>RD$ {money(total)}</span>
@@ -121,7 +123,11 @@ export function ModalCobro({
 
         {filas.map((f, i) => (
           <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            {/* Estos campos no tienen etiqueta visible (se entienden por su posición), así que sin
+                aria-label el lector de pantalla los anunciaría como "cuadro combinado" y "edición"
+                a secas. Se numeran porque en pago mixto hay varias filas iguales. */}
             <select
+              aria-label={`Método de pago ${i + 1}`}
               style={{ ...s.input, flex: 1 }}
               value={f.metodo}
               onChange={(e) => actualizarFila(i, { metodo: e.target.value as MetodoPago })}
@@ -131,6 +137,7 @@ export function ModalCobro({
               ))}
             </select>
             <input
+              aria-label={`Monto ${i + 1} en pesos`}
               style={{ ...s.input, width: 120 }}
               type="text"
               inputMode="decimal"
@@ -140,7 +147,7 @@ export function ModalCobro({
               onChange={(e) => actualizarFila(i, { monto: filtrarNumero(e.target.value) })}
             />
             {filas.length > 1 && (
-              <button style={s.botonPeligro} onClick={() => quitarFila(i)}>×</button>
+              <button className="sfr-peligro" aria-label={`Quitar método de pago ${i + 1}`} style={s.botonPeligro} onClick={() => quitarFila(i)}>×</button>
             )}
           </div>
         ))}
@@ -151,7 +158,12 @@ export function ModalCobro({
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: c.gris, marginBottom: 8 }}>
           <span>Pagado</span><span>RD$ {money(resultado.montoPagado)}</span>
         </div>
+        {/* El cambio se recalcula mientras se teclea el monto: `aria-live` hace que el lector lo
+            cante solo, que es justo el dato que se necesita en el momento de cobrar. `polite` para
+            que espere a una pausa en vez de cortar lo que se esté leyendo. */}
         <div
+          aria-live="polite"
+          aria-atomic="true"
           style={{
             display: "flex", justifyContent: "space-between", alignItems: "center",
             fontSize: 18, fontWeight: 700, borderRadius: 8, padding: "10px 14px", marginBottom: 14,
@@ -192,7 +204,7 @@ export function ModalCobro({
           onChange={(e) => setNotas(e.target.value)}
         />
 
-        {error && <div style={s.errorBox}>{error}</div>}
+        {error && <div role="alert" style={s.errorBox}>{error}</div>}
 
         <div style={{ ...s.formFooter, flexWrap: "wrap" }}>
           <button style={s.boton} disabled={guardando} onClick={() => confirmar("imprimir")}>
@@ -228,7 +240,7 @@ const tarjeta: CSSProperties = {
   ...s.tarjeta,
   width: 460,
   maxWidth: "90vw",
-  maxHeight: "90vh",
+  maxHeight: "90dvh",
   overflow: "auto",
   border: "none",
   borderRadius: 16,

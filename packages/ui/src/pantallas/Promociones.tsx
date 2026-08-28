@@ -68,6 +68,12 @@ export function Promociones() {
         e.preventDefault();
         if (accionFila === "editar") editar(lista[indiceFila]);
         else void eliminar(lista[indiceFila]);
+        return;
+      }
+      // Supr borra la fila resaltada directo, sin tener que llegar hasta "Eliminar" con →.
+      if (e.key === "Delete" && indiceFila >= 0 && lista[indiceFila]) {
+        e.preventDefault();
+        void eliminar(lista[indiceFila]);
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -186,7 +192,7 @@ export function Promociones() {
             Activa
           </label>
 
-          {errores.length > 0 && <div style={s.errorBox}>{errores.join(" ")}</div>}
+          {errores.length > 0 && <div role="alert" style={s.errorBox}>{errores.join(" ")}</div>}
 
           <div style={s.formFooter}>
             <button style={s.boton} onClick={guardar}>Guardar (Ctrl+S)</button>
@@ -199,12 +205,12 @@ export function Promociones() {
         <table style={s.tabla}>
           <thead>
             <tr>
-              <th style={s.th}>Nombre</th>
-              <th style={s.th}>Descuento</th>
-              <th style={s.th}>Aplica a</th>
-              <th style={s.th}>Vigencia</th>
-              <th style={s.th}>Estado</th>
-              <th style={s.th}></th>
+              <th scope="col" style={s.th}>Nombre</th>
+              <th scope="col" style={s.th}>Descuento</th>
+              <th scope="col" style={s.th}>Aplica a</th>
+              <th scope="col" style={s.th}>Vigencia</th>
+              <th scope="col" style={s.th}>Estado</th>
+              <th scope="col" style={s.th}></th>
             </tr>
           </thead>
           <tbody>
@@ -217,7 +223,7 @@ export function Promociones() {
                 <tr
                   key={p.id}
                   ref={i === indiceFila ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
-                  style={i === indiceFila ? { background: c.azulClaro } : undefined}
+                  style={i === indiceFila ? { background: c.seleccion } : undefined}
                 >
                   <td style={s.td}>{p.nombre}</td>
                   <td style={s.tdDerecha}>{p.tipo === "porcentaje" ? `${p.valor}%` : `RD$ ${money(p.valor)}`}</td>
@@ -243,7 +249,7 @@ export function Promociones() {
                       Editar
                     </button>{" "}
                     <button
-                      style={{ ...s.botonPeligro, ...(i === indiceFila && accionFila === "eliminar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                      className="sfr-peligro" style={{ ...s.botonPeligro, ...(i === indiceFila && accionFila === "eliminar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
                       title="←/→ + Enter"
                       onClick={() => eliminar(p)}
                     >

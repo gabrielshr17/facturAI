@@ -94,7 +94,7 @@ export function CorteCaja() {
             <input style={s.input} type="text" inputMode="decimal" value={efectivoContado} onChange={(e) => setEfectivoContado(filtrarNumero(e.target.value))} />
           </div>
         </div>
-        {error && <div style={s.errorBox}>{error}</div>}
+        {error && <div role="alert" style={s.errorBox}>{error}</div>}
         {mensaje && (
           <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>{mensaje}</div>
         )}
@@ -166,11 +166,11 @@ export function CorteCaja() {
         <table style={s.tabla}>
           <thead>
             <tr>
-              <th style={s.th}>Período</th>
-              <th style={s.th}>Total ventas</th>
-              <th style={s.th}>Efectivo esperado</th>
-              <th style={s.th}>Efectivo contado</th>
-              <th style={s.th}>Diferencia</th>
+              <th scope="col" style={s.th}>Período</th>
+              <th scope="col" style={s.th}>Total ventas</th>
+              <th scope="col" style={s.th}>Efectivo esperado</th>
+              <th scope="col" style={s.th}>Efectivo contado</th>
+              <th scope="col" style={s.th}>Diferencia</th>
             </tr>
           </thead>
           <tbody>

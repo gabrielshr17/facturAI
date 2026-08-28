@@ -138,7 +138,7 @@ export function Configuracion() {
           Inventario activo (en el MVP se recomienda apagado)
         </label>
 
-        {errores.length > 0 && <div style={s.errorBox}>{errores.join(" ")}</div>}
+        {errores.length > 0 && <div role="alert" style={s.errorBox}>{errores.join(" ")}</div>}
         {guardado && (
           <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>
             Configuración guardada.

@@ -22,26 +22,16 @@ import { imprimirRecibo } from "../impresion/recibo.js";
 import { imprimirCotizacion } from "../impresion/cotizacion.js";
 import { generarPdfRecibo, generarPdfCotizacion, guardarPdf } from "../impresion/pdf.js";
 import { abrirGavetaTermica } from "../impresion/termica.js";
-import { Hash, Search, Pencil, User, DollarSign, ClipboardList, Weight, TriangleAlert, Star } from "lucide-react";
-import { BotonVoz } from "../componentes/BotonVoz.js";
+import { Hash, Search, Pencil, User, DollarSign, ClipboardList, Weight, TriangleAlert, Star, Trash2, ShoppingCart, Printer } from "lucide-react";
 import { ChatBot } from "../componentes/ChatBot.js";
+import { EtiquetaAtajo } from "../componentes/EtiquetaAtajo.js";
 import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { useEsAngosto, useEsTactil, sinAtajo } from "../hooks/useBreakpoint.js";
 import { filtrarNumero } from "../utilidades/numero.js";
 import { moverIndiceFila, moverAccionFila } from "../utilidades/navegacionFilas.js";
-import type { CSSProperties } from "react";
-
-const stepperBtn: CSSProperties = {
-  ...s.botonSecundario,
-  width: 28,
-  height: 28,
-  padding: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 16,
-  lineHeight: 1,
-};
+// Los botones −/+ de cantidad ya no llevan estilo en línea: ahora son parte del control segmentado
+// `.sfr-grupo-cantidad` (§ estilos-globales.css), que los dibuja junto con el campo del medio.
 
 function hoyIso(): string {
   const d = new Date();
@@ -83,6 +73,14 @@ export function Ventas() {
     cotizacion: cotizacionRepo,
   } = useRepos();
   const { confirmar, avisar, elegir } = useAlertas();
+  // "Angosto" es específicamente "toca apilar", no "no es escritorio": en el tramo `medio` la barra
+  // lateral ya se encogió pero Ventas sigue en dos columnas (§ useBreakpoint).
+  const esAngosto = useEsAngosto();
+  // Táctil se decide por el tipo de puntero, no por el ancho: una tablet es ancha pero se maneja
+  // con el dedo, y las pistas de atajo/el autoFocus sobran igual que en un teléfono.
+  const esTactil = useEsTactil();
+  /** Quita "(F12)" y compañía de las etiquetas cuando no hay teclado físico que las respalde. */
+  const rot = (texto: string) => sinAtajo(texto, esTactil);
 
   const [tickets, setTickets] = useState<Factura[]>([]);
   const [activoId, setActivoId] = useState<string | null>(null);
@@ -113,6 +111,10 @@ export function Ventas() {
   const [resultadosConsulta, setResultadosConsulta] = useState<Producto[]>([]);
   const [lineaEditandoId, setLineaEditandoId] = useState<string | null>(null);
   const [cantidadEditandoInput, setCantidadEditandoInput] = useState("");
+  // Igual que `lineaEditandoId`/`cantidadEditandoInput` pero para el campo de monto en RD$ que las
+  // líneas a granel muestran al lado de la cantidad (§ tabla de líneas).
+  const [lineaMontoEditandoId, setLineaMontoEditandoId] = useState<string | null>(null);
+  const [montoEditandoInput, setMontoEditandoInput] = useState("");
   const [lineaResaltada, setLineaResaltada] = useState<FacturaLinea | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [promoAplicada, setPromoAplicada] = useState<string | null>(null);
@@ -150,6 +152,17 @@ export function Ventas() {
   const busquedaRef = useRef<HTMLInputElement>(null);
   const enfocarBusqueda = useCallback(() => busquedaRef.current?.focus(), []);
 
+  // F4 salta al cliente del ticket. Con el ticket sin cliente el foco va al buscador; si ya hay uno
+  // asignado ese campo no existe (lo reemplaza el nombre + "Quitar"), así que se enfoca "Quitar" —
+  // que es la única acción disponible ahí, y el camino para cambiar de cliente.
+  const clienteBuscarRef = useRef<HTMLInputElement>(null);
+  const clienteQuitarRef = useRef<HTMLButtonElement>(null);
+  const enfocarCliente = useCallback(() => {
+    const destino = clienteBuscarRef.current ?? clienteQuitarRef.current;
+    destino?.focus();
+    if (destino instanceof HTMLInputElement) destino.select();
+  }, []);
+
   // Campos de "Artículo no registrado" (§ F7): arriba/abajo se maneja acá mismo, en vez de confiar
   // en `useNavegacionFlechas`, porque esos campos viven dentro de una fila horizontal donde el orden
   // visual (izquierda→derecha) no es el mismo que el orden vertical que arriba/abajo sugiere — así
@@ -173,6 +186,7 @@ export function Ventas() {
   useAtajosTeclado({
     F10: enfocarBusqueda,
     F12: () => { if (lineas.length > 0) setMostrarCobro(true); },
+    F4: enfocarCliente,
     F5: () => { if (lineas.length > 0) setMostrarCotizacion(true); },
     F6: () => void nuevoTicket(),
     F7: () => setMostrarSuelto((v) => !v),
@@ -199,6 +213,25 @@ export function Ventas() {
         }
       : {}),
   }, !mostrarCobro && !mostrarCotizacion && !modalCantidad && !modalConsultaAbierto && !formEdicion);
+
+  // Supr borra la línea resaltada — a propósito FUERA de `useAtajosTeclado`: ese hook hace
+  // preventDefault() antes de mirar si hay algo que hacer, así que si Supr estuviera ahí (como +/-)
+  // se comería el borrado-hacia-adelante de CUALQUIER campo de texto en pantalla (cliente, suelto,
+  // cantidad) apenas hubiera una línea resaltada — algo mucho más probable con Supr que con +/-.
+  // Este listener decide ANTES de bloquear nada, así el campo enfocado sigue borrando su texto normal.
+  useEffect(() => {
+    if (!lineaResaltada || mostrarCobro || mostrarCotizacion || modalCantidad || modalConsultaAbierto || formEdicion) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Delete") return;
+      const activo = document.activeElement;
+      const enCampoDeTexto = activo instanceof HTMLInputElement || activo instanceof HTMLTextAreaElement || activo instanceof HTMLSelectElement;
+      if (enCampoDeTexto) return;
+      e.preventDefault();
+      void borrarLineaResaltada();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [lineaResaltada, mostrarCobro, mostrarCotizacion, modalCantidad, modalConsultaAbierto, formEdicion]);
 
   useAtajosTeclado({
     Escape: () => cerrarConsultaPrecio(),
@@ -288,6 +321,23 @@ export function Ventas() {
       setNombreClientePorTicket(porTicket);
     })();
   }, [tickets, clientes]);
+
+  // `FacturaLinea` no guarda el `tipo_venta` del producto (§ core/tipos.ts), pero la línea necesita
+  // saberlo para ofrecer el campo de monto en RD$: eso solo tiene sentido a granel, donde la cantidad
+  // es continua ("RD$100 de arroz"). En un producto por unidad, dividir monto/precio daría fracciones
+  // de artículo. Igual que `nombreClientePorTicket`, se resuelve aparte a partir de los ids.
+  const [productosGranel, setProductosGranel] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const ids = Array.from(new Set(lineas.map((l) => l.producto_id).filter((id): id is string => !!id)));
+    if (ids.length === 0) {
+      setProductosGranel(new Set());
+      return;
+    }
+    void (async () => {
+      const encontrados = await Promise.all(ids.map(async (id) => [id, await productos.obtener(id)] as const));
+      setProductosGranel(new Set(encontrados.filter(([, p]) => p?.tipo_venta === "granel").map(([id]) => id)));
+    })();
+  }, [lineas, productos]);
 
   const cargarLineas = useCallback(async () => {
     if (!activoId) {
@@ -769,10 +819,35 @@ export function Ventas() {
     setCantidadEditandoInput(formatearCantidad(l.cantidad));
   }
 
+  // Escape en un campo de cantidad/monto lo cancela, pero para que el campo suelte el foco hay que
+  // llamar a blur() — y eso dispara el onBlur que normalmente CONFIRMA. Esta bandera le avisa al
+  // onBlur que ese blur en particular vino de un Escape y que debe descartar, no guardar.
+  const cancelandoEdicionRef = useRef(false);
+
   async function confirmarEdicionCantidad(l: FacturaLinea) {
-    const cantidad = Number(cantidadEditandoInput);
     setLineaEditandoId(null);
+    if (cancelandoEdicionRef.current) { cancelandoEdicionRef.current = false; return; }
+    const cantidad = Number(cantidadEditandoInput);
     if (!Number.isFinite(cantidad)) return;
+    if (cantidad === l.cantidad) return;
+    await establecerCantidad(l, cantidad);
+  }
+
+  /** Empieza a editar el monto en RD$ de una línea a granel, precargado con su subtotal actual. */
+  function editarMonto(l: FacturaLinea) {
+    setLineaMontoEditandoId(l.id);
+    setMontoEditandoInput((l.cantidad * l.precio_unitario).toFixed(2));
+  }
+
+  /** Monto en RD$ → cantidad (§ mismo cálculo que `cambiarMontoModal` en la ventanita de cantidad):
+   *  se guarda la división completa, sin redondear, para que el subtotal cuadre con lo que se pidió. */
+  async function confirmarEdicionMonto(l: FacturaLinea) {
+    setLineaMontoEditandoId(null);
+    if (cancelandoEdicionRef.current) { cancelandoEdicionRef.current = false; return; }
+    const monto = Number(montoEditandoInput);
+    if (!Number.isFinite(monto) || !(l.precio_unitario > 0)) return;
+    const cantidad = monto / l.precio_unitario;
+    if (cantidad === l.cantidad) return;
     await establecerCantidad(l, cantidad);
   }
 
@@ -782,6 +857,15 @@ export function Ventas() {
     // No hace falta soltar `lineaResaltada` a mano aquí: el efecto que la mantiene siempre válida
     // (§ arriba) la reconcilia en cuanto `lineas` se actualiza, cayendo a otra línea si existía.
     await refrescarTicketActivo();
+  }
+
+  /** Tecla Supr sobre la línea resaltada (§ apuntar con el mouse o ↑/↓, sin hacer clic en "Borrar") —
+   *  mismo confirm() que el botón, para no borrar del ticket sin querer con un roce de teclado. */
+  async function borrarLineaResaltada() {
+    if (!lineaResaltada) return;
+    if (await confirmar(`¿Borrar "${lineaResaltada.descripcion}" del ticket?`, { textoConfirmar: "Borrar" })) {
+      void eliminarLinea(lineaResaltada);
+    }
   }
 
   /** Alterna el precio mayoreo de una línea ya agregada (§ resaltar con el mouse + F8, sin clic):
@@ -1002,7 +1086,10 @@ export function Ventas() {
   }
 
   return (
-    <div>
+    // Columna a lo alto de todo el <main> para que la lista del ticket pueda estirarse hasta abajo
+    // (§ `flex: 1` en su tarjeta). Sin esto la tarjeta medía solo lo que ocupaban sus filas y con
+    // tres artículos quedaba flotando arriba, con media pantalla vacía debajo.
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
       {/* Barra de tickets abiertos + fecha/hora */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1024,27 +1111,45 @@ export function Ventas() {
               {nombreClientePorTicket[t.id] ?? `Ticket #${t.numero_interno}`}
             </button>
           ))}
-          <button style={s.botonSecundario} onClick={nuevoTicket}>+ Nuevo ticket (F6)</button>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button style={s.botonSecundario} disabled={reimprimiendo} onClick={reimprimirUltimo}>
-            Reimprimir último ticket (Ctrl+P)
+          <button style={s.botonSecundario} onClick={nuevoTicket}>
+            <EtiquetaAtajo texto="+ Nuevo ticket (F6)" ocultarAtajo={esTactil} />
           </button>
-          <span style={{ color: c.gris, fontSize: 13 }}>
-            {ahora.toLocaleDateString("es-DO")} {ahora.toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })}
+        </div>
+        {/* "Reimprimir" es una acción ocasional y estaba con el mismo peso que las pestañas de
+            tickets: pasa a icono con tooltip. El reloj, que es solo referencia, se apaga. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            style={{ ...s.botonSecundario, padding: 8, display: "inline-flex", lineHeight: 1, color: c.gris }}
+            disabled={reimprimiendo}
+            onClick={reimprimirUltimo}
+            aria-label="Reimprimir último ticket"
+            title="Reimprimir último ticket (Ctrl+P)"
+          >
+            <Printer size={16} aria-hidden="true" />
+          </button>
+          <span style={{ color: c.gris, fontSize: 12, fontVariantNumeric: "tabular-nums", opacity: 0.8 }}>
+            {ahora.toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })}
           </span>
         </div>
       </div>
 
       {errorCarga ? (
-        <div style={s.errorBox}>No se pudo cargar el ticket: {errorCarga}</div>
+        <div role="alert" style={s.errorBox}>No se pudo cargar el ticket: {errorCarga}</div>
       ) : !activo ? (
         <p style={{ color: c.gris }}>Cargando ticket…</p>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 16 }}>
-          {/* Columna principal: búsqueda + líneas */}
-          <div>
-            <div style={{ ...s.tarjeta, marginBottom: 12 }}>
+        // Al angostar, Cliente + Totales dejan de ser columna y se apilan debajo del ticket.
+        // `minmax(0, …)` por el mismo motivo que el `minWidth: 0` del <main> (§ AppShell): una pista
+        // `1fr` también arranca en `min-width: auto` y se niega a bajar del ancho de su contenido,
+        // empujando la columna de Totales fuera de la pantalla en vez de repartir el espacio.
+        <div style={{ display: "grid", gridTemplateColumns: esAngosto ? "minmax(0, 1fr)" : "minmax(0, 1fr) 280px", gap: 16, flex: 1 }}>
+          {/* Columna principal: búsqueda + líneas. Es flex a lo alto para que la tarjeta del ticket
+              (§ abajo) se coma el espacio que sobra en vez de dejar un hueco negro. */}
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
+            {/* La búsqueda va suelta sobre el fondo de la página, SIN tarjeta. Antes eran dos cajas
+                blancas idénticas apiladas (buscador y ticket) peleando por la atención; dejando el
+                relieve solo en la lista del ticket, la pantalla pasa a tener un único protagonista. */}
+            <div style={{ marginBottom: 14 }}>
               {/* `position: relative` para que el desplegable de resultados (§ abajo) quede
                   posicionado ENCIMA del contenido de más abajo (el formulario de suelto, y sobre
                   todo la tabla de líneas del ticket) en vez de empujarlo hacia abajo cada vez que
@@ -1054,9 +1159,24 @@ export function Ventas() {
                 <input
                   ref={busquedaRef}
                   style={{ ...s.input, fontSize: 15, padding: "11px 14px" }}
-                  placeholder="Escanear código de barra o buscar producto… (F10)"
+                  placeholder={esTactil ? "Buscar producto…" : "Escanear código de barra o buscar producto… (F10)"}
                   value={busqueda}
-                  autoFocus
+                  // En cualquier pantalla táctil (teléfono o tablet) el autoFocus abre el teclado
+                  // encima de media pantalla apenas entrás a Ventas, antes de decidir buscar nada.
+                  autoFocus={!esTactil}
+                  // Patrón combobox: el desplegable de resultados es un listbox aparte, y
+                  // `aria-activedescendant` le dice al lector cuál fila está resaltada sin mover el
+                  // foco real (que tiene que quedarse acá para poder seguir escribiendo/escaneando).
+                  role="combobox"
+                  aria-label="Buscar producto por nombre o código de barra"
+                  aria-expanded={resultados.length > 0 && !ocultarResultados}
+                  aria-controls="sfr-resultados-productos"
+                  aria-autocomplete="list"
+                  aria-activedescendant={
+                    resultados.length > 0 && !ocultarResultados && indiceResultado >= 0
+                      ? `sfr-resultado-${indiceResultado}`
+                      : undefined
+                  }
                   onChange={(e) => buscarProducto(e.target.value)}
                   onKeyDown={async (e) => {
                     if (e.key === "Escape" && resultados.length > 0 && !ocultarResultados) {
@@ -1109,30 +1229,31 @@ export function Ventas() {
                     }
                   }}
                 />
-                <button
-                  style={{
-                    ...s.botonSecundario,
-                    whiteSpace: "nowrap",
-                    ...(esMayoreo ? { background: c.azulClaro, color: c.azulOscuro, border: `1px solid ${c.azul}`, fontWeight: 600 } : {}),
-                  }}
-                  onClick={() => setEsMayoreo((v) => !v)}
-                >
-                  {esMayoreo ? "✓ " : ""}Precio mayoreo (F8)
+                {/* El botón de "Precio mayoreo" salió de la barra (ahora se alterna por línea, § tabla
+                    abajo), pero F8 sin ninguna línea resaltada sigue cambiando el régimen del PRÓXIMO
+                    producto que se agregue — sin este chip ese modo quedaría activo sin nada en
+                    pantalla que lo delate. */}
+                {esMayoreo && (
+                  <span
+                    title="Los próximos productos se agregarán a precio mayoreo (F8 para desactivar)"
+                    style={{ ...s.badge, background: c.azulClaro, color: c.azulOscuro, border: `1px solid ${c.azul}`, whiteSpace: "nowrap" }}
+                  >
+                    ✓ mayoreo (F8)
+                  </span>
+                )}
+                <button style={{ ...s.botonSecundario, whiteSpace: "nowrap" }} onClick={() => setMostrarSuelto((v) => !v)}>
+                  <EtiquetaAtajo texto="+ No registrado (F7)" ocultarAtajo={esTactil} />
                 </button>
-                <BotonVoz onResultado={(texto) => buscarProducto(texto)} />
-                <button style={s.botonSecundario} onClick={() => setMostrarSuelto((v) => !v)}>
-                  + Artículo no registrado (F7)
-                </button>
-                <button style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={abrirModalCantidad}>
-                  <Hash size={15} /> Agregar cantidad (Insert)
-                </button>
-                <button style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={abrirConsultaPrecio}>
-                  <Search size={15} /> Consultar precio (F9)
+                <button style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }} onClick={abrirConsultaPrecio}>
+                  <Search size={15} /> <EtiquetaAtajo texto="Consultar (F9)" ocultarAtajo={esTactil} />
                 </button>
               </div>
 
               {resultados.length > 0 && !ocultarResultados && (
                 <div
+                  id="sfr-resultados-productos"
+                  role="listbox"
+                  aria-label="Resultados de la búsqueda"
                   style={{
                     position: "absolute",
                     top: "100%",
@@ -1152,6 +1273,9 @@ export function Ventas() {
                   {resultados.map((p, i) => (
                     <div
                       key={p.id}
+                      id={`sfr-resultado-${i}`}
+                      role="option"
+                      aria-selected={i === indiceResultado}
                       ref={i === indiceResultado ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                       className="sfr-fila-clickeable"
                       onClick={() => seleccionarProducto(p)}
@@ -1163,13 +1287,15 @@ export function Ventas() {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        ...(i === indiceResultado ? { background: c.azulClaro } : {}),
+                        ...(i === indiceResultado ? { background: c.seleccion } : {}),
                       }}
                     >
                       <span>
                         <button
                           onClick={(e) => { e.stopPropagation(); void alternarFavoritoProducto(p); }}
                           title={p.favorito === 1 ? "Quitar de favoritos (←/→ + Enter)" : "Marcar como favorito (←/→ + Enter)"}
+                          aria-label={`${p.favorito === 1 ? "Quitar de favoritos" : "Marcar como favorito"}: ${p.descripcion}`}
+                          aria-pressed={p.favorito === 1}
                           style={{
                             background: "none", border: "none", cursor: "pointer", padding: 2, marginRight: 4, lineHeight: 1, verticalAlign: "middle", borderRadius: 6,
                             color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4,
@@ -1236,7 +1362,7 @@ export function Ventas() {
                 </div>
               )}
 
-              {error && <div style={s.errorBox}>{error}</div>}
+              {error && <div role="alert" style={s.errorBox}>{error}</div>}
               {promoAplicada && (
                 <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>
                   {promoAplicada}
@@ -1244,83 +1370,162 @@ export function Ventas() {
               )}
             </div>
 
-            <div style={s.tarjeta}>
-              <table style={s.tabla}>
+            {/* La única tarjeta con relieve de verdad de la columna: es el protagonista de la
+                pantalla. `padding: 0` para que las filas lleguen hasta el borde y la tabla se lea
+                como una lista, no como una tabla metida adentro de una caja. */}
+            <div style={{ ...s.tarjeta, padding: 0, overflow: "hidden", boxShadow: sombra.md, flex: 1, display: "flex", flexDirection: "column", minHeight: 260 }}>
+              <div className="sfr-tabla-scroll" style={{ flex: 1 }}>
+              <table style={{ ...s.tabla, minWidth: esAngosto ? 620 : undefined }}>
                 <thead>
+                  {/* Anchos explícitos: sin esto el navegador repartía el sobrante a partes iguales
+                      y la columna "Cant." se estiraba hasta dejar el − y el + en extremos opuestos,
+                      con un vacío enorme entre la descripción y la cantidad. Solo Descripción es
+                      elástica; las demás valen lo que mide su contenido. */}
                   <tr>
-                    <th style={s.th}>#</th>
-                    <th style={s.th}>Descripción</th>
-                    <th style={s.th}>Cant.</th>
-                    <th style={s.th}>Precio</th>
-                    <th style={s.th}>Subtotal</th>
-                    <th style={s.th}></th>
+                    <th scope="col" style={{ ...s.th, width: 44 }}>#</th>
+                    <th scope="col" style={{ ...s.th, width: "auto" }}>Descripción</th>
+                    <th scope="col" style={{ ...s.th, width: 210, whiteSpace: "nowrap" }}>Cant.</th>
+                    <th scope="col" style={{ ...s.th, width: 110, textAlign: "right" }}>Precio</th>
+                    <th scope="col" style={{ ...s.th, width: 130, textAlign: "right" }}>Subtotal</th>
+                    <th scope="col" style={{ ...s.th, width: 52 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {lineas.length === 0 && (
-                    <tr><td style={s.filaVacia} colSpan={6}>Sin artículos. Escanea o busca un producto arriba.</td></tr>
+                    <tr>
+                      <td style={{ ...s.filaVacia, padding: "48px 16px" }} colSpan={6}>
+                        <ShoppingCart size={30} aria-hidden="true" style={{ opacity: 0.35, marginBottom: 10 }} />
+                        <div style={{ fontWeight: 600, color: c.texto, marginBottom: 4 }}>Ticket vacío</div>
+                        <div style={{ fontSize: 13 }}>Escanea un código de barra o busca un producto arriba.</div>
+                      </td>
+                    </tr>
                   )}
                   {lineas.map((l, i) => (
                     <tr
                       key={l.id}
                       onMouseEnter={() => setLineaResaltada(l)}
+                      // Sin el clic, en pantalla táctil `lineaResaltada` nunca se setea (no hay hover)
+                      // y F8/+/− se quedan sin línea sobre la cual actuar.
+                      onClick={() => setLineaResaltada(l)}
                       title={l.producto_id ? "↑/↓: moverse · +/−: cambiar cantidad · F8: alternar mayoreo (sin hacer clic)" : "↑/↓: moverse · +/−: cambiar cantidad (sin hacer clic)"}
-                      style={lineaResaltada?.id === l.id ? { background: c.azulClaro } : undefined}
+                      style={lineaResaltada?.id === l.id ? { background: c.seleccion } : undefined}
                     >
                       <td style={{ ...s.td, color: c.gris, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                       <td style={s.td}>
                         {l.descripcion}
-                        {l.es_mayoreo ? <span style={{ ...s.badge, marginLeft: 6 }}>mayoreo</span> : ""}
+                        {/* El mayoreo se alterna aquí, en la línea (antes era un botón de la barra de
+                            búsqueda). Sin `producto_id` no hay precio mayoreo que consultar, así que
+                            en un artículo no registrado el botón ni se ofrece. */}
+                        {/* Apagado mientras está inactivo (sin borde, gris tenue) y solo entonces se
+                            enciende con el color de marca: en una lista de diez artículos, diez
+                            botones delineados pesaban más que los nombres de los productos. */}
+                        {/* Cuando está APAGADO el botón se oculta hasta que el mouse entra en la
+                            fila (§ .sfr-accion-fila): un "mayoreo" gris repetido en las diez filas
+                            se leía como una etiqueta puesta a todos los productos, no como algo que
+                            se puede activar. Encendido queda siempre visible, porque ahí sí es un
+                            dato de la línea. */}
+                        {l.producto_id && (
+                          <button
+                            className={l.es_mayoreo ? undefined : "sfr-accion-fila"}
+                            onClick={() => void alternarMayoreoLinea(l)}
+                            title={l.es_mayoreo ? "Volver a precio normal (F8)" : "Cambiar a precio mayoreo (F8)"}
+                            aria-label={`Precio mayoreo para ${l.descripcion}`}
+                            aria-pressed={l.es_mayoreo === 1}
+                            style={{
+                              ...s.badge,
+                              marginLeft: 8,
+                              cursor: "pointer",
+                              fontSize: 10.5,
+                              padding: "2px 8px",
+                              border: "1px solid transparent",
+                              verticalAlign: "middle",
+                              ...(l.es_mayoreo
+                                ? { background: c.azulClaro, color: c.azulOscuro, borderColor: c.azul }
+                                : { background: "transparent", color: c.gris, borderColor: c.borde }),
+                            }}
+                          >
+                            mayoreo
+                          </button>
+                        )}
                         {!l.producto_id ? <span style={{ ...s.badge, marginLeft: 6, background: c.amarilloFondo, color: c.amarillo }}>no registrado</span> : ""}
                       </td>
                       <td style={s.td}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <button style={stepperBtn} onClick={() => cambiarCantidad(l, -1)}>−</button>
-                          {lineaEditandoId === l.id ? (
+                          {/* −, campo y + como un solo control segmentado (§ .sfr-grupo-cantidad):
+                              antes eran tres piezas sueltas separadas por huecos, y cada fila del
+                              ticket se leía como un montón de controles en vez de como una línea. */}
+                          <span className="sfr-grupo-cantidad">
+                            <button type="button" aria-label={`Quitar uno de ${l.descripcion}`} onClick={() => cambiarCantidad(l, -1)}>−</button>
+                            {/* Campo siempre visible (antes había que hacer clic sobre la cantidad para
+                                que apareciera). Mientras no se está editando muestra el valor guardado;
+                                al enfocarlo pasa a modo edición con el texto sin confirmar. */}
                             <input
-                              autoFocus
-                              onFocus={(e) => e.target.select()}
+                              aria-label={`Cantidad de ${l.descripcion}`}
+                              onFocus={(e) => { editarCantidad(l); e.target.select(); }}
                               type="text"
                               inputMode="decimal"
-                              value={cantidadEditandoInput}
+                              value={lineaEditandoId === l.id ? cantidadEditandoInput : formatearCantidad(l.cantidad)}
                               onChange={(e) => setCantidadEditandoInput(filtrarNumero(e.target.value))}
                               onBlur={() => void confirmarEdicionCantidad(l)}
                               onKeyDown={(e) => {
-                                if (e.key === "Enter") void confirmarEdicionCantidad(l);
-                                else if (e.key === "Escape") setLineaEditandoId(null);
+                                if (e.key === "Enter") e.currentTarget.blur();
+                                else if (e.key === "Escape") { cancelandoEdicionRef.current = true; e.currentTarget.blur(); }
                               }}
-                              style={{ ...s.input, width: 64, padding: "4px 6px", textAlign: "center", fontVariantNumeric: "tabular-nums" }}
+                              style={{ ...s.input, fontVariantNumeric: "tabular-nums" }}
                             />
-                          ) : (
-                            <span
-                              onClick={() => editarCantidad(l)}
-                              title="Clic para modificar la cantidad"
-                              style={{ minWidth: 24, textAlign: "center", fontVariantNumeric: "tabular-nums", cursor: "pointer", borderBottom: `1px dashed ${c.gris}` }}
-                            >
-                              {formatearCantidad(l.cantidad)}
+                            <button type="button" aria-label={`Agregar uno de ${l.descripcion}`} onClick={() => cambiarCantidad(l, 1)}>+</button>
+                          </span>
+                          {/* Solo a granel: cobrar por monto ("RD$100 de arroz") en vez de por peso. */}
+                          {l.producto_id && productosGranel.has(l.producto_id) && (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: c.gris, fontSize: 12 }}>
+                              RD$
+                              <input
+                                onFocus={(e) => { editarMonto(l); e.target.select(); }}
+                                type="text"
+                                inputMode="decimal"
+                                aria-label={`Monto en pesos de ${l.descripcion}`}
+                                title="Cobrar por monto: la cantidad se calcula sola"
+                                value={lineaMontoEditandoId === l.id ? montoEditandoInput : (l.cantidad * l.precio_unitario).toFixed(2)}
+                                onChange={(e) => setMontoEditandoInput(filtrarNumero(e.target.value))}
+                                onBlur={() => void confirmarEdicionMonto(l)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") e.currentTarget.blur();
+                                  else if (e.key === "Escape") { cancelandoEdicionRef.current = true; e.currentTarget.blur(); }
+                                }}
+                                style={{ ...s.input, width: 76, padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
+                              />
                             </span>
                           )}
-                          <button style={stepperBtn} onClick={() => cambiarCantidad(l, 1)}>+</button>
                         </div>
                       </td>
-                      <td style={s.tdDerecha}>RD$ {money(l.precio_unitario)}</td>
-                      <td style={s.tdDerecha}>RD$ {money(l.subtotal)}</td>
-                      <td style={s.td}>
+                      <td style={{ ...s.tdDerecha, color: c.gris }}>{money(l.precio_unitario)}</td>
+                      {/* El subtotal es la cifra que se mira de la fila: va más grande y en semibold,
+                          con el precio unitario apagado al lado para que no compitan. */}
+                      <td style={{ ...s.tdDerecha, fontWeight: 600, fontSize: 15 }}>{money(l.subtotal)}</td>
+                      <td style={{ ...s.td, width: 1, whiteSpace: "nowrap" }}>
+                        {/* Icono en vez de un botón "Borrar" con texto en cada fila, y oculto hasta
+                            que el mouse entra en la fila o algo dentro toma el foco (§ .sfr-accion-fila).
+                            Con teclado sigue alcanzable por Tab y por Supr. */}
                         <button
-                          style={s.botonPeligro}
+                          className="sfr-accion-fila sfr-peligro"
+                          aria-label={`Borrar ${l.descripcion} del ticket`}
+                          title="Borrar del ticket (Supr)"
+                          style={{ ...s.botonPeligro, padding: 6, display: "inline-flex", lineHeight: 1 }}
                           onClick={async () => { if (await confirmar(`¿Borrar "${l.descripcion}" del ticket?`, { textoConfirmar: "Borrar" })) void eliminarLinea(l); }}
                         >
-                          Borrar
+                          <Trash2 size={15} aria-hidden="true" />
                         </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
               {lineas.length > 0 && (() => {
                 const totalArticulos = lineas.reduce((acc, l) => acc + l.cantidad, 0);
                 return (
-                  <div style={{ padding: "8px 4px 0", textAlign: "right", fontSize: 12, color: c.gris }}>
+                  // Pie dentro de la tarjeta, que ahora tiene `padding: 0`: se le devuelve el suyo.
+                  <div style={{ padding: "10px 14px", textAlign: "right", fontSize: 12, color: c.gris, background: c.fondo, borderTop: `1px solid ${c.borde}` }}>
                     {lineas.length} línea{lineas.length === 1 ? "" : "s"} · {formatearCantidad(totalArticulos)} artículo{totalArticulos === 1 ? "" : "s"} en total
                   </div>
                 );
@@ -1330,19 +1535,33 @@ export function Ventas() {
 
           {/* Columna lateral: cliente + totales */}
           <div>
-            <div style={{ ...s.tarjeta, marginBottom: 12 }}>
-              <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><User size={16} /> Cliente</h4>
+            {/* Cliente es opcional en la mayoría de las ventas, así que se lo deja discreto: sin
+                relieve y con el título como encabezado chico, para que Totales sea lo que pesa
+                en esta columna. */}
+            <div style={{ ...s.tarjeta, marginBottom: 12, boxShadow: "none", padding: 14 }}>
+              <h4 style={{ margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, color: c.gris }}>
+                <User size={14} aria-hidden="true" /> <EtiquetaAtajo texto="Cliente (F4)" ocultarAtajo={esTactil} />
+              </h4>
               {clienteActivo ? (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <p style={{ margin: 0 }}>{clienteActivo.nombre} {clienteActivo.apellidos ?? ""}</p>
-                  <button style={s.botonSecundario} onClick={() => asignarCliente(null)}>Quitar</button>
+                  <button
+                    ref={clienteQuitarRef}
+                    style={s.botonSecundario}
+                    aria-label={`Quitar a ${clienteActivo.nombre} del ticket`}
+                    onClick={() => asignarCliente(null)}
+                  >
+                    Quitar
+                  </button>
                 </div>
               ) : (
                 <>
                   <div style={{ display: "flex", gap: 6 }}>
                     <input
+                      ref={clienteBuscarRef}
                       style={s.input}
-                      placeholder="Buscar cliente…"
+                      placeholder={rot("Buscar cliente… (F4)")}
+                      aria-label="Buscar cliente para asignar al ticket"
                       value={clienteQ}
                       onChange={(e) => void buscarCliente(e.target.value)}
                       onKeyDown={(e) => {
@@ -1359,7 +1578,14 @@ export function Ventas() {
                         }
                       }}
                     />
-                    <button style={s.botonSecundario} onClick={() => setMostrarNuevoCliente((v) => !v)}>+ Nuevo</button>
+                    {/* `nowrap` + padding chico: en los ~250px de la columna, "+ Nuevo" partía en
+                        dos renglones y el botón se veía roto. */}
+                    <button
+                      style={{ ...s.botonSecundario, whiteSpace: "nowrap", padding: "9px 12px", flexShrink: 0 }}
+                      onClick={() => setMostrarNuevoCliente((v) => !v)}
+                    >
+                      + Nuevo
+                    </button>
                   </div>
                   {clienteResultados.map((cl, i) => (
                     <div
@@ -1373,7 +1599,7 @@ export function Ventas() {
                         cursor: "pointer",
                         fontSize: 14,
                         borderRadius: 6,
-                        ...(i === indiceResultadoCliente ? { background: c.azulClaro } : {}),
+                        ...(i === indiceResultadoCliente ? { background: c.seleccion } : {}),
                       }}
                     >
                       {cl.nombre} {cl.apellidos ?? ""}
@@ -1396,35 +1622,66 @@ export function Ventas() {
               )}
             </div>
 
-            <div style={s.tarjeta}>
-              <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><DollarSign size={16} /> Totales</h4>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-                <span style={{ color: c.gris }}>Gravado</span><span>RD$ {money(activo.subtotal_gravado)}</span>
+            <div style={{ ...s.tarjeta, boxShadow: sombra.md }}>
+              <h4 style={{ margin: "0 0 12px", display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, color: c.gris }}>
+                <DollarSign size={14} aria-hidden="true" /> Totales
+              </h4>
+              {/* El desglose es de consulta: chico, apagado y con cifras alineadas. Lo que se lee de
+                  lejos es el panel del total, abajo. */}
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
+                <span style={{ color: c.gris }}>Gravado</span><span style={{ color: c.gris, fontVariantNumeric: "tabular-nums" }}>{money(activo.subtotal_gravado)}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-                <span style={{ color: c.gris }}>Exento</span><span>RD$ {money(activo.subtotal_exento)}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
+                <span style={{ color: c.gris }}>Exento</span><span style={{ color: c.gris, fontVariantNumeric: "tabular-nums" }}>{money(activo.subtotal_exento)}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 8 }}>
-                <span style={{ color: c.gris }}>ITBIS</span><span>RD$ {money(activo.total_itbis)}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
+                <span style={{ color: c.gris }}>ITBIS</span><span style={{ color: c.gris, fontVariantNumeric: "tabular-nums" }}>{money(activo.total_itbis)}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 20, fontWeight: 700, borderTop: `1px solid ${c.borde}`, paddingTop: 10 }}>
-                <span>Total</span><span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(activo.total)}</span>
+              {/* El total es lo único de esta tarjeta que se mira de lejos y a las apuradas, así que
+                  va en su propio panel acentuado y a un tamaño muy por encima del resto. */}
+              {/* "TOTAL" arriba y el monto en su propia línea, en vez de los dos en una fila: con el
+                  monto a 30px, "RD$ 1,260.00" no entraba en los ~250px de la columna y el "RD$"
+                  quedaba colgado en un renglón aparte. `RD$` va chico y tenue — lo que se lee de
+                  lejos es la cifra. */}
+              <div
+                style={{
+                  background: c.azulClaro,
+                  borderRadius: 10,
+                  padding: "10px 14px 12px",
+                  marginTop: 12,
+                }}
+              >
+                <div style={{ fontSize: 11, fontWeight: 700, color: c.azulOscuro, textTransform: "uppercase", letterSpacing: 0.8, opacity: 0.75 }}>
+                  Total
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 5, marginTop: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: c.azulOscuro, opacity: 0.7 }}>RD$</span>
+                  <span style={{ fontSize: 30, fontWeight: 800, color: c.azulOscuro, fontVariantNumeric: "tabular-nums", lineHeight: 1.05, letterSpacing: -0.5 }}>
+                    {money(activo.total)}
+                  </span>
+                </div>
               </div>
               <button
-                style={{ ...s.boton, width: "100%", marginTop: 14, padding: "13px 18px", fontSize: 16 }}
+                style={{ ...s.boton, width: "100%", marginTop: 12, padding: "16px 18px", fontSize: 17, fontWeight: 700 }}
                 disabled={lineas.length === 0}
                 onClick={() => setMostrarCobro(true)}
               >
-                Cobrar (F12)
+                <EtiquetaAtajo texto="Cobrar (F12)" ocultarAtajo={esTactil} />
               </button>
               <button
                 style={{ ...s.botonSecundario, width: "100%", marginTop: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
                 disabled={lineas.length === 0}
                 onClick={() => setMostrarCotizacion(true)}
               >
-                <ClipboardList size={15} /> Cotización (F5)
+                <ClipboardList size={15} /> <EtiquetaAtajo texto="Cotización (F5)" ocultarAtajo={esTactil} />
               </button>
-              <button style={{ ...s.botonPeligro, width: "100%", marginTop: 8, border: "none", background: "none" }} onClick={eliminarTicketActivo}>
+              {/* Separado por una línea del par Cobrar/Cotización: es la acción destructiva de la
+                  tarjeta y estaba pegada a ellas como si fuera una opción más de la misma familia. */}
+              <button
+                className="sfr-peligro"
+                style={{ ...s.botonPeligro, width: "100%", marginTop: 14, paddingTop: 12, border: "none", borderTop: `1px solid ${c.borde}`, borderRadius: 0, background: "none", fontSize: 12.5 }}
+                onClick={eliminarTicketActivo}
+              >
                 Eliminar ticket
               </button>
             </div>
@@ -1512,13 +1769,15 @@ export function Ventas() {
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
-                          ...(i === indiceResultadoModalCantidad ? { background: c.azulClaro } : {}),
+                          ...(i === indiceResultadoModalCantidad ? { background: c.seleccion } : {}),
                         }}
                       >
                         <span>
                           <button
                             onClick={(e) => { e.stopPropagation(); void alternarFavoritoProducto(p); }}
                             title={p.favorito === 1 ? "Quitar de favoritos (←/→ + Enter)" : "Marcar como favorito (←/→ + Enter)"}
+                          aria-label={`${p.favorito === 1 ? "Quitar de favoritos" : "Marcar como favorito"}: ${p.descripcion}`}
+                          aria-pressed={p.favorito === 1}
                             style={{
                               background: "none", border: "none", cursor: "pointer", padding: 2, marginRight: 4, lineHeight: 1, verticalAlign: "middle", borderRadius: 6,
                               color: p.favorito === 1 ? c.amarillo : c.gris, opacity: p.favorito === 1 ? 1 : 0.4,

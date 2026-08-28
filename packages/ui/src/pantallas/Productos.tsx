@@ -251,6 +251,43 @@ export function Productos() {
   const paginaSegura = Math.min(pagina, totalPaginas);
   const visibles = lista.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA);
 
+  // El input de búsqueda ya navega la tabla con flechas en su propio onKeyDown (§ abajo) mientras
+  // tiene el foco — pero en cuanto el foco se va a otro lado (clic en un botón, en la tabla, o en
+  // ningún lado) esas flechas dejaban de hacer cualquier cosa. Este listener cubre exactamente ESE
+  // caso: solo actúa cuando NO hay un campo de texto enfocado, así nunca compite con lo que el input
+  // ya resuelve (que corre primero de todas formas, por cómo React delega los eventos) ni con
+  // `useNavegacionFlechas` (que solo mira campos de texto).
+  useEffect(() => {
+    if (form || ajustando) return;
+    function onKeyDown(e: KeyboardEvent) {
+      const activo = document.activeElement;
+      if (activo instanceof HTMLInputElement || activo instanceof HTMLTextAreaElement || activo instanceof HTMLSelectElement) return;
+
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && visibles.length > 0) {
+        e.preventDefault();
+        setAccionFila("fila");
+        setIndiceFila((i) => moverIndiceFila(i, e.key === "ArrowDown" ? 1 : -1, visibles.length));
+        return;
+      }
+      if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && indiceFila >= 0 && visibles[indiceFila]) {
+        e.preventDefault();
+        setAccionFila((a) => moverAccionFila(a, e.key === "ArrowRight" ? 1 : -1, accionesDe()));
+        return;
+      }
+      if (e.key === "Enter" && accionFila !== "fila" && indiceFila >= 0 && visibles[indiceFila]) {
+        e.preventDefault();
+        dispararAccion(visibles[indiceFila], accionFila);
+        return;
+      }
+      if (e.key === "Delete" && indiceFila >= 0 && visibles[indiceFila]) {
+        e.preventDefault();
+        dispararAccion(visibles[indiceFila], "eliminar");
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [form, ajustando, visibles, indiceFila, accionFila]);
+
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
@@ -282,6 +319,17 @@ export function Productos() {
             if (e.key === "Enter" && accionFila !== "fila" && indiceFila >= 0 && visibles[indiceFila]) {
               e.preventDefault();
               dispararAccion(visibles[indiceFila], accionFila);
+              return;
+            }
+            // Supr borra la fila resaltada directo, sin tener que llegar hasta "Eliminar" con → —
+            // pero solo si no hay texto por borrar hacia adelante en la búsqueda (cursor al final),
+            // para no comerse un borrado de texto real mientras se sigue escribiendo el filtro.
+            if (e.key === "Delete" && indiceFila >= 0 && visibles[indiceFila]) {
+              const campo = e.currentTarget;
+              if (campo.selectionStart === campo.value.length && campo.selectionEnd === campo.value.length) {
+                e.preventDefault();
+                dispararAccion(visibles[indiceFila], "eliminar");
+              }
             }
           }}
         />
@@ -301,17 +349,18 @@ export function Productos() {
       )}
 
       <div style={s.tarjeta}>
+        <div className="sfr-tabla-scroll">
         <table style={s.tabla}>
           <thead>
             <tr>
-              <th style={s.th}></th>
-              <th style={s.th}>Descripción</th>
-              <th style={s.th}>Código</th>
-              <th style={s.th}>Costo</th>
-              <th style={s.th}>Precio</th>
-              <th style={s.th}>Impuesto</th>
-              {inventarioActivo && <th style={s.th}>Existencia</th>}
-              <th style={s.th}></th>
+              <th scope="col" style={s.th}></th>
+              <th scope="col" style={s.th}>Descripción</th>
+              <th scope="col" style={s.th}>Código</th>
+              <th scope="col" style={s.th}>Costo</th>
+              <th scope="col" style={s.th}>Precio</th>
+              <th scope="col" style={s.th}>Impuesto</th>
+              {inventarioActivo && <th scope="col" style={s.th}>Existencia</th>}
+              <th scope="col" style={s.th}></th>
             </tr>
           </thead>
           <tbody>
@@ -322,7 +371,7 @@ export function Productos() {
               <Fragment key={p.id}>
                 <tr
                   ref={i === indiceFila ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
-                  style={i === indiceFila ? { background: c.azulClaro } : undefined}
+                  style={i === indiceFila ? { background: c.seleccion } : undefined}
                 >
                   <td style={s.td}>
                     <button
@@ -393,7 +442,7 @@ export function Productos() {
                       </>
                     )}
                     <button
-                      style={{ ...s.botonPeligro, ...(i === indiceFila && accionFila === "eliminar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                      className="sfr-peligro" style={{ ...s.botonPeligro, ...(i === indiceFila && accionFila === "eliminar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
                       title="←/→ + Enter"
                       onClick={() => eliminar(p)}
                     >
@@ -404,7 +453,7 @@ export function Productos() {
                 {errorAjuste && ajustando === p.id && (
                   <tr>
                     <td style={s.td} colSpan={inventarioActivo ? 8 : 7}>
-                      <div style={s.errorBox}>{errorAjuste}</div>
+                      <div role="alert" style={s.errorBox}>{errorAjuste}</div>
                     </td>
                   </tr>
                 )}
@@ -433,6 +482,7 @@ export function Productos() {
             ))}
           </tbody>
         </table>
+        </div>
         {lista.length > POR_PAGINA && (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 14, marginTop: 4, borderTop: `1px solid ${c.borde}` }}>
             <span style={{ color: c.gris, fontSize: 13 }}>

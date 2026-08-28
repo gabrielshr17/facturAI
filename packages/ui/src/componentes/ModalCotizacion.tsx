@@ -72,7 +72,7 @@ export function ModalCotizacion({ total, cantidadArticulos, notasIniciales, onCa
           onChange={(e) => setNotas(e.target.value)}
         />
 
-        {error && <div style={s.errorBox}>{error}</div>}
+        {error && <div role="alert" style={s.errorBox}>{error}</div>}
 
         <div style={{ ...s.formFooter, flexWrap: "wrap" }}>
           <button style={s.boton} disabled={guardando} onClick={() => confirmar("imprimir")}>
@@ -105,7 +105,7 @@ const tarjeta: CSSProperties = {
   ...s.tarjeta,
   width: 420,
   maxWidth: "90vw",
-  maxHeight: "90vh",
+  maxHeight: "90dvh",
   overflow: "auto",
   border: "none",
   borderRadius: 16,

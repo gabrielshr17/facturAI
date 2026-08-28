@@ -59,7 +59,7 @@ const tarjeta: CSSProperties = {
   ...s.tarjeta,
   width: 440,
   maxWidth: "90vw",
-  maxHeight: "80vh",
+  maxHeight: "80dvh",
   overflow: "auto",
   border: "none",
   borderRadius: 16,

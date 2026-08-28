@@ -161,9 +161,9 @@ export function Reportes() {
           <table style={s.tabla}>
             <thead>
               <tr>
-                <th style={s.th}>Producto</th>
-                <th style={s.th}>Cant.</th>
-                <th style={s.th}>Total</th>
+                <th scope="col" style={s.th}>Producto</th>
+                <th scope="col" style={s.th}>Cant.</th>
+                <th scope="col" style={s.th}>Total</th>
               </tr>
             </thead>
             <tbody>

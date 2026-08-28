@@ -100,6 +100,43 @@ export function Clientes() {
     await recargar();
   }
 
+  // El input de búsqueda ya navega la tabla con flechas en su propio onKeyDown (§ abajo) mientras
+  // tiene el foco — pero en cuanto el foco se va a otro lado (clic en un botón, en la tabla, o en
+  // ningún lado) esas flechas dejaban de hacer cualquier cosa. Este listener cubre exactamente ESE
+  // caso: solo actúa cuando NO hay un campo de texto enfocado, así nunca compite con lo que el input
+  // ya resuelve (que corre primero de todas formas, por cómo React delega los eventos) ni con
+  // `useNavegacionFlechas` (que solo mira campos de texto).
+  useEffect(() => {
+    if (form) return;
+    function onKeyDown(e: KeyboardEvent) {
+      const activo = document.activeElement;
+      if (activo instanceof HTMLInputElement || activo instanceof HTMLTextAreaElement || activo instanceof HTMLSelectElement) return;
+
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && lista.length > 0) {
+        e.preventDefault();
+        setAccionFila("fila");
+        setIndiceFila((i) => moverIndiceFila(i, e.key === "ArrowDown" ? 1 : -1, lista.length));
+        return;
+      }
+      if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && indiceFila >= 0 && lista[indiceFila]) {
+        e.preventDefault();
+        setAccionFila((a) => moverAccionFila(a, e.key === "ArrowRight" ? 1 : -1, ["editar", "eliminar"]));
+        return;
+      }
+      if (e.key === "Enter" && accionFila !== "fila" && indiceFila >= 0 && lista[indiceFila]) {
+        e.preventDefault();
+        dispararAccion(lista[indiceFila], accionFila);
+        return;
+      }
+      if (e.key === "Delete" && indiceFila >= 0 && lista[indiceFila]) {
+        e.preventDefault();
+        dispararAccion(lista[indiceFila], "eliminar");
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [form, lista, indiceFila, accionFila]);
+
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
@@ -129,6 +166,17 @@ export function Clientes() {
             if (e.key === "Enter" && accionFila !== "fila" && indiceFila >= 0 && lista[indiceFila]) {
               e.preventDefault();
               dispararAccion(lista[indiceFila], accionFila);
+              return;
+            }
+            // Supr borra la fila resaltada directo, sin tener que llegar hasta "Eliminar" con → —
+            // pero solo si no hay texto por borrar hacia adelante en la búsqueda (cursor al final),
+            // para no comerse un borrado de texto real mientras se sigue escribiendo el filtro.
+            if (e.key === "Delete" && indiceFila >= 0 && lista[indiceFila]) {
+              const campo = e.currentTarget;
+              if (campo.selectionStart === campo.value.length && campo.selectionEnd === campo.value.length) {
+                e.preventDefault();
+                dispararAccion(lista[indiceFila], "eliminar");
+              }
             }
           }}
         />
@@ -187,7 +235,7 @@ export function Clientes() {
             Aplica crédito
           </label>
 
-          {errores.length > 0 && <div style={s.errorBox}>{errores.join(" ")}</div>}
+          {errores.length > 0 && <div role="alert" style={s.errorBox}>{errores.join(" ")}</div>}
 
           <div style={s.formFooter}>
             <button style={s.boton} onClick={guardar}>Guardar (Ctrl+S)</button>
@@ -197,14 +245,15 @@ export function Clientes() {
       )}
 
       <div style={s.tarjeta}>
+        <div className="sfr-tabla-scroll">
         <table style={s.tabla}>
           <thead>
             <tr>
-              <th style={s.th}>Nombre</th>
-              <th style={s.th}>Teléfono</th>
-              <th style={s.th}>Correo</th>
-              <th style={s.th}>Documento</th>
-              <th style={s.th}></th>
+              <th scope="col" style={s.th}>Nombre</th>
+              <th scope="col" style={s.th}>Teléfono</th>
+              <th scope="col" style={s.th}>Correo</th>
+              <th scope="col" style={s.th}>Documento</th>
+              <th scope="col" style={s.th}></th>
             </tr>
           </thead>
           <tbody>
@@ -215,7 +264,7 @@ export function Clientes() {
               <tr
                 key={cl.id}
                 ref={i === indiceFila ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
-                style={i === indiceFila ? { background: c.azulClaro } : undefined}
+                style={i === indiceFila ? { background: c.seleccion } : undefined}
               >
                 <td style={s.td}>{cl.nombre} {cl.apellidos ?? ""}</td>
                 <td style={s.td}>{cl.telefono ?? "—"}</td>
@@ -230,7 +279,7 @@ export function Clientes() {
                     Editar
                   </button>{" "}
                   <button
-                    style={{ ...s.botonPeligro, ...(i === indiceFila && accionFila === "eliminar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
+                    className="sfr-peligro" style={{ ...s.botonPeligro, ...(i === indiceFila && accionFila === "eliminar" ? { outline: `2px solid ${c.azul}`, outlineOffset: 1 } : {}) }}
                     title="←/→ + Enter"
                     onClick={() => eliminar(cl)}
                   >
@@ -241,6 +290,7 @@ export function Clientes() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

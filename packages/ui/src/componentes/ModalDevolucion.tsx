@@ -78,9 +78,9 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
         <table style={s.tabla}>
           <thead>
             <tr>
-              <th style={s.th}>Artículo</th>
-              <th style={s.th}>Vendido</th>
-              <th style={s.th}>Devolver</th>
+              <th scope="col" style={s.th}>Artículo</th>
+              <th scope="col" style={s.th}>Vendido</th>
+              <th scope="col" style={s.th}>Devolver</th>
             </tr>
           </thead>
           <tbody>
@@ -111,7 +111,7 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
         <label style={s.label}>Motivo (opcional)</label>
         <textarea style={{ ...s.input, minHeight: 50 }} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
 
-        {error && <div style={s.errorBox}>{error}</div>}
+        {error && <div role="alert" style={s.errorBox}>{error}</div>}
         {mensaje && (
           <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>{mensaje}</div>
         )}
@@ -142,7 +142,7 @@ const tarjeta: CSSProperties = {
   ...s.tarjeta,
   width: 480,
   maxWidth: "90vw",
-  maxHeight: "85vh",
+  maxHeight: "85dvh",
   overflow: "auto",
   border: "none",
   borderRadius: 16,

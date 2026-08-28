@@ -186,7 +186,7 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
               accept=".xlsx,.csv"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) void manejarArchivo(f); }}
             />
-            {error && <div style={s.errorBox}>{error}</div>}
+            {error && <div role="alert" style={s.errorBox}>{error}</div>}
             <div style={s.formFooter}>
               <button style={s.botonSecundario} onClick={onCerrar}>Cancelar</button>
             </div>
@@ -202,9 +202,9 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
             <table style={s.tabla}>
               <thead>
                 <tr>
-                  <th style={s.th}>Columna del archivo</th>
-                  <th style={s.th}>Se importa como</th>
-                  <th style={s.th}>Ejemplo</th>
+                  <th scope="col" style={s.th}>Columna del archivo</th>
+                  <th scope="col" style={s.th}>Se importa como</th>
+                  <th scope="col" style={s.th}>Ejemplo</th>
                 </tr>
               </thead>
               <tbody>
@@ -245,7 +245,7 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
               </div>
             )}
 
-            {error && <div style={s.errorBox}>{error}</div>}
+            {error && <div role="alert" style={s.errorBox}>{error}</div>}
 
             <div style={s.formFooter}>
               <button style={s.boton} onClick={ejecutarImportacion}>Importar {archivo.filas.length} fila(s)</button>
@@ -300,7 +300,7 @@ const tarjeta: CSSProperties = {
   ...s.tarjeta,
   width: 640,
   maxWidth: "90vw",
-  maxHeight: "85vh",
+  maxHeight: "85dvh",
   overflow: "auto",
   border: "none",
   borderRadius: 16,

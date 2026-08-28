@@ -302,7 +302,7 @@ export function Compras() {
                   <div key={p.id} className="sfr-fila-clickeable"
                     onClick={() => { setProveedorSel(p); setProveedorQ(""); setProveedorResultados([]); }}
                     onMouseEnter={() => setIndiceResultadoProveedor(i)}
-                    style={{ padding: "6px 8px", cursor: "pointer", fontSize: 14, borderRadius: 6, ...(i === indiceResultadoProveedor ? { background: c.azulClaro } : {}) }}>
+                    style={{ padding: "6px 8px", cursor: "pointer", fontSize: 14, borderRadius: 6, ...(i === indiceResultadoProveedor ? { background: c.seleccion } : {}) }}>
                     {p.nombre}
                   </div>
                 ))}
@@ -350,7 +350,7 @@ export function Compras() {
             {resultadosProducto.map((p, i) => (
               <div key={p.id} className="sfr-fila-clickeable" onClick={() => agregarLineaProducto(p)}
                 onMouseEnter={() => setIndiceResultadoProducto(i)}
-                style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${c.borde}`, display: "flex", justifyContent: "space-between", ...(i === indiceResultadoProducto ? { background: c.azulClaro } : {}) }}>
+                style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${c.borde}`, display: "flex", justifyContent: "space-between", ...(i === indiceResultadoProducto ? { background: c.seleccion } : {}) }}>
                 <span>{p.favorito === 1 && <span title="Favorito" style={{ color: c.amarillo, marginRight: 4, display: "inline-flex", verticalAlign: "middle" }}><Star size={12} fill="currentColor" /></span>}{p.descripcion} {p.codigo_barra ? <span style={{ color: c.gris, fontSize: 12 }}>({p.codigo_barra})</span> : ""}</span>
                 <span style={{ color: c.gris, fontVariantNumeric: "tabular-nums" }}>costo actual RD$ {money(p.costo)}</span>
               </div>
@@ -369,11 +369,11 @@ export function Compras() {
         <table style={{ ...s.tabla, marginTop: 12 }}>
           <thead>
             <tr>
-              <th style={s.th}>Descripción</th>
-              <th style={s.th}>Cantidad</th>
-              <th style={s.th}>Costo unitario</th>
-              <th style={s.th}>Subtotal</th>
-              <th style={s.th}></th>
+              <th scope="col" style={s.th}>Descripción</th>
+              <th scope="col" style={s.th}>Cantidad</th>
+              <th scope="col" style={s.th}>Costo unitario</th>
+              <th scope="col" style={s.th}>Subtotal</th>
+              <th scope="col" style={s.th}></th>
             </tr>
           </thead>
           <tbody>
@@ -395,7 +395,7 @@ export function Compras() {
                     onChange={(e) => actualizarLinea(i, { costoUnitario: Number(filtrarNumero(e.target.value)) || 0 })} />
                 </td>
                 <td style={s.tdDerecha}>RD$ {money(l.cantidad * l.costoUnitario)}</td>
-                <td style={s.td}><button style={s.botonPeligro} onClick={() => quitarLinea(i)}>Borrar</button></td>
+                <td style={s.td}><button className="sfr-peligro" style={s.botonPeligro} onClick={() => quitarLinea(i)}>Borrar</button></td>
               </tr>
             ))}
           </tbody>
@@ -438,7 +438,7 @@ export function Compras() {
         <label style={s.label}>Notas</label>
         <textarea style={{ ...s.input, minHeight: 50 }} value={notas} onChange={(e) => setNotas(e.target.value)} />
 
-        {error && <div style={s.errorBox}>{error}</div>}
+        {error && <div role="alert" style={s.errorBox}>{error}</div>}
         {mensaje && <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>{mensaje}</div>}
 
         <div style={s.formFooter}>
@@ -466,10 +466,10 @@ export function Compras() {
           <table style={s.tabla}>
             <thead>
               <tr>
-                <th style={s.th}>Fecha</th>
-                <th style={s.th}>Proveedor</th>
-                <th style={s.th}>Clasificación</th>
-                <th style={s.th}>Total</th>
+                <th scope="col" style={s.th}>Fecha</th>
+                <th scope="col" style={s.th}>Proveedor</th>
+                <th scope="col" style={s.th}>Clasificación</th>
+                <th scope="col" style={s.th}>Total</th>
               </tr>
             </thead>
             <tbody>

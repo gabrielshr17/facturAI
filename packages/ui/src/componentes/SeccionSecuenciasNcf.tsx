@@ -86,7 +86,7 @@ export function SeccionSecuenciasNcf() {
                 onChange={(e) => setForm({ ...form, vencimiento: e.target.value })} />
             </div>
           </div>
-          {errores.length > 0 && <div style={s.errorBox}>{errores.join(" ")}</div>}
+          {errores.length > 0 && <div role="alert" style={s.errorBox}>{errores.join(" ")}</div>}
           <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${c.borde}` }}>
             <button style={s.boton} onClick={guardar}>Guardar secuencia</button>
             <button style={s.botonSecundario} onClick={() => setForm(null)}>Cancelar</button>
@@ -97,12 +97,12 @@ export function SeccionSecuenciasNcf() {
       <table style={s.tabla}>
         <thead>
           <tr>
-            <th style={s.th}>Tipo</th>
-            <th style={s.th}>Rango</th>
-            <th style={s.th}>Próximo</th>
-            <th style={s.th}>Restantes</th>
-            <th style={s.th}>Vencimiento</th>
-            <th style={s.th}>Estado</th>
+            <th scope="col" style={s.th}>Tipo</th>
+            <th scope="col" style={s.th}>Rango</th>
+            <th scope="col" style={s.th}>Próximo</th>
+            <th scope="col" style={s.th}>Restantes</th>
+            <th scope="col" style={s.th}>Vencimiento</th>
+            <th scope="col" style={s.th}>Estado</th>
           </tr>
         </thead>
         <tbody>

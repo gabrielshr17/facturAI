@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { TriangleAlert, CircleHelp, CircleX, Info } from "lucide-react";
 import { s, c, sombra } from "../estilos.js";
+import { useModalAccesible } from "../hooks/useModalAccesible.js";
 
 export interface OpcionesConfirmar {
   titulo?: string;
@@ -107,6 +108,7 @@ function ModalAlerta({ solicitud, onCerrar }: { solicitud: Exclude<Solicitud, { 
   const esPeligro = solicitud.tipo === "confirmar" && (solicitud.opciones.peligro ?? true);
   const acentuado = esError || esPeligro;
   const botonConfirmarRef = useRef<HTMLButtonElement>(null);
+  const tarjetaRef = useModalAccesible<HTMLDivElement>();
 
   // Enter confirma (el botón principal ya queda enfocado al abrir), Escape cancela/cierra — así el
   // modal se puede operar sin mouse igual que el confirm() nativo que reemplaza.
@@ -129,14 +131,24 @@ function ModalAlerta({ solicitud, onCerrar }: { solicitud: Exclude<Solicitud, { 
 
   return (
     <div style={overlay} onClick={() => onCerrar(false)}>
-      <div style={{ ...tarjeta, borderTop: `5px solid ${acentuado ? c.rojo : c.azul}` }} onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={tarjetaRef}
+        // `alertdialog` (y no `dialog`) es justamente para mensajes que interrumpen: el lector de
+        // pantalla anuncia el contenido de una, sin esperar a que el usuario lo explore.
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="sfr-alerta-titulo"
+        aria-describedby="sfr-alerta-mensaje"
+        style={{ ...tarjeta, borderTop: `5px solid ${acentuado ? c.rojo : c.azul}` }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-          <span style={{ ...iconoCirculo, background: acentuado ? c.rojoFondo : c.azulClaro, color: acentuado ? c.rojo : c.azul }}>
+          <span aria-hidden="true" style={{ ...iconoCirculo, background: acentuado ? c.rojoFondo : c.azulClaro, color: acentuado ? c.rojo : c.azul }}>
             <Icono size={20} />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{ margin: "2px 0 8px", fontSize: 18 }}>{titulo}</h3>
-            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: c.texto, wordBreak: "break-word" }}>
+            <h3 id="sfr-alerta-titulo" style={{ margin: "2px 0 8px", fontSize: 18 }}>{titulo}</h3>
+            <p id="sfr-alerta-mensaje" style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: c.texto, wordBreak: "break-word" }}>
               {solicitud.mensaje}
             </p>
           </div>
@@ -168,6 +180,7 @@ function ModalAlerta({ solicitud, onCerrar }: { solicitud: Exclude<Solicitud, { 
 
 function ModalElegir({ solicitud, onCerrar }: { solicitud: Extract<Solicitud, { tipo: "elegir" }>; onCerrar: (valor: string | null) => void }) {
   const primerBotonRef = useRef<HTMLButtonElement>(null);
+  const tarjetaRef = useModalAccesible<HTMLDivElement>();
 
   // Enter dispara la primera opción (ya enfocada al abrir) y Escape cancela — mismo trato de teclado
   // que ModalAlerta, salvo que acá el usuario elige entre varias acciones en vez de solo sí/no.
@@ -183,14 +196,22 @@ function ModalElegir({ solicitud, onCerrar }: { solicitud: Extract<Solicitud, { 
 
   return (
     <div style={overlay} onClick={() => onCerrar(null)}>
-      <div style={{ ...tarjeta, borderTop: `5px solid ${c.azul}` }} onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={tarjetaRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="sfr-elegir-titulo"
+        aria-describedby="sfr-elegir-mensaje"
+        style={{ ...tarjeta, borderTop: `5px solid ${c.azul}` }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-          <span style={{ ...iconoCirculo, background: c.azulClaro, color: c.azul }}>
+          <span aria-hidden="true" style={{ ...iconoCirculo, background: c.azulClaro, color: c.azul }}>
             <CircleHelp size={20} />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{ margin: "2px 0 8px", fontSize: 18 }}>{solicitud.opciones.titulo ?? "¿Qué quieres hacer?"}</h3>
-            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: c.texto, wordBreak: "break-word" }}>
+            <h3 id="sfr-elegir-titulo" style={{ margin: "2px 0 8px", fontSize: 18 }}>{solicitud.opciones.titulo ?? "¿Qué quieres hacer?"}</h3>
+            <p id="sfr-elegir-mensaje" style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: c.texto, wordBreak: "break-word" }}>
               {solicitud.mensaje}
             </p>
           </div>
@@ -231,6 +252,11 @@ const tarjeta: CSSProperties = {
   ...s.tarjeta,
   width: 440,
   maxWidth: "90vw",
+  // Un mensaje largo (un error con stack, p.ej.) no debe empujar los botones fuera de la pantalla:
+  // en teléfono, sin esto, "Confirmar" queda inalcanzable. `dvh` porque en el navegador móvil la
+  // barra de direcciones aparece y desaparece, y `vh` no la descuenta.
+  maxHeight: "90dvh",
+  overflow: "auto",
   border: "none",
   borderRadius: 16,
   boxShadow: sombra.md,

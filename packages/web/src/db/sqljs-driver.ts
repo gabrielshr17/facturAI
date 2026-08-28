@@ -47,6 +47,16 @@ async function guardarBytes(bytes: Uint8Array): Promise<void> {
 
 export async function crearSqlJsDriver(): Promise<SqlDriver> {
   const SQL = await initSqlJs({ locateFile: () => wasmUrl });
+
+  // Sin esto el navegador trata la base como caché descartable y puede borrarla cuando el
+  // dispositivo anda escaso de espacio — en un teléfono eso es perder las ventas. Pedirlo es
+  // best-effort (el navegador puede decir que no) y nunca debe impedir que la app arranque.
+  try {
+    await navigator.storage?.persist?.();
+  } catch {
+    // Navegador sin la API o permiso denegado: se sigue igual, solo sin la garantía extra.
+  }
+
   const previos = await cargarBytes();
   const db: Database = previos ? new SQL.Database(previos) : new SQL.Database();
   db.run("PRAGMA foreign_keys = ON;");
@@ -60,6 +70,25 @@ export async function crearSqlJsDriver(): Promise<SqlDriver> {
       pendiente = null;
     }, 150);
   };
+
+  /** Guarda YA lo que esté esperando el debounce, sin esperar los 150 ms. */
+  const persistirAhora = () => {
+    if (!pendiente) return;
+    clearTimeout(pendiente);
+    pendiente = null;
+    void guardarBytes(db.export());
+  };
+
+  // En el teléfono la pestaña se puede congelar o matar en cualquier momento (cambio de app,
+  // pantalla bloqueada) y ahí nunca llega a correr el timer del debounce: se perdería la última
+  // escritura. `pagehide` y el paso a segundo plano son las únicas señales fiables en iOS —
+  // `beforeunload` no dispara en móvil.
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", persistirAhora);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") persistirAhora();
+    });
+  }
 
   return {
     async exec(sql) {
