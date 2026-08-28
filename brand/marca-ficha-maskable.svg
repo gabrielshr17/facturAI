@@ -1,9 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="facturAI">
-  <!-- Ficha de aplicación: la marca calada en blanco sobre el garnet de la app.
-       Es la forma que usan el favicon, el icono de Windows y el de la PWA — una
-       marca transparente y delgada se pierde en la barra de tareas; una ficha no. -->
-  <rect width="512" height="512" rx="96" fill="#991b1b"/>
-  <g fill="#ffffff" transform="translate(80.6 93.8) scale(10.96)">
+  <!-- Variante `maskable` para Android: fondo a sangre (el sistema le aplica su
+       propio recorte, que puede ser un círculo) y la marca encogida para caber
+       dentro de la zona segura — el círculo central del 80 %. Sin esto, el
+       recorte adaptativo le come la antena y el rasgado. -->
+  <rect width="512" height="512" fill="#991b1b"/>
+  <g fill="#ffffff" transform="translate(121.7 131.8) scale(8.393)">
     <circle cx="16" cy="2.4" r="1.6"/>
     <rect x="15.2" y="2.4" width="1.6" height="4.4" rx="0.8"/>
     <path fill-rule="evenodd" d="M7 8.7Q7 6.2 9.5 6.2H22.5Q25 6.2 25 8.7V26.2L22 28.8L19 26.2L16 28.8L13 26.2L10 28.8L7 26.2ZM10.4 13.2A2 2 0 0 1 14.4 13.2A2 2 0 0 1 10.4 13.2ZM17.6 13.2A2 2 0 0 1 21.6 13.2A2 2 0 0 1 17.6 13.2ZM11.5 18.4H20.5V20.6H11.5Z"/>
