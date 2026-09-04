@@ -55,7 +55,9 @@ async function parseXlsx(buffer: ArrayBuffer): Promise<ArchivoParseado> {
     }
     if (valores.every((v) => v == null || v === "")) return;
     const fila: ArchivoParseado["filas"][number] = {};
-    columnas.forEach((col, i) => { fila[col] = valores[i] ?? null; });
+    columnas.forEach((col, i) => {
+      fila[col] = valores[i] ?? null;
+    });
     filas.push(fila);
   });
 
@@ -81,18 +83,49 @@ function partirCsv(texto: string, delimitador: string): string[][] {
     const ch = texto[i];
     if (enComillas) {
       if (ch === '"') {
-        if (texto[i + 1] === '"') { campo += '"'; i += 2; continue; }
-        enComillas = false; i++; continue;
+        if (texto[i + 1] === '"') {
+          campo += '"';
+          i += 2;
+          continue;
+        }
+        enComillas = false;
+        i++;
+        continue;
       }
-      campo += ch; i++; continue;
+      campo += ch;
+      i++;
+      continue;
     }
-    if (ch === '"') { enComillas = true; i++; continue; }
-    if (ch === delimitador) { fila.push(campo); campo = ""; i++; continue; }
-    if (ch === "\r") { i++; continue; }
-    if (ch === "\n") { fila.push(campo); filas.push(fila); fila = []; campo = ""; i++; continue; }
-    campo += ch; i++;
+    if (ch === '"') {
+      enComillas = true;
+      i++;
+      continue;
+    }
+    if (ch === delimitador) {
+      fila.push(campo);
+      campo = "";
+      i++;
+      continue;
+    }
+    if (ch === "\r") {
+      i++;
+      continue;
+    }
+    if (ch === "\n") {
+      fila.push(campo);
+      filas.push(fila);
+      fila = [];
+      campo = "";
+      i++;
+      continue;
+    }
+    campo += ch;
+    i++;
   }
-  if (campo.length > 0 || fila.length > 0) { fila.push(campo); filas.push(fila); }
+  if (campo.length > 0 || fila.length > 0) {
+    fila.push(campo);
+    filas.push(fila);
+  }
   return filas;
 }
 
@@ -112,7 +145,7 @@ function tiparCelda(texto: string): string | number | null {
 }
 
 function parseCsv(texto: string): ArchivoParseado {
-  const sinBom = texto.replace(/^﻿/, "");
+  const sinBom = texto.replace(/^\uFEFF/, "");
   const primeraLinea = sinBom.split(/\r?\n/, 1)[0] ?? "";
   const delimitador = detectarDelimitador(primeraLinea);
   const filasCeldas = partirCsv(sinBom, delimitador);
@@ -124,7 +157,9 @@ function parseCsv(texto: string): ArchivoParseado {
     const celdas = filasCeldas[i];
     if (celdas.every((c) => c.trim() === "")) continue;
     const fila: ArchivoParseado["filas"][number] = {};
-    columnas.forEach((col, j) => { fila[col] = tiparCelda(celdas[j] ?? ""); });
+    columnas.forEach((col, j) => {
+      fila[col] = tiparCelda(celdas[j] ?? "");
+    });
     filas.push(fila);
   }
   return { columnas, filas };

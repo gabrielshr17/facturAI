@@ -4,6 +4,7 @@ import { tieneValor, normalizar, esCorreoValido, type ErrorValidacion } from "..
 import { ValidacionError } from "./producto-repo.js";
 import { registrarAccion } from "./bitacora-repo.js";
 import type { Proveedor } from "./tipos.js";
+import { MSG } from "../dominio/mensajes.js";
 
 export interface ProveedorInput {
   nombre: string;
@@ -56,7 +57,7 @@ export function crearProveedorRepo(db: SqlDriver) {
       if (errores.length) throw new ValidacionError(errores);
 
       const actual = await this.obtener(id);
-      if (!actual) throw new Error(`Proveedor ${id} no existe`);
+      if (!actual) throw new Error(MSG.proveedorNoExiste);
 
       await db.run(
         `UPDATE proveedor SET nombre=?, rnc=?, telefono=?, correo=?, direccion=?, updated_at=? WHERE id=?`,

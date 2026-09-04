@@ -5,6 +5,7 @@ import { ValidacionError } from "./producto-repo.js";
 import { registrarAccion } from "./bitacora-repo.js";
 import type { ImpuestoTipo } from "../dominio/impuesto.js";
 import type { Devolucion, DevolucionLinea, FacturaLinea } from "./tipos.js";
+import { MSG } from "../dominio/mensajes.js";
 
 /**
  * Repo de devoluciones (§ Ventas): devolver artículos de una venta ya
@@ -61,7 +62,7 @@ export async function prepararDevolucion(
     "SELECT estado FROM factura WHERE id=? AND deleted_at IS NULL",
     [input.facturaId],
   );
-  if (!factura) throw new Error(`Factura ${input.facturaId} no existe`);
+  if (!factura) throw new Error(MSG.facturaNoExiste);
   if (factura.estado !== "cobrada") {
     throw new ValidacionError([{ campo: "factura", mensaje: "Solo se pueden devolver artículos de ventas ya cobradas." }]);
   }

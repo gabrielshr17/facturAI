@@ -10,6 +10,7 @@ import {
 import { ValidacionError } from "./producto-repo.js";
 import { registrarAccion } from "./bitacora-repo.js";
 import type { Cliente } from "./tipos.js";
+import { MSG } from "../dominio/mensajes.js";
 
 export interface ClienteInput {
   nombre: string;
@@ -85,7 +86,7 @@ export function crearClienteRepo(db: SqlDriver) {
       if (errores.length) throw new ValidacionError(errores);
 
       const actual = await this.obtener(id);
-      if (!actual) throw new Error(`Cliente ${id} no existe`);
+      if (!actual) throw new Error(MSG.clienteNoExiste);
 
       await db.run(
         `UPDATE cliente SET nombre=?, apellidos=?, telefono=?, correo=?, direccion=?,

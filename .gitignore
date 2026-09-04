@@ -21,3 +21,6 @@ packages/desktop/src-tauri/target/
 productDatabase/
 *.xlsx
 *.xls
+
+# Salida local de herramientas de automatización de browser (screenshots, sesiones)
+.playwright-mcp/

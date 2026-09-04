@@ -5,11 +5,11 @@ import {
   type TipoEcf,
   ETIQUETA_TIPO_ECF,
   UMBRAL_BAJO,
-  ValidacionError,
 } from "@sfr/core";
 import { Receipt, TriangleAlert } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c } from "../estilos.js";
+import { mensajesError } from "../utilidades/errores.js";
 
 const TIPOS: TipoEcf[] = ["32", "31", "34", "33", "41", "43", "44", "45", "46", "47"];
 
@@ -47,7 +47,7 @@ export function SeccionSecuenciasNcf() {
       setErrores([]);
       await recargar();
     } catch (e) {
-      setErrores(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje) : [String(e)]);
+      setErrores(mensajesError(e));
     }
   }
 

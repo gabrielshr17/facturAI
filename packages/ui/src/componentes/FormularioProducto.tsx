@@ -1,4 +1,4 @@
-import { type Producto, type ProductoInput, type ImpuestoTipo, type TipoVenta, tasaDe, pctGananciaDesdePrecio, calcularPrecioVenta } from "@sfr/core";
+import { type Producto, type ProductoInput, type ImpuestoTipo, type TipoVenta, pctGananciaDesdePrecio, calcularPrecioVenta, PCT_GANANCIA_POR_DEFECTO } from "@sfr/core";
 import { Package } from "lucide-react";
 import { s, money } from "../estilos.js";
 import { filtrarNumero } from "../utilidades/numero.js";
@@ -44,7 +44,14 @@ export function diferenciasProducto(original: Producto, form: ProductoInput): Ca
   agregar("Tipo de venta", ETIQUETA_TIPO_VENTA[original.tipo_venta], ETIQUETA_TIPO_VENTA[form.tipo_venta ?? "unidad"]);
   agregar("Unidad de medida", original.unidad_medida?.trim() || "(ninguna)", form.unidad_medida?.trim() || "(ninguna)");
   agregar("Costo", money(original.costo), money(form.costo ?? 0));
-  agregar("% Ganancia", `${original.pct_ganancia}%`, `${form.pct_ganancia ?? 0}%`);
+  // El % que se compara es el que el formulario mostró al abrirse (el que implica el precio
+  // guardado), no `pct_ganancia` de la base — ese se queda viejo cuando el precio se escribió a
+  // mano, y comparar contra él inventaba un "cambio" que el usuario nunca hizo.
+  agregar(
+    "% Ganancia",
+    `${pctGananciaDesdePrecio(original.costo, original.precio_venta)}%`,
+    `${form.pct_ganancia ?? 0}%`,
+  );
   agregar("Precio venta", money(original.precio_venta), form.precio_venta != null ? money(form.precio_venta) : "(automático)");
   agregar(
     "Precio mayoreo",
@@ -127,18 +134,18 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             value={form.costo ?? 0}
             onChange={(e) => {
               const costo = Number(filtrarNumero(e.target.value)) || 0;
-              // Costo, % Ganancia e Impuesto son los "insumos" de la fórmula — cualquiera de los
-              // tres recalcula el precio en vivo. Precio venta pasa a ser el insumo (y % Ganancia
-              // el reflejo) solo cuando se escribe directamente ahí abajo — así cambiar la ganancia
-              // sí mueve el precio, en vez de quedarse pegado al que tenía al abrir el formulario.
-              const tasa = tasaDe(form.impuesto_tipo ?? "itbis18");
-              const precio_venta = calcularPrecioVenta({ costo, pctGanancia: form.pct_ganancia ?? 0, tasaImpuesto: tasa, precioManual: null });
+              // Costo y % Ganancia son los "insumos" de la fórmula — cualquiera de los dos
+              // recalcula el precio en vivo (costo 100 + 20% = 120). Precio venta pasa a ser el
+              // insumo (y % Ganancia el reflejo) solo cuando se escribe directamente ahí abajo —
+              // así cambiar la ganancia sí mueve el precio, en vez de quedarse pegado al que
+              // tenía al abrir el formulario. El impuesto ya no entra: va incluido en el precio.
+              const precio_venta = calcularPrecioVenta({ costo, pctGanancia: form.pct_ganancia ?? PCT_GANANCIA_POR_DEFECTO, precioManual: null });
               onCambiar({ ...form, costo, precio_venta });
             }}
           />
         </div>
         <div>
-          <label style={s.label}>% Ganancia</label>
+          <label style={s.label}>% Ganancia (sobre el costo)</label>
           <input
             style={s.input}
             type="text"
@@ -146,14 +153,13 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             value={form.pct_ganancia ?? 0}
             onChange={(e) => {
               const pct_ganancia = Number(filtrarNumero(e.target.value)) || 0;
-              const tasa = tasaDe(form.impuesto_tipo ?? "itbis18");
-              const precio_venta = calcularPrecioVenta({ costo: form.costo ?? 0, pctGanancia: pct_ganancia, tasaImpuesto: tasa, precioManual: null });
+              const precio_venta = calcularPrecioVenta({ costo: form.costo ?? 0, pctGanancia: pct_ganancia, precioManual: null });
               onCambiar({ ...form, pct_ganancia, precio_venta });
             }}
           />
         </div>
         <div>
-          <label style={s.label}>Precio venta (vacío = automático desde costo + %)</label>
+          <label style={s.label}>Precio venta (ITBIS incluido; vacío = costo + % de ganancia)</label>
           <input
             style={s.input}
             type="text"
@@ -163,7 +169,7 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
               const texto = filtrarNumero(e.target.value);
               const precio_venta = texto === "" ? null : Number(texto) || 0;
               const pct_ganancia = precio_venta != null
-                ? pctGananciaDesdePrecio(form.costo ?? 0, precio_venta, tasaDe(form.impuesto_tipo ?? "itbis18"))
+                ? pctGananciaDesdePrecio(form.costo ?? 0, precio_venta)
                 : form.pct_ganancia;
               onCambiar({ ...form, precio_venta, pct_ganancia });
             }}
@@ -190,12 +196,10 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
           <select
             style={s.input}
             value={form.impuesto_tipo}
-            onChange={(e) => {
-              const impuesto_tipo = e.target.value as ImpuestoTipo;
-              const tasa = tasaDe(impuesto_tipo);
-              const precio_venta = calcularPrecioVenta({ costo: form.costo ?? 0, pctGanancia: form.pct_ganancia ?? 0, tasaImpuesto: tasa, precioManual: null });
-              onCambiar({ ...form, impuesto_tipo, precio_venta });
-            }}
+            // El impuesto NO mueve el precio: el precio de venta ya lo lleva incluido y sale
+            // solo de costo + % de ganancia. Cambiar de ITBIS a exento cambia cuánto impuesto
+            // se le extrae a ese precio en la factura, no lo que paga el cliente.
+            onChange={(e) => onCambiar({ ...form, impuesto_tipo: e.target.value as ImpuestoTipo })}
           >
             {IMPUESTOS.map((i) => (
               <option key={i.valor} value={i.valor}>{i.etiqueta}</option>

@@ -233,9 +233,12 @@ tbody tr:hover {
   }
 }
 
-/* Cualquier tabla ancha se desplaza dentro de su propia caja en vez de estirar la página entera. */
+/* Cualquier tabla ancha se desplaza dentro de su propia caja en vez de estirar la página entera.
+   `overflow-y: auto` solo entra en juego cuando el contenedor tiene una altura acotada (p.ej. Ventas,
+   con `flex: 1` en una columna de altura fija) — en las pantallas donde no la hay, no hace nada. */
 .sfr-tabla-scroll {
   overflow-x: auto;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 

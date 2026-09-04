@@ -34,7 +34,12 @@ function normalizarTecla(e: KeyboardEvent): string {
  */
 export function useAtajosTeclado(mapa: MapaAtajos, activo = true) {
   const mapaRef = useRef(mapa);
-  mapaRef.current = mapa;
+  // Actualizar el ref en un efecto (no durante el render, que React no garantiza que corra una
+  // sola vez) es lo que mantiene el patrón "último valor" seguro sin forzar al listener de keydown
+  // de abajo a recrearse en cada tecla registrada/desregistrada.
+  useEffect(() => {
+    mapaRef.current = mapa;
+  });
 
   useEffect(() => {
     if (!activo) return;

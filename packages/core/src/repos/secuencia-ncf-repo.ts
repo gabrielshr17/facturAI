@@ -4,6 +4,7 @@ import type { ErrorValidacion } from "../dominio/validacion.js";
 import type { TipoEcf } from "../dominio/ecf.js";
 import { ValidacionError } from "./producto-repo.js";
 import type { SecuenciaNcf, EstadoSecuencia } from "./tipos.js";
+import { MSG } from "../dominio/mensajes.js";
 
 /**
  * Secuencias autorizadas por la DGII (§6). Rango + vencimiento por tipo de
@@ -119,7 +120,7 @@ export function crearSecuenciaNcfRepo(db: SqlDriver) {
     /** Consume el siguiente número de la secuencia (marca agotada si era el último). */
     async consumirSiguiente(secuenciaId: string): Promise<number> {
       const s = await db.get<SecuenciaNcf>(`SELECT ${COLS} FROM secuencia_ncf WHERE id=?`, [secuenciaId]);
-      if (!s) throw new Error(`Secuencia ${secuenciaId} no existe`);
+      if (!s) throw new Error(MSG.secuenciaNoExiste);
       if (s.proximo_numero > s.rango_hasta) {
         throw new ValidacionError([{ campo: "secuencia", mensaje: "La secuencia está agotada." }]);
       }

@@ -1,3 +1,50 @@
+# Cambios sin publicar todavía
+
+## Ganancia: el % ahora es lo que uno espera
+
+**Costo 100 con 20% de ganancia = precio 120.** Antes daba **141.60**: el sistema sacaba
+120 (costo + 20%) y encima le sumaba el 18% de ITBIS. El precio de venta es lo que paga el
+cliente, con el ITBIS ya adentro, así que el impuesto no vuelve a sumarse: se *extrae* de esos
+120 al facturar, como siempre.
+
+- El **% por defecto de un producto nuevo es 20%** (antes 0%, así que un producto creado sin
+  tocar ese campo se vendía al costo).
+- Cambiar el tipo de impuesto ya **no mueve el precio** en el formulario. Cambia cuánto ITBIS
+  se le extrae a ese precio en la factura, no lo que paga el cliente.
+- Al abrir "Editar producto", el % que se muestra es el que el precio guardado implica de
+  verdad. Los productos que ya existen **no cambian de precio**.
+
+## Los avisos dicen qué pasó, en español
+
+**"Ese producto ya existe".** Al crear un producto con un código de barra que ya está en uso,
+antes salía el texto crudo del motor de base de datos
+(`UNIQUE constraint failed: producto.codigo_barra`). Ahora dice **cuál** producto lo tiene:
+
+> El código de barra 7460170310017 ya está asignado a "Arroz Selecto 5 lb". Dos productos no
+> pueden compartir el mismo código: cámbialo, déjalo vacío, o edita el producto que ya existe.
+
+Y si el nombre se repite (no lo impide la base, pero casi siempre es un descuido), se pregunta
+antes de crear el duplicado, mostrando el precio y el código del que ya está guardado.
+
+**Todos los demás errores pasan por un traductor** (`mensajeError`, en `packages/ui/src/utilidades/`).
+Los 30-y-pico de `setError(String(e))` que había regados por las pantallas mandaban a pantalla lo
+que dijera el motor. Ahora se traducen los casos conocidos —dato repetido, registro enlazado,
+campo obligatorio, base ocupada, disco lleno, base dañada, sin conexión— y lo desconocido cae en
+un mensaje honesto ("No se pudo completar la operación…") con el detalle técnico en la consola,
+no en la cara del usuario.
+
+Los `Producto 01J8…-… no existe` que se mostraban tal cual (con el id interno) pasaron a textos
+de `MSG`, en `packages/core/src/dominio/mensajes.ts`.
+
+## Verificación
+
+- `pnpm -r test` — 149/149 en verde (incluye pruebas nuevas del 20% por defecto, del
+  100 + 20% = 120 y del aviso de código repetido).
+- `pnpm -r typecheck` — limpio en los cinco paquetes.
+- **Sin verificar visualmente:** la extensión de Chrome no estuvo conectada en esta sesión.
+
+---
+
 # Cambios desde la última publicación
 
 Resumen de todo lo que entró entre `a60cae1` (lo último que estaba en GitHub) y `d871060`.

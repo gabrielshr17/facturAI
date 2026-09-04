@@ -33,7 +33,12 @@ export function useNavegacionFlechas() {
       const activo = document.activeElement;
       if (!activo || !esCampoQueDebeNavegar(activo)) return;
 
-      const enfocables = Array.from(document.querySelectorAll(SELECTOR_ENFOCABLE)).filter(esEnfocable);
+      // Ámbito: solo el contenido de la pantalla activa, no el menú de módulos de la izquierda ni el
+      // resto del cascarón — si no, ↓ en el último campo de una pantalla saltaba al primer botón del
+      // menú lateral (o ↑ en el primero se iba al botón de tema), que visualmente no está "arriba" ni
+      // "abajo" de nada: rompía la dirección esperada de las flechas.
+      const contenedor = document.getElementById("contenido-principal") ?? document;
+      const enfocables = Array.from(contenedor.querySelectorAll(SELECTOR_ENFOCABLE)).filter(esEnfocable);
       const indice = enfocables.indexOf(activo as HTMLElement);
       if (indice === -1) return;
 

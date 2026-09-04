@@ -6,7 +6,6 @@ import {
   type CompraLinea,
   type ComprobanteArchivo,
   type ImpuestoTipo,
-  ValidacionError,
 } from "@sfr/core";
 import { Truck, Star, Sparkles } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
@@ -14,6 +13,7 @@ import { s, c, money } from "../estilos.js";
 import { analizarComprobante, type DatosExtraidosComprobante } from "../data/chatbotCliente.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { filtrarNumero } from "../utilidades/numero.js";
+import { mensajeError } from "../utilidades/errores.js";
 
 interface LineaLocal {
   producto_id: string | null;
@@ -131,7 +131,7 @@ export function Compras() {
       setProveedorQ("");
       setProveedorResultados([]);
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     }
   }
 
@@ -189,7 +189,7 @@ export function Compras() {
       if (datos.proveedor) setProveedorQ(datos.proveedor);
       if (datos.fecha && /^\d{4}-\d{2}-\d{2}$/.test(datos.fecha)) setFecha(datos.fecha);
     } catch (e) {
-      setErrorIA(e instanceof Error ? e.message : String(e));
+      setErrorIA(mensajeError(e));
     } finally {
       setAnalizando(false);
     }
@@ -251,7 +251,7 @@ export function Compras() {
       limpiarFormulario();
       await cargarHistorial();
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     } finally {
       setGuardando(false);
     }
@@ -282,6 +282,7 @@ export function Compras() {
                   <input ref={proveedorRef} style={s.input} placeholder="Buscar proveedor…" value={proveedorQ}
                     autoFocus
                     onChange={(e) => void buscarProveedor(e.target.value)}
+                    onFocus={(e) => e.target.select()}
                     onKeyDown={(e) => {
                       if ((e.key === "ArrowDown" || e.key === "ArrowUp") && proveedorResultados.length > 0) {
                         e.preventDefault();
@@ -330,6 +331,7 @@ export function Compras() {
         <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
           <input ref={busquedaProductoRef} style={s.input} placeholder="Buscar producto para agregar a la compra… (F10)" value={busquedaProducto}
             onChange={(e) => void buscarProducto(e.target.value)}
+            onFocus={(e) => e.target.select()}
             onKeyDown={(e) => {
               if ((e.key === "ArrowDown" || e.key === "ArrowUp") && resultadosProducto.length > 0) {
                 e.preventDefault();

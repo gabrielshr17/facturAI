@@ -1,8 +1,10 @@
 export { redondear2, ajustarCentavo, calcularCambio, sumar } from "./dinero.js";
 export { type ImpuestoTipo, TASA_POR_TIPO, tasaDe } from "./impuesto.js";
+export { MSG } from "./mensajes.js";
 export {
   type CalculoPrecioInput,
-  precioBaseDesdeCosto,
+  PCT_GANANCIA_POR_DEFECTO,
+  precioDesdeCosto,
   calcularPrecioVenta,
   pctGananciaDesdePrecio,
 } from "./precio.js";

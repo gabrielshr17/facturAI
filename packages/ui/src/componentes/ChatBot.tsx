@@ -3,6 +3,7 @@ import { MessageCircle, Bot, X, Camera } from "lucide-react";
 import { enviarMensaje, type MensajeChat } from "../data/chatbotCliente.js";
 import { s, c, sombra } from "../estilos.js";
 import { BotonVoz } from "./BotonVoz.js";
+import { mensajeError } from "../utilidades/errores.js";
 
 function leerArchivoComoBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -52,7 +53,7 @@ export function ChatBot() {
       const respuesta = await enviarMensaje(historialPrevio, mensajeTexto, imagenAdjunta);
       setHistorial((prev) => [...prev, { rol: "assistant", texto: respuesta }]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(mensajeError(e));
       setHistorial(historialPrevio);
     } finally {
       setEnviando(false);

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type Cliente, type ClienteInput, ValidacionError } from "@sfr/core";
+import { type Cliente, type ClienteInput } from "@sfr/core";
 import { User } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c } from "../estilos.js";
 import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { moverIndiceFila, moverAccionFila } from "../utilidades/navegacionFilas.js";
+import { mensajesError } from "../utilidades/errores.js";
 
 const VACIO: ClienteInput = {
   nombre: "",
@@ -89,8 +90,7 @@ export function Clientes() {
       setEditando(null);
       await recargar();
     } catch (e) {
-      if (e instanceof ValidacionError) setErrores(e.errores.map((x) => x.mensaje));
-      else setErrores([String(e)]);
+      setErrores(mensajesError(e));
     }
   }
 
@@ -151,6 +151,7 @@ export function Clientes() {
             setQ(e.target.value);
             void recargar(e.target.value);
           }}
+          onFocus={(e) => e.target.select()}
           onKeyDown={(e) => {
             if ((e.key === "ArrowDown" || e.key === "ArrowUp") && lista.length > 0) {
               e.preventDefault();

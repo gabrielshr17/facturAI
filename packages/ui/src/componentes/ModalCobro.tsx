@@ -5,6 +5,7 @@ import { s, c, sombra, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { useModalAccesible } from "../hooks/useModalAccesible.js";
 import { filtrarNumero } from "../utilidades/numero.js";
+import { mensajeError } from "../utilidades/errores.js";
 
 const METODOS: { valor: MetodoPago; etiqueta: string }[] = [
   { valor: "efectivo", etiqueta: "Efectivo" },
@@ -106,7 +107,7 @@ export function ModalCobro({
     try {
       await onConfirmar(pagos, notas, salida, fiscal);
     } catch (e) {
-      setError(String(e));
+      setError(mensajeError(e));
     } finally {
       setGuardando(false);
     }

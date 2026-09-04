@@ -6,6 +6,7 @@ import type { ProveedorFiscal } from "./proveedor.js";
 import { formatearNcf } from "../dominio/ecf.js";
 import { ValidacionError } from "../repos/producto-repo.js";
 import type { Devolucion, ComprobanteFiscal } from "../repos/tipos.js";
+import { MSG } from "../dominio/mensajes.js";
 
 export interface DevolucionConFiscalDeps {
   devolucionRepo: DevolucionRepo;
@@ -35,14 +36,14 @@ export async function registrarDevolucionConFiscal(
   const { devolucionRepo, facturaRepo, secuenciaRepo, comprobanteRepo, proveedorFiscal } = deps;
 
   const factura = await facturaRepo.obtener(input.facturaId);
-  if (!factura) throw new Error(`Factura ${input.facturaId} no existe`);
+  if (!factura) throw new Error(MSG.facturaNoExiste);
   if (!factura.comprobante_id) {
     throw new ValidacionError([
       { campo: "factura", mensaje: "Esta venta no tiene comprobante fiscal; use la devolución sin Nota de Crédito." },
     ]);
   }
   const comprobanteOriginal = await comprobanteRepo.obtener(factura.comprobante_id);
-  if (!comprobanteOriginal) throw new Error(`Comprobante ${factura.comprobante_id} no existe`);
+  if (!comprobanteOriginal) throw new Error(MSG.comprobanteNoExiste);
 
   // Valida todo y calcula montos SIN escribir nada (mismo orden que cobrarConFiscal:
   // no se consume el NCF de la NC hasta que la devolución en sí es válida).

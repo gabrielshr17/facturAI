@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from "react";
 import { ClipboardList } from "lucide-react";
 import { s, c, sombra, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { mensajeError } from "../utilidades/errores.js";
 
 /** Qué hacer con la cotización al generarla: imprimirla (térmica/GDI/navegador, § cotizacion.ts) o
  *  solo guardar el PDF (§ mismo concepto que `SalidaCobro` en ModalCobro.tsx). */
@@ -31,7 +32,7 @@ export function ModalCotizacion({ total, cantidadArticulos, notasIniciales, onCa
     try {
       await onConfirmar(notas, Number(diasVigencia) || 15, salida);
     } catch (e) {
-      setError(String(e));
+      setError(mensajeError(e));
     } finally {
       setGuardando(false);
     }

@@ -8,6 +8,7 @@ import { useAlertas } from "../contexto/Alertas.js";
 import { ClipboardList } from "lucide-react";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { useEsAngosto } from "../hooks/useBreakpoint.js";
+import { mensajeError } from "../utilidades/errores.js";
 
 /** Recorta el ruido de punto flotante antes de mostrar una cantidad (§ recibo.ts) — sin esto, un
  *  producto a granel como 3+1/3 lb se ve "3.3333333333333335". */
@@ -96,7 +97,7 @@ export function ConsultaCotizaciones() {
       );
       setFilas(enriquecidas);
     } catch (e) {
-      setError(String(e));
+      setError(mensajeError(e));
     } finally {
       setCargando(false);
     }

@@ -13,6 +13,7 @@ import { ValidacionError } from "./producto-repo.js";
 import { registrarAccion } from "./bitacora-repo.js";
 import type { ImpuestoTipo } from "../dominio/impuesto.js";
 import type { Factura, FacturaLinea, Pago } from "./tipos.js";
+import { MSG } from "../dominio/mensajes.js";
 
 /**
  * Repo de "tickets" de venta (pantalla Ventas, §7.1). Un ticket es una `factura`
@@ -284,7 +285,7 @@ export function crearFacturaRepo(db: SqlDriver) {
         `SELECT ${COLS_LINEA} FROM factura_linea WHERE id=?`,
         [lineaId],
       );
-      if (!linea) throw new Error(`Línea ${lineaId} no existe`);
+      if (!linea) throw new Error(MSG.lineaNoExiste);
       if (linea.producto_id) await verificarDisponibilidad(linea.producto_id, cantidad);
 
       const calc = calcularLinea({
@@ -397,7 +398,7 @@ export function crearFacturaRepo(db: SqlDriver) {
       input: { pagos: PagoInput[]; notas?: string | null },
     ): Promise<{ factura: Factura; cambio: number }> {
       const factura = await this.obtener(facturaId);
-      if (!factura) throw new Error(`Ticket ${facturaId} no existe`);
+      if (!factura) throw new Error(MSG.ticketNoExiste);
       if (factura.estado !== "abierta") {
         throw new ValidacionError([{ campo: "estado", mensaje: "Este ticket ya fue cobrado o anulado." }]);
       }

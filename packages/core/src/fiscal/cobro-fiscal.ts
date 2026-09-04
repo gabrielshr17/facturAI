@@ -7,6 +7,7 @@ import { formatearNcf, type TipoEcf } from "../dominio/ecf.js";
 import { esDocumentoValido } from "../dominio/validacion.js";
 import { ValidacionError } from "../repos/producto-repo.js";
 import type { Factura, ComprobanteFiscal } from "../repos/tipos.js";
+import { MSG } from "../dominio/mensajes.js";
 
 export interface CobrarConFiscalInput {
   pagos: PagoInput[];
@@ -64,7 +65,7 @@ export async function cobrarConFiscal(
   }
 
   const factura = await facturaRepo.obtener(facturaId);
-  if (!factura) throw new Error(`Ticket ${facturaId} no existe`);
+  if (!factura) throw new Error(MSG.ticketNoExiste);
   if (factura.estado !== "abierta") {
     throw new ValidacionError([{ campo: "estado", mensaje: "Este ticket ya fue cobrado o anulado." }]);
   }

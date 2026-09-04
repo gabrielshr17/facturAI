@@ -1,9 +1,10 @@
 import { useState, type CSSProperties } from "react";
-import { type FacturaLinea, type Factura, ValidacionError, calcularLinea, registrarDevolucionConFiscal } from "@sfr/core";
+import { type FacturaLinea, type Factura, calcularLinea, registrarDevolucionConFiscal } from "@sfr/core";
 import { Undo2 } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, sombra, money } from "../estilos.js";
 import { filtrarNumero } from "../utilidades/numero.js";
+import { mensajeError } from "../utilidades/errores.js";
 
 export interface ModalDevolucionProps {
   factura: Factura;
@@ -60,7 +61,7 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
       setMensaje("Devolución registrada.");
       onCompletada();
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     } finally {
       setGuardando(false);
     }

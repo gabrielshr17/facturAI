@@ -10,6 +10,7 @@ import {
   obtenerImpresoraSeleccionada,
   seleccionarImpresoraTermica,
 } from "../impresion/termica.js";
+import { mensajeError } from "../utilidades/errores.js";
 
 /**
  * Configuración de la impresora térmica ESC/POS (§ hardware, plan.md). Solo
@@ -31,7 +32,7 @@ export function SeccionImpresoraTermica() {
       const lista = await listarImpresorasTermicas();
       setImpresoras(lista);
     } catch (e) {
-      setMensaje({ texto: e instanceof Error ? e.message : String(e), error: true });
+      setMensaje({ texto: mensajeError(e), error: true });
     } finally {
       setCargando(false);
     }
@@ -56,7 +57,7 @@ export function SeccionImpresoraTermica() {
       await imprimirTermico(generarTicketPrueba());
       setMensaje({ texto: "Ticket de prueba enviado. Revisa la impresora.", error: false });
     } catch (e) {
-      setMensaje({ texto: e instanceof Error ? e.message : String(e), error: true });
+      setMensaje({ texto: mensajeError(e), error: true });
     } finally {
       setProbando(false);
     }
@@ -67,42 +68,79 @@ export function SeccionImpresoraTermica() {
     try {
       await abrirGavetaTermica();
     } catch (e) {
-      setMensaje({ texto: e instanceof Error ? e.message : String(e), error: true });
+      setMensaje({ texto: mensajeError(e), error: true });
     }
   }
 
   return (
     <div style={{ ...s.tarjeta, marginTop: 16 }}>
-      <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Printer size={18} /> Impresora térmica (ESC/POS)</h3>
+      <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+        <Printer size={18} /> Impresora térmica (ESC/POS)
+      </h3>
       <p style={{ color: c.gris, fontSize: 13 }}>
-        Selecciona la impresora térmica instalada en Windows para imprimir los tickets directamente,
-        sin el diálogo del navegador. Si no seleccionas ninguna, se sigue usando la impresión normal.
+        Selecciona la impresora térmica instalada en Windows para imprimir los tickets directamente, sin el diálogo del
+        navegador. Si no seleccionas ninguna, se sigue usando la impresión normal.
       </p>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <select style={{ ...s.input, minWidth: 240 }} value={seleccionada} onChange={(e) => elegir(e.target.value)}>
           <option value="">(No usar impresora térmica)</option>
           {impresoras.map((nombre) => (
-            <option key={nombre} value={nombre}>{nombre}</option>
+            <option key={nombre} value={nombre}>
+              {nombre}
+            </option>
           ))}
         </select>
-        <button type="button" style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} disabled={cargando} onClick={() => void refrescar()}>
-          {cargando ? "Buscando…" : <><RefreshCw size={15} /> Buscar impresoras</>}
+        <button
+          type="button"
+          style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }}
+          disabled={cargando}
+          onClick={() => void refrescar()}
+        >
+          {cargando ? (
+            "Buscando…"
+          ) : (
+            <>
+              <RefreshCw size={15} /> Buscar impresoras
+            </>
+          )}
         </button>
-        <button type="button" style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} disabled={!seleccionada || probando} onClick={() => void probar()}>
-          {probando ? "Imprimiendo…" : <><Printer size={15} /> Imprimir ticket de prueba</>}
+        <button
+          type="button"
+          style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }}
+          disabled={!seleccionada || probando}
+          onClick={() => void probar()}
+        >
+          {probando ? (
+            "Imprimiendo…"
+          ) : (
+            <>
+              <Printer size={15} /> Imprimir ticket de prueba
+            </>
+          )}
         </button>
-        <button type="button" style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} disabled={!seleccionada} onClick={() => void gaveta()}>
+        <button
+          type="button"
+          style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }}
+          disabled={!seleccionada}
+          onClick={() => void gaveta()}
+        >
           <Wallet size={15} /> Abrir gaveta
         </button>
       </div>
       {impresoras.length === 0 && !cargando && (
         <p style={{ color: c.gris, fontSize: 12, marginTop: 8 }}>
-          No se encontró ninguna impresora instalada en Windows. Instala la impresora térmica desde
-          Configuración de Windows (Dispositivos e impresoras) y presiona "Buscar impresoras".
+          No se encontró ninguna impresora instalada en Windows. Instala la impresora térmica desde Configuración de
+          Windows (Dispositivos e impresoras) y presiona &ldquo;Buscar impresoras&rdquo;.
         </p>
       )}
       {mensaje && (
-        <div style={{ ...s.errorBox, marginTop: 8, ...(mensaje.error ? {} : { background: c.verdeFondo, borderColor: c.verde, color: c.verde }) }}>
+        <div
+          style={{
+            ...s.errorBox,
+            marginTop: 8,
+            ...(mensaje.error ? {} : { background: c.verdeFondo, borderColor: c.verde, color: c.verde }),
+          }}
+        >
           {mensaje.texto}
         </div>
       )}

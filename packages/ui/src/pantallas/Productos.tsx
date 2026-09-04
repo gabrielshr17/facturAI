@@ -4,8 +4,8 @@ import {
   type ProductoInput,
   type ImpuestoTipo,
   type MovimientoInventario,
-  ValidacionError,
   pctGananciaDesdePrecio,
+  PCT_GANANCIA_POR_DEFECTO,
 } from "@sfr/core";
 import { Star, TriangleAlert, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
@@ -17,6 +17,7 @@ import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { filtrarNumero } from "../utilidades/numero.js";
 import { moverIndiceFila, moverAccionFila } from "../utilidades/navegacionFilas.js";
+import { mensajeError, mensajesError } from "../utilidades/errores.js";
 
 const IMPUESTOS: { valor: ImpuestoTipo; etiqueta: string }[] = [
   { valor: "itbis18", etiqueta: "ITBIS 18%" },
@@ -40,7 +41,7 @@ const VACIO: ProductoInput = {
   tipo_venta: "unidad",
   unidad_medida: "",
   costo: 0,
-  pct_ganancia: 0,
+  pct_ganancia: PCT_GANANCIA_POR_DEFECTO,
   precio_venta: null,
   precio_mayoreo: null,
   impuesto_tipo: "itbis18",
@@ -113,7 +114,7 @@ export function Productos() {
       setAjustando(null);
       await recargar();
     } catch (e) {
-      setErrorAjuste(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setErrorAjuste(mensajeError(e));
     }
   }
 
@@ -142,7 +143,7 @@ export function Productos() {
       // El % guardado solo se actualiza cuando el precio se DERIVA de costo + %; si
       // se escribió el precio a mano queda desfasado (típicamente en 0) — se muestra
       // el % que ese precio implica de verdad, no el valor guardado y obsoleto.
-      pct_ganancia: pctGananciaDesdePrecio(p.costo, p.precio_venta, p.tasa_impuesto),
+      pct_ganancia: pctGananciaDesdePrecio(p.costo, p.precio_venta),
       precio_venta: p.precio_venta,
       precio_mayoreo: p.precio_mayoreo,
       impuesto_tipo: p.impuesto_tipo,
@@ -152,8 +153,10 @@ export function Productos() {
   }
 
   /** Al editar (no al crear), primero muestra qué va a cambiar y pide confirmar — así una
-   *  corrección de precio no se aplica sin querer. Si nada cambió, no hay nada que confirmar. */
-  function guardar() {
+   *  corrección de precio no se aplica sin querer. Si nada cambió, no hay nada que confirmar.
+   *  Al crear, si ya hay un producto con esa misma descripción se dice cuál es y se pregunta,
+   *  en vez de dejar que se cuelen dos "Coca Cola 2L" en el catálogo sin que nadie avise. */
+  async function guardar() {
     if (!form) return;
     if (editando) {
       const cambios = diferenciasProducto(editando, form);
@@ -161,7 +164,18 @@ export function Productos() {
       setCambiosPendientes(cambios);
       return;
     }
-    void guardarAhora();
+    const repetido = await repo.porDescripcion(form.descripcion ?? "");
+    if (repetido) {
+      const seguir = await confirmar(
+        `Ya existe un producto llamado "${repetido.descripcion}" ` +
+        `(precio ${money(repetido.precio_venta)}${repetido.codigo_barra ? `, código ${repetido.codigo_barra}` : ""}). ` +
+        "Si lo que quieres es corregirle el precio, cancela y búscalo en la lista para editarlo. " +
+        "¿Crear de todos modos un segundo producto con el mismo nombre?",
+        { titulo: "Ese producto ya existe", textoConfirmar: "Crear otro igual", textoCancelar: "Cancelar", peligro: false },
+      );
+      if (!seguir) return;
+    }
+    await guardarAhora();
   }
 
   async function guardarAhora() {
@@ -190,8 +204,7 @@ export function Productos() {
       await recargar();
     } catch (e) {
       setCambiosPendientes(null);
-      if (e instanceof ValidacionError) setErrores(e.errores.map((x) => x.mensaje));
-      else setErrores([String(e)]);
+      setErrores(mensajesError(e));
     }
   }
 
@@ -304,6 +317,7 @@ export function Productos() {
             setQ(e.target.value);
             void recargar(e.target.value);
           }}
+          onFocus={(e) => e.target.select()}
           onKeyDown={(e) => {
             if ((e.key === "ArrowDown" || e.key === "ArrowUp") && visibles.length > 0) {
               e.preventDefault();
@@ -343,7 +357,7 @@ export function Productos() {
           editando={!!editando}
           inventarioActivo={inventarioActivo}
           errores={errores}
-          onGuardar={guardar}
+          onGuardar={() => void guardar()}
           onCancelar={() => setForm(null)}
         />
       )}

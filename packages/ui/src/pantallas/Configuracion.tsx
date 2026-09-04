@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { type NegocioInput, ValidacionError } from "@sfr/core";
+import { type NegocioInput } from "@sfr/core";
 import { Store, Printer, Save } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c } from "../estilos.js";
@@ -7,6 +7,7 @@ import { SeccionSecuenciasNcf } from "../componentes/SeccionSecuenciasNcf.js";
 import { SeccionBitacora } from "../componentes/SeccionBitacora.js";
 import { SeccionImpresoraTermica } from "../componentes/SeccionImpresoraTermica.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { mensajesError } from "../utilidades/errores.js";
 
 const VACIO: NegocioInput = {
   nombre_comercial: "",
@@ -55,8 +56,7 @@ export function Configuracion() {
       setErrores([]);
       setGuardado(true);
     } catch (e) {
-      if (e instanceof ValidacionError) setErrores(e.errores.map((x) => x.mensaje));
-      else setErrores([String(e)]);
+      setErrores(mensajesError(e));
     }
   }
 

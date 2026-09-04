@@ -22,11 +22,41 @@ describe("productoRepo — CRUD persiste en SQLite", () => {
   it("crea y persiste, derivando el precio del costo", async () => {
     const repo = crearProductoRepo(db);
     const p = await repo.crear({ descripcion: "Arroz 5lb", costo: 40, pct_ganancia: 25 });
-    // 40 + 25% = 50 base, + 18% ITBIS = 59
-    expect(p.precio_venta).toBe(59);
+    // 40 + 25% = 50, con el ITBIS ya incluido en ese precio
+    expect(p.precio_venta).toBe(50);
 
     const leido = await repo.obtener(p.id);
     expect(leido?.descripcion).toBe("Arroz 5lb");
+  });
+
+  it("un producto nuevo sin % indicado nace con 20% de ganancia", async () => {
+    const repo = crearProductoRepo(db);
+    const p = await repo.crear({ descripcion: "Aceite", costo: 100 });
+    expect(p.pct_ganancia).toBe(20);
+    expect(p.precio_venta).toBe(120);
+  });
+
+  it("avisa en español cuál producto tiene ya ese código de barra", async () => {
+    const repo = crearProductoRepo(db);
+    await repo.crear({ descripcion: "Coca Cola 2L", codigo_barra: "7501055300006" });
+    await expect(
+      repo.crear({ descripcion: "Coca Cola grande", codigo_barra: "7501055300006" }),
+    ).rejects.toThrow(/ya está asignado a "Coca Cola 2L"/);
+  });
+
+  it("editar un producto no choca con su propio código de barra", async () => {
+    const repo = crearProductoRepo(db);
+    const p = await repo.crear({ descripcion: "Pan", codigo_barra: "123" });
+    await repo.actualizar(p.id, { descripcion: "Pan de agua", codigo_barra: "123" });
+    expect((await repo.obtener(p.id))?.descripcion).toBe("Pan de agua");
+  });
+
+  it("encuentra un producto repetido por descripción, sin importar acentos ni mayúsculas", async () => {
+    const repo = crearProductoRepo(db);
+    const p = await repo.crear({ descripcion: "Jabón Rosa" });
+    expect((await repo.porDescripcion("  jabon rosa "))?.id).toBe(p.id);
+    expect(await repo.porDescripcion("Jabón Rosa", p.id)).toBeUndefined();
+    expect(await repo.porDescripcion("Otro")).toBeUndefined();
   });
 
   it("respeta el precio manual (manda sobre la derivación)", async () => {
@@ -41,7 +71,7 @@ describe("productoRepo — CRUD persiste en SQLite", () => {
     await repo.actualizar(p.id, { descripcion: "Jabón azul", costo: 10, pct_ganancia: 100 });
     const leido = await repo.obtener(p.id);
     expect(leido?.descripcion).toBe("Jabón azul");
-    expect(leido?.precio_venta).toBe(23.6); // 10 + 100% = 20, +18% = 23.6
+    expect(leido?.precio_venta).toBe(20); // 10 + 100% = 20
   });
 
   it("elimina (borrado lógico) y deja de listarse", async () => {

@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
-import { type CorteCaja as CorteCajaTipo, type ResumenPeriodoVentas, calcularCorteCaja, ValidacionError } from "@sfr/core";
+import { type CorteCaja as CorteCajaTipo, type ResumenPeriodoVentas, calcularCorteCaja } from "@sfr/core";
 import { ChartColumn, Banknote, ClipboardList } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { filtrarNumero } from "../utilidades/numero.js";
+import { mensajeError } from "../utilidades/errores.js";
 
 /** Fecha local (no UTC): `toISOString` corre el día si la zona horaria está adelantada a UTC. */
 function hoyIso(): string {
@@ -36,7 +37,7 @@ export function CorteCaja() {
     try {
       setResumen(await repo.calcularResumen(desde, hasta));
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     }
   }, [repo, desde, hasta]);
 
@@ -67,7 +68,7 @@ export function CorteCaja() {
       setMensaje("Corte registrado.");
       await cargarHistorial();
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     } finally {
       setGuardando(false);
     }

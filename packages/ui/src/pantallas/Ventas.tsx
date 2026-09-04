@@ -7,7 +7,6 @@ import {
   type Cliente,
   type Negocio,
   type MetodoPago,
-  ValidacionError,
   cobrarConFiscal,
   aplicarDescuento,
   pctGananciaDesdePrecio,
@@ -30,6 +29,7 @@ import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { useEsAngosto, useEsTactil, sinAtajo } from "../hooks/useBreakpoint.js";
 import { filtrarNumero } from "../utilidades/numero.js";
 import { moverIndiceFila, moverAccionFila } from "../utilidades/navegacionFilas.js";
+import { mensajeError, mensajesError } from "../utilidades/errores.js";
 // Los botones −/+ de cantidad ya no llevan estilo en línea: ahora son parte del control segmentado
 // `.sfr-grupo-cantidad` (§ estilos-globales.css), que los dibuja junto con el campo del medio.
 
@@ -234,6 +234,10 @@ export function Ventas() {
   }, [lineaResaltada, mostrarCobro, mostrarCotizacion, modalCantidad, modalConsultaAbierto, formEdicion]);
 
   useAtajosTeclado({
+    Escape: () => cerrarSuelto(),
+  }, mostrarSuelto && !mostrarCobro && !mostrarCotizacion && !modalCantidad && !modalConsultaAbierto && !formEdicion);
+
+  useAtajosTeclado({
     Escape: () => cerrarConsultaPrecio(),
   }, modalConsultaAbierto);
 
@@ -295,7 +299,7 @@ export function Ventas() {
   useEffect(() => {
     if (iniciado.current) return;
     iniciado.current = true;
-    cargarTickets().catch((e) => setErrorCarga(String(e)));
+    cargarTickets().catch((e) => setErrorCarga(mensajeError(e)));
   }, [cargarTickets]);
 
   // `Factura` solo trae `cliente_id` (§ core), así que las pestañas de tickets abiertos resuelven
@@ -355,7 +359,7 @@ export function Ventas() {
     // cambiar de ticket para no arriesgarse a deshacer/rehacer algo en el ticket equivocado.
     setPilaDeshacer([]);
     setPilaRehacer([]);
-    cargarLineas().catch((e) => setErrorCarga(String(e)));
+    cargarLineas().catch((e) => setErrorCarga(mensajeError(e)));
   }, [activoId]);
 
   // Siempre hay una línea "resaltada" mientras el ticket tenga artículos — así F8/+/− (que actúan
@@ -414,7 +418,7 @@ export function Ventas() {
       setPilaRehacer((p) => [...p, pasos]);
       await refrescarTicketActivo();
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     }
   }
 
@@ -432,7 +436,7 @@ export function Ventas() {
       setPilaDeshacer((p) => [...p, pasos]);
       await refrescarTicketActivo();
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     }
   }
 
@@ -537,7 +541,7 @@ export function Ventas() {
       setLineaResaltada(destino);
       enfocarBusqueda();
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     }
   }
 
@@ -571,7 +575,7 @@ export function Ventas() {
       costo: p.costo,
       // § Productos.editar(): el % guardado se desfasa cuando el precio se
       // escribió a mano — se muestra el % que el precio actual implica de verdad.
-      pct_ganancia: pctGananciaDesdePrecio(p.costo, p.precio_venta, p.tasa_impuesto),
+      pct_ganancia: pctGananciaDesdePrecio(p.costo, p.precio_venta),
       precio_venta: p.precio_venta,
       precio_mayoreo: p.precio_mayoreo,
       impuesto_tipo: p.impuesto_tipo,
@@ -617,7 +621,7 @@ export function Ventas() {
       await refrescarTicketActivo();
     } catch (e) {
       setCambiosPendientesEdicion(null);
-      setErroresEdicion(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje) : [String(e)]);
+      setErroresEdicion(mensajesError(e));
     }
   }
 
@@ -761,6 +765,17 @@ export function Ventas() {
     return () => clearTimeout(id);
   }, [busquedaConsulta, modalConsultaAbierto, productos]);
 
+  /** Cierra "Artículo no registrado" (F7/Escape) descartando lo escrito y devolviendo el foco al
+   *  buscador — sin esto el panel se quedaba abierto para siempre una vez abierto por error, sin
+   *  ninguna forma de cerrarlo salvo volver a apretar F7. */
+  function cerrarSuelto() {
+    setMostrarSuelto(false);
+    setSueltoDesc("");
+    setSueltoPrecio("");
+    setSueltoCantidad("1");
+    enfocarBusqueda();
+  }
+
   async function agregarSuelto() {
     if (!activoId) return;
     setError(null);
@@ -780,7 +795,7 @@ export function Ventas() {
       setMostrarSuelto(false);
       await refrescarTicketActivo();
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     }
   }
 
@@ -797,7 +812,7 @@ export function Ventas() {
       registrarAccionTicket([{ tipo: "cantidad", lineaId: l.id, antes: l.cantidad, despues: cantidad }]);
       await refrescarTicketActivo();
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     }
   }
 
@@ -911,7 +926,7 @@ export function Ventas() {
       setLineaResaltada(null);
       await refrescarTicketActivo();
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     }
   }
 
@@ -940,7 +955,7 @@ export function Ventas() {
       setNuevoClienteNombre("");
       setNuevoClienteTelefono("");
     } catch (e) {
-      setError(e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e));
+      setError(mensajeError(e));
     }
   }
 
@@ -1089,7 +1104,11 @@ export function Ventas() {
     // Columna a lo alto de todo el <main> para que la lista del ticket pueda estirarse hasta abajo
     // (§ `flex: 1` en su tarjeta). Sin esto la tarjeta medía solo lo que ocupaban sus filas y con
     // tres artículos quedaba flotando arriba, con media pantalla vacía debajo.
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
+    // En dos columnas, `height` (no `minHeight`) fija el alto al del <main>: así un ticket largo
+    // scrollea DENTRO de su tarjeta en vez de estirar la página entera, que es lo que se llevaba
+    // Cliente/Totales y la búsqueda fuera de vista. Apilado (angosto) sigue siendo `minHeight`: ahí
+    // Cliente/Totales van debajo del ticket y se espera que la página entera scrollee hasta ellos.
+    <div style={{ display: "flex", flexDirection: "column", ...(esAngosto ? { minHeight: "100%" } : { height: "100%", minHeight: 0 }) }}>
       {/* Barra de tickets abiertos + fecha/hora */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1142,10 +1161,10 @@ export function Ventas() {
         // `minmax(0, …)` por el mismo motivo que el `minWidth: 0` del <main> (§ AppShell): una pista
         // `1fr` también arranca en `min-width: auto` y se niega a bajar del ancho de su contenido,
         // empujando la columna de Totales fuera de la pantalla en vez de repartir el espacio.
-        <div style={{ display: "grid", gridTemplateColumns: esAngosto ? "minmax(0, 1fr)" : "minmax(0, 1fr) 280px", gap: 16, flex: 1 }}>
+        <div style={{ display: "grid", gridTemplateColumns: esAngosto ? "minmax(0, 1fr)" : "minmax(0, 1fr) 280px", gap: 16, flex: 1, minHeight: 0 }}>
           {/* Columna principal: búsqueda + líneas. Es flex a lo alto para que la tarjeta del ticket
               (§ abajo) se coma el espacio que sobra en vez de dejar un hueco negro. */}
-          <div style={{ display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 0, height: "100%", minHeight: 0 }}>
             {/* La búsqueda va suelta sobre el fondo de la página, SIN tarjeta. Antes eran dos cajas
                 blancas idénticas apiladas (buscador y ticket) peleando por la atención; dejando el
                 relieve solo en la lista del ticket, la pantalla pasa a tener un único protagonista. */}
@@ -1178,6 +1197,7 @@ export function Ventas() {
                       : undefined
                   }
                   onChange={(e) => buscarProducto(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   onKeyDown={async (e) => {
                     if (e.key === "Escape" && resultados.length > 0 && !ocultarResultados) {
                       e.preventDefault();
@@ -1339,24 +1359,33 @@ export function Ventas() {
                 <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
                   <input ref={sueltoDescRef} autoFocus style={s.input} placeholder="Descripción" value={sueltoDesc}
                     onChange={(e) => setSueltoDesc(e.target.value)}
+                    onFocus={(e) => e.target.select()}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") { void agregarSuelto(); return; }
+                      if (e.key === "Escape") { e.preventDefault(); cerrarSuelto(); return; }
                       manejarFlechaSuelto(e, sueltoPrecioRef.current, null);
                     }} />
                   <input ref={sueltoPrecioRef} style={{ ...s.input, maxWidth: 120 }} placeholder="Precio" type="text" inputMode="decimal" value={sueltoPrecio}
                     onChange={(e) => setSueltoPrecio(filtrarNumero(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") { void agregarSuelto(); return; }
+                      if (e.key === "Escape") { e.preventDefault(); cerrarSuelto(); return; }
                       manejarFlechaSuelto(e, sueltoCantidadRef.current, sueltoDescRef.current);
                     }} />
                   <input ref={sueltoCantidadRef} style={{ ...s.input, maxWidth: 80 }} placeholder="Cant." type="text" inputMode="decimal" value={sueltoCantidad}
                     onChange={(e) => setSueltoCantidad(filtrarNumero(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") { void agregarSuelto(); return; }
+                      if (e.key === "Escape") { e.preventDefault(); cerrarSuelto(); return; }
                       manejarFlechaSuelto(e, sueltoAgregarRef.current, sueltoPrecioRef.current);
                     }} />
                   <button ref={sueltoAgregarRef} style={s.boton} onClick={agregarSuelto}
-                    onKeyDown={(e) => manejarFlechaSuelto(e, null, sueltoCantidadRef.current)}>
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") { e.preventDefault(); cerrarSuelto(); return; }
+                      manejarFlechaSuelto(e, null, sueltoCantidadRef.current);
+                    }}>
                     Agregar
                   </button>
                 </div>
@@ -1564,6 +1593,7 @@ export function Ventas() {
                       aria-label="Buscar cliente para asignar al ticket"
                       value={clienteQ}
                       onChange={(e) => void buscarCliente(e.target.value)}
+                      onFocus={(e) => e.target.select()}
                       onKeyDown={(e) => {
                         if ((e.key === "ArrowDown" || e.key === "ArrowUp") && clienteResultados.length > 0) {
                           e.preventDefault();
@@ -1726,6 +1756,7 @@ export function Ventas() {
                   placeholder="Escanear código de barra o buscar producto…"
                   value={busquedaModalCantidad}
                   onChange={(e) => setBusquedaModalCantidad(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   onKeyDown={async (e) => {
                     if ((e.key === "ArrowDown" || e.key === "ArrowUp") && resultadosModalCantidad.length > 0) {
                       e.preventDefault();
@@ -1859,6 +1890,7 @@ export function Ventas() {
               placeholder="Escanear código de barra o buscar producto…"
               value={busquedaConsulta}
               onChange={(e) => setBusquedaConsulta(e.target.value)}
+              onFocus={(e) => e.target.select()}
               onKeyDown={async (e) => {
                 if (e.key !== "Enter" || !busquedaConsulta.trim()) return;
                 // `e.currentTarget` deja de ser válido después del `await` (React limpia el evento
