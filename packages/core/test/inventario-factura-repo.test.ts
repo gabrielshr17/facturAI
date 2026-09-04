@@ -35,8 +35,12 @@ describe("factura-repo + inventario (§3: inventario configurable, política por
     const t = await facturas.abrirTicket();
     await expect(
       facturas.agregarLinea(t.id, {
-        producto_id: p.id, descripcion: p.descripcion, cantidad: 100,
-        precioUnitario: 20, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+        producto_id: p.id,
+        descripcion: p.descripcion,
+        cantidad: 100,
+        precioUnitario: 20,
+        impuestoTipo: "itbis18",
+        tasaImpuesto: 0.18,
       }),
     ).resolves.toBeDefined();
   });
@@ -52,8 +56,12 @@ describe("factura-repo + inventario (§3: inventario configurable, política por
     const t = await facturas.abrirTicket();
     await expect(
       facturas.agregarLinea(t.id, {
-        producto_id: p.id, descripcion: "Agua", cantidad: 10,
-        precioUnitario: 20, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+        producto_id: p.id,
+        descripcion: "Agua",
+        cantidad: 10,
+        precioUnitario: 20,
+        impuestoTipo: "itbis18",
+        tasaImpuesto: 0.18,
       }),
     ).rejects.toBeInstanceOf(ValidacionError);
   });
@@ -69,8 +77,12 @@ describe("factura-repo + inventario (§3: inventario configurable, política por
     const t = await facturas.abrirTicket();
     await expect(
       facturas.agregarLinea(t.id, {
-        producto_id: p.id, descripcion: "Agua", cantidad: 10,
-        precioUnitario: 20, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+        producto_id: p.id,
+        descripcion: "Agua",
+        cantidad: 10,
+        precioUnitario: 20,
+        impuestoTipo: "itbis18",
+        tasaImpuesto: 0.18,
       }),
     ).resolves.toBeDefined();
   });
@@ -85,8 +97,12 @@ describe("factura-repo + inventario (§3: inventario configurable, política por
 
     const t = await facturas.abrirTicket();
     await facturas.agregarLinea(t.id, {
-      producto_id: p.id, descripcion: "Agua", cantidad: 3,
-      precioUnitario: 20, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      producto_id: p.id,
+      descripcion: "Agua",
+      cantidad: 3,
+      precioUnitario: 20,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     await facturas.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 60 }] });
 
@@ -106,8 +122,12 @@ describe("factura-repo + inventario (§3: inventario configurable, política por
 
     const t = await facturas.abrirTicket();
     await facturas.agregarLinea(t.id, {
-      producto_id: p.id, descripcion: "Agua", cantidad: 3,
-      precioUnitario: 20, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      producto_id: p.id,
+      descripcion: "Agua",
+      cantidad: 3,
+      precioUnitario: 20,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     await facturas.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 60 }] });
 
@@ -121,12 +141,14 @@ describe("factura-repo + inventario (§3: inventario configurable, política por
     const facturas = crearFacturaRepo(db);
     const t = await facturas.abrirTicket();
     await facturas.agregarLinea(t.id, {
-      producto_id: null, descripcion: "Suelto", cantidad: 1,
-      precioUnitario: 20, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      producto_id: null,
+      descripcion: "Suelto",
+      cantidad: 1,
+      precioUnitario: 20,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
-    await expect(
-      facturas.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 20 }] }),
-    ).resolves.toBeDefined();
+    await expect(facturas.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 20 }] })).resolves.toBeDefined();
   });
 });
 

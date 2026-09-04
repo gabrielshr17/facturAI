@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState, type CSSProperties, type ComponentType } from "react";
 import {
-  ShoppingCart, Package, Users, Receipt, Truck,
-  Banknote, ChartColumn, Tag, Settings, Sun, Moon, Menu, type LucideProps,
+  ShoppingCart,
+  Package,
+  Users,
+  Receipt,
+  Truck,
+  Banknote,
+  ChartColumn,
+  Tag,
+  Settings,
+  Sun,
+  Moon,
+  Menu,
+  type LucideProps,
 } from "lucide-react";
 import { Marca } from "./componentes/Marca.js";
 import { Ventas } from "./pantallas/Ventas.js";
@@ -22,24 +33,38 @@ import { useNavegacionFlechas } from "./hooks/useNavegacionFlechas.js";
 import { useBreakpoint, useNavSoloIconos, useNavEnCajon } from "./hooks/useBreakpoint.js";
 
 type Modulo =
-  | "Ventas" | "Productos" | "Clientes" | "Facturas" | "Compras"
-  | "Corte de caja" | "Reportes" | "Promociones" | "Configuración";
+  | "Ventas"
+  | "Productos"
+  | "Clientes"
+  | "Facturas"
+  | "Compras"
+  | "Corte de caja"
+  | "Reportes"
+  | "Promociones"
+  | "Configuración";
 
 const MODULOS: Modulo[] = [
-  "Ventas", "Productos", "Clientes", "Facturas", "Compras",
-  "Corte de caja", "Reportes", "Promociones", "Configuración",
+  "Ventas",
+  "Productos",
+  "Clientes",
+  "Facturas",
+  "Compras",
+  "Corte de caja",
+  "Reportes",
+  "Promociones",
+  "Configuración",
 ];
 
 const ICONO: Record<Modulo, ComponentType<LucideProps>> = {
-  "Ventas": ShoppingCart,
-  "Productos": Package,
-  "Clientes": Users,
-  "Facturas": Receipt,
-  "Compras": Truck,
+  Ventas: ShoppingCart,
+  Productos: Package,
+  Clientes: Users,
+  Facturas: Receipt,
+  Compras: Truck,
   "Corte de caja": Banknote,
-  "Reportes": ChartColumn,
-  "Promociones": Tag,
-  "Configuración": Settings,
+  Reportes: ChartColumn,
+  Promociones: Tag,
+  Configuración: Settings,
 };
 
 /**
@@ -61,14 +86,14 @@ export function AppShell({ plataforma }: { plataforma: "Escritorio" | "Web" }) {
   // Alt+1..Alt+9 cambia de pantalla desde cualquier lugar de la app — junto con
   // `useNavegacionFlechas` (flechas para moverse entre campos en vez de alterar
   // valores), es lo que hace posible operar todo el sistema sin mouse.
-  useAtajosTeclado(
-    Object.fromEntries(MODULOS.map((m, i) => [`Alt+${i + 1}`, () => setActivo(m)])),
-  );
+  useAtajosTeclado(Object.fromEntries(MODULOS.map((m, i) => [`Alt+${i + 1}`, () => setActivo(m)])));
   useNavegacionFlechas();
 
   // El cajón se cierra solo al ensanchar la ventana: si no, al volver a escritorio quedaría un
   // overlay abierto encima de una barra lateral que ya es visible de por sí.
-  useEffect(() => { if (!enCajon) setCajonAbierto(false); }, [enCajon]);
+  useEffect(() => {
+    if (!enCajon) setCajonAbierto(false);
+  }, [enCajon]);
   useAtajosTeclado({ Escape: () => setCajonAbierto(false) }, cajonAbierto);
 
   // Al abrir el cajón el foco entra en él, y al cerrarlo vuelve al botón que lo abrió. Sin esto,
@@ -141,7 +166,9 @@ export function AppShell({ plataforma }: { plataforma: "Escritorio" | "Web" }) {
                 <span style={{ flex: 1 }}>{m}</span>
                 {/* El número suelto ("1", "2"…) leído en voz alta no significa nada; la pista real
                     ya va en el `title`, así que para el lector este adorno se oculta. */}
-                <span style={styles.navAtajo} aria-hidden="true">{i + 1}</span>
+                <span style={styles.navAtajo} aria-hidden="true">
+                  {i + 1}
+                </span>
               </>
             )}
           </button>
@@ -152,53 +179,70 @@ export function AppShell({ plataforma }: { plataforma: "Escritorio" | "Web" }) {
 
   return (
     <ProveedorAlertas>
-    <div style={styles.root}>
-      {/* Primer tabulador de la página: salta los nueve módulos y va directo al contenido. Solo se
+      <div style={styles.root}>
+        {/* Primer tabulador de la página: salta los nueve módulos y va directo al contenido. Solo se
           ve cuando tiene el foco (§ .sfr-salto-contenido en estilos-globales.css). */}
-      <a href="#contenido-principal" className="sfr-salto-contenido">Saltar al contenido</a>
-      {!enCajon && nav}
-      {enCajon && cajonAbierto && (
-        <>
-          <div
-            onClick={() => setCajonAbierto(false)}
-            aria-hidden="true"
-            style={{ position: "fixed", inset: 0, background: "var(--sfr-overlay)", zIndex: 290 }}
-          />
-          {nav}
-        </>
-      )}
+        <a href="#contenido-principal" className="sfr-salto-contenido">
+          Saltar al contenido
+        </a>
+        {!enCajon && nav}
+        {enCajon && cajonAbierto && (
+          <>
+            <div
+              onClick={() => setCajonAbierto(false)}
+              aria-hidden="true"
+              style={{ position: "fixed", inset: 0, background: "var(--sfr-overlay)", zIndex: 290 }}
+            />
+            {nav}
+          </>
+        )}
 
-      {/* El padding se achica recién cuando el contenido ya se está apilando; en `medio` (barra en
+        {/* El padding se achica recién cuando el contenido ya se está apilando; en `medio` (barra en
           tira de iconos pero dos columnas todavía) el respiro de escritorio se mantiene. */}
-      <main id="contenido-principal" style={{ ...styles.main, ...(tramo === "compacto" || tramo === "movil" ? { padding: "12px 14px" } : {}) }}>
-        <h2 style={{ ...styles.titulo, display: "flex", alignItems: "center", gap: 10, ...(enCajon ? { fontSize: 18, marginBottom: 14 } : {}) }}>
-          {enCajon && (
-            <button
-              ref={botonMenuRef}
-              onClick={() => setCajonAbierto(true)}
-              aria-label="Abrir menú de módulos"
-              aria-expanded={cajonAbierto}
-              title="Menú"
-              style={styles.botonMenu}
-            >
-              <Menu size={20} aria-hidden="true" />
-            </button>
-          )}
-          {(() => { const Icono = ICONO[activo]; return <Icono size={enCajon ? 18 : 22} aria-hidden="true" />; })()} {activo}
-        </h2>
-        <ErrorBoundary key={activo}>
-          {activo === "Ventas" && <Ventas />}
-          {activo === "Productos" && <Productos />}
-          {activo === "Clientes" && <Clientes />}
-          {activo === "Facturas" && <ConsultaFacturas />}
-          {activo === "Compras" && <Compras />}
-          {activo === "Corte de caja" && <CorteCaja />}
-          {activo === "Reportes" && <Reportes />}
-          {activo === "Promociones" && <Promociones />}
-          {activo === "Configuración" && <Configuracion />}
-        </ErrorBoundary>
-      </main>
-    </div>
+        <main
+          id="contenido-principal"
+          style={{ ...styles.main, ...(tramo === "compacto" || tramo === "movil" ? { padding: "12px 14px" } : {}) }}
+        >
+          <h2
+            style={{
+              ...styles.titulo,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              ...(enCajon ? { fontSize: 18, marginBottom: 14 } : {}),
+            }}
+          >
+            {enCajon && (
+              <button
+                ref={botonMenuRef}
+                onClick={() => setCajonAbierto(true)}
+                aria-label="Abrir menú de módulos"
+                aria-expanded={cajonAbierto}
+                title="Menú"
+                style={styles.botonMenu}
+              >
+                <Menu size={20} aria-hidden="true" />
+              </button>
+            )}
+            {(() => {
+              const Icono = ICONO[activo];
+              return <Icono size={enCajon ? 18 : 22} aria-hidden="true" />;
+            })()}{" "}
+            {activo}
+          </h2>
+          <ErrorBoundary key={activo}>
+            {activo === "Ventas" && <Ventas />}
+            {activo === "Productos" && <Productos />}
+            {activo === "Clientes" && <Clientes />}
+            {activo === "Facturas" && <ConsultaFacturas />}
+            {activo === "Compras" && <Compras />}
+            {activo === "Corte de caja" && <CorteCaja />}
+            {activo === "Reportes" && <Reportes />}
+            {activo === "Promociones" && <Promociones />}
+            {activo === "Configuración" && <Configuracion />}
+          </ErrorBoundary>
+        </main>
+      </div>
     </ProveedorAlertas>
   );
 }

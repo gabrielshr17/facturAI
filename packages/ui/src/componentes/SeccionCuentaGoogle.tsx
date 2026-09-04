@@ -47,8 +47,8 @@ export function SeccionCuentaGoogle() {
         <UserRound size={18} /> Cuenta (multi-caja/multiusuario)
       </h3>
       <p style={{ color: c.gris, fontSize: 13, marginTop: 0 }}>
-        Opcional: solo hace falta para sincronizar este negocio entre varias cajas o dispositivos.
-        Sin iniciar sesión, la app sigue funcionando 100% local, sin internet.
+        Opcional: solo hace falta para sincronizar este negocio entre varias cajas o dispositivos. Sin iniciar sesión,
+        la app sigue funcionando 100% local, sin internet.
       </p>
 
       {cargando ? (
@@ -84,7 +84,11 @@ export function SeccionCuentaGoogle() {
         </button>
       )}
 
-      {error && <div role="alert" style={{ ...s.errorBox, marginTop: 12 }}>{error}</div>}
+      {error && (
+        <div role="alert" style={{ ...s.errorBox, marginTop: 12 }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 }

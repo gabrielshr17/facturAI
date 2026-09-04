@@ -16,11 +16,19 @@ export function ModalConfirmarCambios({ cambios, onConfirmar, onCancelar }: Moda
   return (
     <div style={overlay} onClick={onCancelar}>
       <div style={tarjeta} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><TriangleAlert size={18} /> Confirmar cambios</h3>
-        <p style={{ color: c.gris, fontSize: 13, marginTop: 0, marginBottom: 12 }}>
-          Se va a guardar lo siguiente:
-        </p>
-        <div style={{ border: `1px solid ${c.borde}`, borderRadius: 8, overflow: "hidden", maxHeight: 320, overflowY: "auto" }}>
+        <h3 style={{ marginTop: 0, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+          <TriangleAlert size={18} /> Confirmar cambios
+        </h3>
+        <p style={{ color: c.gris, fontSize: 13, marginTop: 0, marginBottom: 12 }}>Se va a guardar lo siguiente:</p>
+        <div
+          style={{
+            border: `1px solid ${c.borde}`,
+            borderRadius: 8,
+            overflow: "hidden",
+            maxHeight: 320,
+            overflowY: "auto",
+          }}
+        >
           {cambios.map((cambio, i) => (
             <div
               key={cambio.campo}
@@ -36,8 +44,12 @@ export function ModalConfirmarCambios({ cambios, onConfirmar, onCancelar }: Moda
           ))}
         </div>
         <div style={s.formFooter}>
-          <button style={s.boton} onClick={onConfirmar}>Sí, guardar (Ctrl+S)</button>
-          <button style={s.botonSecundario} onClick={onCancelar}>Cancelar (Esc)</button>
+          <button style={s.boton} onClick={onConfirmar}>
+            Sí, guardar (Ctrl+S)
+          </button>
+          <button style={s.botonSecundario} onClick={onCancelar}>
+            Cancelar (Esc)
+          </button>
         </div>
       </div>
     </div>

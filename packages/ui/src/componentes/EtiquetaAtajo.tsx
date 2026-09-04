@@ -18,7 +18,9 @@ export function EtiquetaAtajo({ texto, ocultarAtajo = false }: { texto: string; 
       {base}
       {/* `aria-hidden`: el lector de pantalla ya recibe el atajo por el `title`/`aria-label` del
           botón; leerlo dos veces solo alarga el anuncio. */}
-      <kbd className="sfr-kbd" aria-hidden="true">{atajo}</kbd>
+      <kbd className="sfr-kbd" aria-hidden="true">
+        {atajo}
+      </kbd>
     </>
   );
 }

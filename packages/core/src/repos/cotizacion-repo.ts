@@ -77,9 +77,7 @@ export function crearCotizacionRepo(db: SqlDriver) {
       const errores = validarLineas(input.lineas);
       if (errores.length) throw new ValidacionError(errores);
 
-      const ultimo = await db.get<{ max: number | null }>(
-        "SELECT MAX(numero_interno) as max FROM cotizacion",
-      );
+      const ultimo = await db.get<{ max: number | null }>("SELECT MAX(numero_interno) as max FROM cotizacion");
       const numero_interno = (ultimo?.max ?? 0) + 1;
       const ts = now();
 
@@ -109,14 +107,24 @@ export function crearCotizacionRepo(db: SqlDriver) {
         deleted_at: null,
       };
 
-      await db.run(
-        `INSERT INTO cotizacion (${COLS_COTIZACION}) VALUES (${Array(16).fill("?").join(",")})`,
-        [
-          c.id, c.numero_interno, c.fecha_hora, c.fecha_vencimiento, c.cliente_id, c.usuario_id,
-          c.subtotal_gravado, c.subtotal_exento, c.total_itbis, c.total, c.notas, c.estado,
-          c.factura_id, c.created_at, c.updated_at, c.deleted_at,
-        ],
-      );
+      await db.run(`INSERT INTO cotizacion (${COLS_COTIZACION}) VALUES (${Array(16).fill("?").join(",")})`, [
+        c.id,
+        c.numero_interno,
+        c.fecha_hora,
+        c.fecha_vencimiento,
+        c.cliente_id,
+        c.usuario_id,
+        c.subtotal_gravado,
+        c.subtotal_exento,
+        c.total_itbis,
+        c.total,
+        c.notas,
+        c.estado,
+        c.factura_id,
+        c.created_at,
+        c.updated_at,
+        c.deleted_at,
+      ]);
 
       for (const l of input.lineas) {
         const calc = calcularLinea({
@@ -139,24 +147,28 @@ export function crearCotizacionRepo(db: SqlDriver) {
           updated_at: ts,
           deleted_at: null,
         };
-        await db.run(
-          `INSERT INTO cotizacion_linea (${COLS_LINEA}) VALUES (${Array(13).fill("?").join(",")})`,
-          [
-            linea.id, linea.cotizacion_id, linea.producto_id, linea.descripcion, linea.cantidad,
-            linea.precio_unitario, linea.impuesto_tipo, linea.tasa_impuesto, linea.monto_itbis,
-            linea.subtotal, linea.created_at, linea.updated_at, linea.deleted_at,
-          ],
-        );
+        await db.run(`INSERT INTO cotizacion_linea (${COLS_LINEA}) VALUES (${Array(13).fill("?").join(",")})`, [
+          linea.id,
+          linea.cotizacion_id,
+          linea.producto_id,
+          linea.descripcion,
+          linea.cantidad,
+          linea.precio_unitario,
+          linea.impuesto_tipo,
+          linea.tasa_impuesto,
+          linea.monto_itbis,
+          linea.subtotal,
+          linea.created_at,
+          linea.updated_at,
+          linea.deleted_at,
+        ]);
       }
 
       return c;
     },
 
     async obtener(id: string): Promise<Cotizacion | undefined> {
-      return db.get<Cotizacion>(
-        `SELECT ${COLS_COTIZACION} FROM cotizacion WHERE id=? AND deleted_at IS NULL`,
-        [id],
-      );
+      return db.get<Cotizacion>(`SELECT ${COLS_COTIZACION} FROM cotizacion WHERE id=? AND deleted_at IS NULL`, [id]);
     },
 
     async obtenerLineas(cotizacionId: string): Promise<CotizacionLinea[]> {

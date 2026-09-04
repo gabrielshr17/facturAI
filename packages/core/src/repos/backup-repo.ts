@@ -7,15 +7,29 @@ import type { SqlDriver } from "../db/driver.js";
  * al interpolarlos en el SQL.
  */
 const TABLAS = [
-  "negocio", "usuario", "caja", "departamento", "producto", "cliente",
-  "factura", "factura_linea", "pago",
-  "secuencia_ncf", "comprobante_fiscal",
-  "corte_caja", "movimiento_inventario",
-  "proveedor", "compra", "compra_linea", "comprobante_archivo",
+  "negocio",
+  "usuario",
+  "caja",
+  "departamento",
+  "producto",
+  "cliente",
+  "factura",
+  "factura_linea",
+  "pago",
+  "secuencia_ncf",
+  "comprobante_fiscal",
+  "corte_caja",
+  "movimiento_inventario",
+  "proveedor",
+  "compra",
+  "compra_linea",
+  "comprobante_archivo",
   "bitacora_accion",
-  "devolucion", "devolucion_linea",
+  "devolucion",
+  "devolucion_linea",
   "promocion",
-  "cotizacion", "cotizacion_linea",
+  "cotizacion",
+  "cotizacion_linea",
 ] as const;
 
 export interface RespaldoCompleto {

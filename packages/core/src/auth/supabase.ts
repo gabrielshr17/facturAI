@@ -30,7 +30,11 @@ function aSesionAuth(session: Session): SesionAuth {
  * pueda leer solo, así que el `code` de la URL de retorno se intercambia a
  * mano (§ completarInicioSesionDesktop) en vez de con `detectSessionInUrl`.
  */
-export function crearClienteAuth(url: string, anonKey: string, opciones?: { detectarSesionEnUrl?: boolean }): SupabaseClient {
+export function crearClienteAuth(
+  url: string,
+  anonKey: string,
+  opciones?: { detectarSesionEnUrl?: boolean },
+): SupabaseClient {
   return createClient(url, anonKey, {
     auth: {
       flowType: "pkce",

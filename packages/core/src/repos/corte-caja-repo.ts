@@ -126,17 +126,31 @@ export function crearCorteCajaRepo(db: SqlDriver) {
         deleted_at: null,
       };
 
-      await db.run(
-        `INSERT INTO corte_caja (${COLS}) VALUES (${Array(19).fill("?").join(",")})`,
-        [
-          c.id, c.caja_id, c.usuario_id, c.fecha_apertura, c.fecha_cierre, c.monto_inicial,
-          c.total_ventas, c.total_itbis, c.total_efectivo, c.total_tarjeta, c.total_transferencia,
-          c.total_credito, c.efectivo_esperado, c.efectivo_contado, c.diferencia, c.estado,
-          c.created_at, c.updated_at, c.deleted_at,
-        ],
-      );
+      await db.run(`INSERT INTO corte_caja (${COLS}) VALUES (${Array(19).fill("?").join(",")})`, [
+        c.id,
+        c.caja_id,
+        c.usuario_id,
+        c.fecha_apertura,
+        c.fecha_cierre,
+        c.monto_inicial,
+        c.total_ventas,
+        c.total_itbis,
+        c.total_efectivo,
+        c.total_tarjeta,
+        c.total_transferencia,
+        c.total_credito,
+        c.efectivo_esperado,
+        c.efectivo_contado,
+        c.diferencia,
+        c.estado,
+        c.created_at,
+        c.updated_at,
+        c.deleted_at,
+      ]);
       await registrarAccion(db, {
-        accion: "cerrar_caja", entidad: "corte_caja", entidadId: c.id,
+        accion: "cerrar_caja",
+        entidad: "corte_caja",
+        entidadId: c.id,
         resumen: `Período ${c.fecha_apertura} a ${c.fecha_cierre}, diferencia RD$ ${c.diferencia.toFixed(2)}`,
       });
       return c;

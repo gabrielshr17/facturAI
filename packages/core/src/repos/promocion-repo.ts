@@ -56,8 +56,8 @@ export function crearPromocionRepo(db: SqlDriver) {
         tipo: input.tipo,
         valor: input.valor,
         aplica_a: input.aplicaA,
-        producto_id: input.aplicaA === "producto" ? input.productoId ?? null : null,
-        departamento_id: input.aplicaA === "departamento" ? input.departamentoId ?? null : null,
+        producto_id: input.aplicaA === "producto" ? (input.productoId ?? null) : null,
+        departamento_id: input.aplicaA === "departamento" ? (input.departamentoId ?? null) : null,
         fecha_inicio: input.fechaInicio,
         fecha_fin: input.fechaFin,
         activa: input.activa === false ? 0 : 1,
@@ -65,13 +65,21 @@ export function crearPromocionRepo(db: SqlDriver) {
         updated_at: ts,
         deleted_at: null,
       };
-      await db.run(
-        `INSERT INTO promocion (${COLS}) VALUES (${Array(13).fill("?").join(",")})`,
-        [
-          p.id, p.nombre, p.tipo, p.valor, p.aplica_a, p.producto_id, p.departamento_id,
-          p.fecha_inicio, p.fecha_fin, p.activa, p.created_at, p.updated_at, p.deleted_at,
-        ],
-      );
+      await db.run(`INSERT INTO promocion (${COLS}) VALUES (${Array(13).fill("?").join(",")})`, [
+        p.id,
+        p.nombre,
+        p.tipo,
+        p.valor,
+        p.aplica_a,
+        p.producto_id,
+        p.departamento_id,
+        p.fecha_inicio,
+        p.fecha_fin,
+        p.activa,
+        p.created_at,
+        p.updated_at,
+        p.deleted_at,
+      ]);
       return p;
     },
 
@@ -84,10 +92,17 @@ export function crearPromocionRepo(db: SqlDriver) {
            fecha_inicio=?, fecha_fin=?, activa=?, updated_at=?
          WHERE id=?`,
         [
-          input.nombre.trim(), input.tipo, input.valor, input.aplicaA,
-          input.aplicaA === "producto" ? input.productoId ?? null : null,
-          input.aplicaA === "departamento" ? input.departamentoId ?? null : null,
-          input.fechaInicio, input.fechaFin, input.activa === false ? 0 : 1, now(), id,
+          input.nombre.trim(),
+          input.tipo,
+          input.valor,
+          input.aplicaA,
+          input.aplicaA === "producto" ? (input.productoId ?? null) : null,
+          input.aplicaA === "departamento" ? (input.departamentoId ?? null) : null,
+          input.fechaInicio,
+          input.fechaFin,
+          input.activa === false ? 0 : 1,
+          now(),
+          id,
         ],
       );
     },
@@ -97,16 +112,18 @@ export function crearPromocionRepo(db: SqlDriver) {
     },
 
     async listar(): Promise<Promocion[]> {
-      return db.all<Promocion>(
-        `SELECT ${COLS} FROM promocion WHERE deleted_at IS NULL ORDER BY fecha_inicio DESC`,
-      );
+      return db.all<Promocion>(`SELECT ${COLS} FROM promocion WHERE deleted_at IS NULL ORDER BY fecha_inicio DESC`);
     },
 
     /**
      * La mejor promoción aplicable (producto específico > departamento > todo)
      * vigente en `fecha` para ese producto/departamento, o undefined si ninguna.
      */
-    async obtenerAplicable(productoId: string | null, departamentoId: string | null, fecha: string): Promise<Promocion | undefined> {
+    async obtenerAplicable(
+      productoId: string | null,
+      departamentoId: string | null,
+      fecha: string,
+    ): Promise<Promocion | undefined> {
       const candidatas = await db.all<Promocion>(
         `SELECT ${COLS} FROM promocion
          WHERE activa=1 AND deleted_at IS NULL

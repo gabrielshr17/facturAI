@@ -24,7 +24,10 @@ function primerDiaDelMes(): string {
 }
 
 const ETIQUETA_METODO: Record<string, string> = {
-  efectivo: "Efectivo", transferencia: "Transferencia", credito: "Crédito", tarjeta: "Tarjeta",
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  credito: "Crédito",
+  tarjeta: "Tarjeta",
 };
 
 /** Reportes avanzados (§ Fase 3): ventas por día, productos más vendidos, ganancia estimada, ITBIS. */
@@ -60,9 +63,15 @@ export function Reportes() {
     }
   }, [repo, desde, hasta]);
 
-  useEffect(() => { void cargar(); }, [cargar]);
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
 
-  useAtajosTeclado({ "Ctrl+E": () => { if (ventasPorDia.length > 0) exportarCsv(); } });
+  useAtajosTeclado({
+    "Ctrl+E": () => {
+      if (ventasPorDia.length > 0) exportarCsv();
+    },
+  });
 
   const totalVentas = ventasPorDia.reduce((acc, v) => acc + v.totalVentas, 0);
   const maxVenta = Math.max(1, ...ventasPorDia.map((v) => v.totalVentas));
@@ -100,30 +109,85 @@ export function Reportes() {
           {cargando && <span style={{ color: c.gris, fontSize: 13 }}>Cargando…</span>}
         </div>
         <p style={{ color: c.gris, fontSize: 12, marginBottom: 0, marginTop: 8 }}>
-          Ventas brutas del período (no descuenta devoluciones). La ganancia usa el costo ACTUAL del producto como estimación.
+          Ventas brutas del período (no descuenta devoluciones). La ganancia usa el costo ACTUAL del producto como
+          estimación.
         </p>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
         <div style={s.tarjeta}>
-          <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><Wallet size={15} /> Total ventas</h4>
-          <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>RD$ {money(totalVentas)}</div>
+          <h4
+            style={{
+              marginTop: 0,
+              color: c.gris,
+              fontSize: 13,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Wallet size={15} /> Total ventas
+          </h4>
+          <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+            RD$ {money(totalVentas)}
+          </div>
         </div>
         <div style={s.tarjeta}>
-          <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><TrendingUp size={15} /> Ganancia estimada</h4>
-          <div style={{ fontSize: 26, fontWeight: 700, color: c.verde, fontVariantNumeric: "tabular-nums" }}>RD$ {money(ganancia?.gananciaEstimada ?? 0)}</div>
+          <h4
+            style={{
+              marginTop: 0,
+              color: c.gris,
+              fontSize: 13,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <TrendingUp size={15} /> Ganancia estimada
+          </h4>
+          <div style={{ fontSize: 26, fontWeight: 700, color: c.verde, fontVariantNumeric: "tabular-nums" }}>
+            RD$ {money(ganancia?.gananciaEstimada ?? 0)}
+          </div>
           <div style={{ fontSize: 12, color: c.gris }}>Costo estimado: RD$ {money(ganancia?.costoEstimado ?? 0)}</div>
           {(ganancia?.ingresosSinCosto ?? 0) > 0 && (
-            <div style={{ fontSize: 12, color: c.amarillo, marginTop: 6, fontWeight: 600, display: "flex", alignItems: "flex-start", gap: 5 }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: c.amarillo,
+                marginTop: 6,
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 5,
+              }}
+            >
               <TriangleAlert size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span>RD$ {money(ganancia!.ingresosSinCosto)} en ventas sin producto vinculado — su costo real
-              se desconoce y NO está restado arriba, así que la ganancia real es MENOR a la mostrada.</span>
+              <span>
+                RD$ {money(ganancia!.ingresosSinCosto)} en ventas sin producto vinculado — su costo real se desconoce y
+                NO está restado arriba, así que la ganancia real es MENOR a la mostrada.
+              </span>
             </div>
           )}
         </div>
         <div style={s.tarjeta}>
-          <h4 style={{ marginTop: 0, color: c.gris, fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><Receipt size={15} /> ITBIS recaudado</h4>
-          <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>RD$ {money(itbis?.totalItbis ?? 0)}</div>
+          <h4
+            style={{
+              marginTop: 0,
+              color: c.gris,
+              fontSize: 13,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Receipt size={15} /> ITBIS recaudado
+          </h4>
+          <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+            RD$ {money(itbis?.totalItbis ?? 0)}
+          </div>
           <div style={{ fontSize: 12, color: c.gris }}>
             Gravado RD$ {money(itbis?.totalGravado ?? 0)} · Exento RD$ {money(itbis?.totalExento ?? 0)}
           </div>
@@ -132,43 +196,82 @@ export function Reportes() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div style={s.tarjeta}>
-          <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><CalendarDays size={16} /> Ventas por día</h4>
+          <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}>
+            <CalendarDays size={16} /> Ventas por día
+          </h4>
           {ventasPorDia.length === 0 && <p style={{ color: c.gris }}>Sin ventas en este período.</p>}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {ventasPorDia.map((v) => (
               <div key={v.fecha}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
                   <span>{v.fecha}</span>
-                  <span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(v.totalVentas)} ({v.cantidadFacturas})</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                    RD$ {money(v.totalVentas)} ({v.cantidadFacturas})
+                  </span>
                 </div>
                 <div style={{ background: c.grisClaro, borderRadius: 999, height: 7, overflow: "hidden" }}>
-                  <div style={{ background: c.azul, borderRadius: 999, height: 7, width: `${(v.totalVentas / maxVenta) * 100}%`, transition: "width 200ms ease" }} />
+                  <div
+                    style={{
+                      background: c.azul,
+                      borderRadius: 999,
+                      height: 7,
+                      width: `${(v.totalVentas / maxVenta) * 100}%`,
+                      transition: "width 200ms ease",
+                    }}
+                  />
                 </div>
               </div>
             ))}
           </div>
 
-          <h4 style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${c.borde}`, display: "flex", alignItems: "center", gap: 6 }}><CreditCard size={16} /> Ventas por método de pago</h4>
+          <h4
+            style={{
+              marginTop: 20,
+              paddingTop: 14,
+              borderTop: `1px solid ${c.borde}`,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <CreditCard size={16} /> Ventas por método de pago
+          </h4>
           {porMetodo.map((m) => (
-            <div key={m.metodo} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "4px 0" }}>
-              <span>{ETIQUETA_METODO[m.metodo] ?? m.metodo}</span><span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(m.total)}</span>
+            <div
+              key={m.metodo}
+              style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "4px 0" }}
+            >
+              <span>{ETIQUETA_METODO[m.metodo] ?? m.metodo}</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>RD$ {money(m.total)}</span>
             </div>
           ))}
         </div>
 
         <div style={s.tarjeta}>
-          <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><Trophy size={16} /> Productos más vendidos</h4>
+          <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}>
+            <Trophy size={16} /> Productos más vendidos
+          </h4>
           <table style={s.tabla}>
             <thead>
               <tr>
-                <th scope="col" style={s.th}>Producto</th>
-                <th scope="col" style={s.th}>Cant.</th>
-                <th scope="col" style={s.th}>Total</th>
+                <th scope="col" style={s.th}>
+                  Producto
+                </th>
+                <th scope="col" style={s.th}>
+                  Cant.
+                </th>
+                <th scope="col" style={s.th}>
+                  Total
+                </th>
               </tr>
             </thead>
             <tbody>
               {productos.length === 0 && (
-                <tr><td style={s.filaVacia} colSpan={3}>Sin datos.</td></tr>
+                <tr>
+                  <td style={s.filaVacia} colSpan={3}>
+                    Sin datos.
+                  </td>
+                </tr>
               )}
               {productos.map((p, i) => (
                 <tr key={p.productoId ?? i}>

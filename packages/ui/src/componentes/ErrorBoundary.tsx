@@ -33,8 +33,8 @@ export class ErrorBoundary extends Component<Props, State> {
         <div style={{ ...s.tarjeta, maxWidth: 480, margin: "40px auto", textAlign: "center" }}>
           <h3 style={{ marginTop: 0, color: c.rojo }}>Ocurrió un error inesperado</h3>
           <p style={{ color: c.gris, fontSize: 14 }}>
-            Esta pantalla tuvo un problema. Puedes intentar con otra sección desde el menú de la
-            izquierda, o reiniciar la aplicación si el problema sigue.
+            Esta pantalla tuvo un problema. Puedes intentar con otra sección desde el menú de la izquierda, o reiniciar
+            la aplicación si el problema sigue.
           </p>
           <button style={s.boton} onClick={() => window.location.reload()}>
             Reiniciar aplicación

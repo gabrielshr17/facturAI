@@ -39,7 +39,10 @@ function validar(input: SecuenciaNcfInput): ErrorValidacion[] {
 }
 
 /** Recalcula el estado real (vencida/agotada/disponible) según fecha y consumo. */
-function calcularEstado(s: Pick<SecuenciaNcf, "vencimiento" | "proximo_numero" | "rango_hasta">, hoy: string): EstadoSecuencia {
+function calcularEstado(
+  s: Pick<SecuenciaNcf, "vencimiento" | "proximo_numero" | "rango_hasta">,
+  hoy: string,
+): EstadoSecuencia {
   if (s.vencimiento < hoy) return "vencida";
   if (s.proximo_numero > s.rango_hasta) return "agotada";
   return "disponible";
@@ -73,13 +76,20 @@ export function crearSecuenciaNcfRepo(db: SqlDriver) {
         deleted_at: null,
       };
 
-      await db.run(
-        `INSERT INTO secuencia_ncf (${COLS}) VALUES (${Array(12).fill("?").join(",")})`,
-        [
-          s.id, s.tipo_ecf, s.prefijo, s.modo, s.rango_desde, s.rango_hasta, s.proximo_numero,
-          s.vencimiento, s.estado, s.created_at, s.updated_at, s.deleted_at,
-        ],
-      );
+      await db.run(`INSERT INTO secuencia_ncf (${COLS}) VALUES (${Array(12).fill("?").join(",")})`, [
+        s.id,
+        s.tipo_ecf,
+        s.prefijo,
+        s.modo,
+        s.rango_desde,
+        s.rango_hasta,
+        s.proximo_numero,
+        s.vencimiento,
+        s.estado,
+        s.created_at,
+        s.updated_at,
+        s.deleted_at,
+      ]);
       return s;
     },
 
@@ -127,10 +137,12 @@ export function crearSecuenciaNcfRepo(db: SqlDriver) {
       const numero = s.proximo_numero;
       const siguiente = numero + 1;
       const nuevoEstado: EstadoSecuencia = siguiente > s.rango_hasta ? "agotada" : s.estado;
-      await db.run(
-        "UPDATE secuencia_ncf SET proximo_numero=?, estado=?, updated_at=? WHERE id=?",
-        [siguiente, nuevoEstado, now(), secuenciaId],
-      );
+      await db.run("UPDATE secuencia_ncf SET proximo_numero=?, estado=?, updated_at=? WHERE id=?", [
+        siguiente,
+        nuevoEstado,
+        now(),
+        secuenciaId,
+      ]);
       return numero;
     },
 

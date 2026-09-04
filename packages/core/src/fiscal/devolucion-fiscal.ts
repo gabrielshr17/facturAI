@@ -54,7 +54,8 @@ export async function registrarDevolucionConFiscal(
     throw new ValidacionError([
       {
         campo: "secuencia",
-        mensaje: "No hay una secuencia de NCF vigente para Nota de Crédito (E34). Configúrela antes de procesar devoluciones de ventas fiscales.",
+        mensaje:
+          "No hay una secuencia de NCF vigente para Nota de Crédito (E34). Configúrela antes de procesar devoluciones de ventas fiscales.",
       },
     ]);
   }
@@ -79,14 +80,18 @@ export async function registrarDevolucionConFiscal(
     throw new ValidacionError([
       {
         campo: "fiscal",
-        mensaje: "No se pudo transmitir la Nota de Crédito a la DGII (sin conexión). No se permite procesar la devolución fiscal sin conexión.",
+        mensaje:
+          "No se pudo transmitir la Nota de Crédito a la DGII (sin conexión). No se permite procesar la devolución fiscal sin conexión.",
       },
     ]);
   }
 
   if (resultadoTransmision.estado !== "aceptado") {
     throw new ValidacionError([
-      { campo: "fiscal", mensaje: `La DGII rechazó la Nota de Crédito: ${resultadoTransmision.motivoRechazo ?? "sin detalle"}.` },
+      {
+        campo: "fiscal",
+        mensaje: `La DGII rechazó la Nota de Crédito: ${resultadoTransmision.motivoRechazo ?? "sin detalle"}.`,
+      },
     ]);
   }
 

@@ -45,21 +45,31 @@ export function ProveedorAuth({
     if (!cliente) return;
     let vivo = true;
     void obtenerSesion(cliente).then((s) => {
-      if (vivo) { setSesion(s); setCargando(false); }
+      if (vivo) {
+        setSesion(s);
+        setCargando(false);
+      }
     });
     // Cubre las tres formas en que la sesión cambia después del arranque: login web (Supabase la
     // detecta sola en la URL de retorno), login escritorio (§ completarInicioSesionDesktop, en el
     // manejador del deep link) y el refresco automático del token en segundo plano.
     const desuscribir = alCambiarSesion(cliente, setSesion);
-    return () => { vivo = false; desuscribir(); };
+    return () => {
+      vivo = false;
+      desuscribir();
+    };
   }, [cliente]);
 
   const api: AuthApi = {
     disponible: cliente !== null,
     sesion,
     cargando,
-    iniciarSesionGoogle: async () => { if (cliente) await onIniciarSesion(cliente); },
-    cerrarSesion: async () => { if (cliente) await cerrarSesionSupabase(cliente); },
+    iniciarSesionGoogle: async () => {
+      if (cliente) await onIniciarSesion(cliente);
+    },
+    cerrarSesion: async () => {
+      if (cliente) await cerrarSesionSupabase(cliente);
+    },
   };
 
   return <AuthContext.Provider value={api}>{children}</AuthContext.Provider>;

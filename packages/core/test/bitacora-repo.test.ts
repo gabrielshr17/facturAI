@@ -2,12 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createNodeSqliteDriver } from "../src/db/drivers/node-sqlite.js";
 import { migrate } from "../src/db/migrator.js";
 import type { SqlDriver } from "../src/db/driver.js";
-import {
-  crearBitacoraRepo,
-  crearProductoRepo,
-  crearClienteRepo,
-  crearFacturaRepo,
-} from "../src/index.js";
+import { crearBitacoraRepo, crearProductoRepo, crearClienteRepo, crearFacturaRepo } from "../src/index.js";
 
 async function nuevaDb(): Promise<SqlDriver> {
   const db = createNodeSqliteDriver();
@@ -17,7 +12,9 @@ async function nuevaDb(): Promise<SqlDriver> {
 
 describe("bitacoraRepo — registrar y listar (§ Caja y auditoría)", () => {
   let db: SqlDriver;
-  beforeEach(async () => { db = await nuevaDb(); });
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
 
   it("registra una acción y la lista, más reciente primero", async () => {
     const bitacora = crearBitacoraRepo(db);
@@ -54,7 +51,9 @@ describe("bitacoraRepo — registrar y listar (§ Caja y auditoría)", () => {
 
 describe("bitácora — se registra automáticamente en acciones sensibles", () => {
   let db: SqlDriver;
-  beforeEach(async () => { db = await nuevaDb(); });
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
 
   it("al eliminar un producto", async () => {
     const productos = crearProductoRepo(db);
@@ -83,7 +82,11 @@ describe("bitácora — se registra automáticamente en acciones sensibles", () 
     const bitacora = crearBitacoraRepo(db);
     const t = await facturas.abrirTicket();
     await facturas.agregarLinea(t.id, {
-      descripcion: "Arroz", cantidad: 1, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "Arroz",
+      cantidad: 1,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     await facturas.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 50 }] });
 

@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  calcularLinea,
-  calcularTotales,
-  procesarCobro,
-} from "../src/dominio/factura.js";
+import { calcularLinea, calcularTotales, procesarCobro } from "../src/dominio/factura.js";
 
 describe("factura — desglose de ITBIS por línea", () => {
   it("extrae el ITBIS de un precio con impuesto incluido", () => {

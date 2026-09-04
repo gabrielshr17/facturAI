@@ -43,7 +43,11 @@ function App() {
   }, []);
 
   if (error) {
-    return <div style={{ padding: 24, fontFamily: "system-ui", color: "#dc2626" }}>Error al iniciar la base de datos: {error}</div>;
+    return (
+      <div style={{ padding: 24, fontFamily: "system-ui", color: "#dc2626" }}>
+        Error al iniciar la base de datos: {error}
+      </div>
+    );
   }
   if (!db) {
     return <div style={{ padding: 24, fontFamily: "system-ui", color: "#6b7280" }}>Cargando base de datos…</div>;

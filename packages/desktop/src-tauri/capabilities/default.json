@@ -3,11 +3,5 @@
   "identifier": "default",
   "description": "Permisos base de la ventana principal",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "sql:default",
-    "sql:allow-execute",
-    "deep-link:default",
-    "opener:default"
-  ]
+  "permissions": ["core:default", "sql:default", "sql:allow-execute", "deep-link:default", "opener:default"]
 }

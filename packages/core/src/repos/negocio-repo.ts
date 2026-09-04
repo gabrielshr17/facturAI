@@ -46,9 +46,7 @@ export function crearNegocioRepo(db: SqlDriver) {
   return {
     /** Trae la configuración del negocio (singleton), o undefined si no existe. */
     async obtener(): Promise<Negocio | undefined> {
-      return db.get<Negocio>(
-        `SELECT ${COLS} FROM negocio WHERE deleted_at IS NULL ORDER BY created_at LIMIT 1`,
-      );
+      return db.get<Negocio>(`SELECT ${COLS} FROM negocio WHERE deleted_at IS NULL ORDER BY created_at LIMIT 1`);
     },
 
     /** Crea la config si no existe, o actualiza la existente. */
@@ -77,14 +75,23 @@ export function crearNegocioRepo(db: SqlDriver) {
           updated_at: ts,
           deleted_at: null,
         };
-        await db.run(
-          `INSERT INTO negocio (${COLS}) VALUES (${Array(15).fill("?").join(",")})`,
-          [
-            n.id, n.nombre_comercial, n.razon_social, n.rnc, n.direccion, n.telefono, n.correo,
-            n.logo_ruta, n.regimen, n.ancho_impresora_default, n.redondeo_centavo,
-            n.inventario_activo, n.created_at, n.updated_at, n.deleted_at,
-          ],
-        );
+        await db.run(`INSERT INTO negocio (${COLS}) VALUES (${Array(15).fill("?").join(",")})`, [
+          n.id,
+          n.nombre_comercial,
+          n.razon_social,
+          n.rnc,
+          n.direccion,
+          n.telefono,
+          n.correo,
+          n.logo_ruta,
+          n.regimen,
+          n.ancho_impresora_default,
+          n.redondeo_centavo,
+          n.inventario_activo,
+          n.created_at,
+          n.updated_at,
+          n.deleted_at,
+        ]);
         return n;
       }
 
@@ -104,7 +111,8 @@ export function crearNegocioRepo(db: SqlDriver) {
           input.ancho_impresora_default ?? actual.ancho_impresora_default,
           input.redondeo_centavo === false ? 0 : 1,
           input.inventario_activo ? 1 : 0,
-          ts, actual.id,
+          ts,
+          actual.id,
         ],
       );
       return (await this.obtener())!;

@@ -55,7 +55,9 @@ export function useBreakpoint(): Tramo {
     // El primer render puede haber ocurrido antes de que el layout se asentara (fuentes, barra de
     // scroll): se re-sincroniza una vez al montar.
     alCambiar();
-    return () => { for (const q of consultas) q.removeEventListener("change", alCambiar); };
+    return () => {
+      for (const q of consultas) q.removeEventListener("change", alCambiar);
+    };
   }, []);
 
   return tramo;

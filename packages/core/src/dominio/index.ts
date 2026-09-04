@@ -19,26 +19,12 @@ export {
   calcularTotales,
   procesarCobro,
 } from "./factura.js";
-export {
-  type TipoEcf,
-  formatearNcf,
-  tipoEcfSugerido,
-  ETIQUETA_TIPO_ECF,
-} from "./ecf.js";
-export {
-  type CorteCajaInput,
-  type CorteCajaResultado,
-  calcularCorteCaja,
-} from "./caja.js";
+export { type TipoEcf, formatearNcf, tipoEcfSugerido, ETIQUETA_TIPO_ECF } from "./ecf.js";
+export { type CorteCajaInput, type CorteCajaResultado, calcularCorteCaja } from "./caja.js";
 export {
   type PoliticaSinExistencia,
   type DisponibilidadInput,
   type DisponibilidadResultado,
   evaluarDisponibilidad,
 } from "./inventario.js";
-export {
-  type TipoPromocion,
-  type AplicaAPromocion,
-  type DescuentoInput,
-  aplicarDescuento,
-} from "./promocion.js";
+export { type TipoPromocion, type AplicaAPromocion, type DescuentoInput, aplicarDescuento } from "./promocion.js";

@@ -35,6 +35,6 @@ await app.listen({ port: config.puerto, host: "0.0.0.0" });
 if (!config.supabaseConfigurado) {
   app.log.warn(
     "SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY no configurados: todas las solicitudes se autentican " +
-    "como usuario de desarrollo. No usar así en producción.",
+      "como usuario de desarrollo. No usar así en producción.",
   );
 }

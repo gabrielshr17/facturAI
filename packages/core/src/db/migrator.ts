@@ -17,16 +17,15 @@ export async function migrate(db: SqlDriver): Promise<Migration[]> {
   const aplicadas = await db.all<{ id: number }>("SELECT id FROM _migracion");
   const yaAplicadas = new Set(aplicadas.map((r) => r.id));
 
-  const pendientes = migrations
-    .filter((m) => !yaAplicadas.has(m.id))
-    .sort((a, b) => a.id - b.id);
+  const pendientes = migrations.filter((m) => !yaAplicadas.has(m.id)).sort((a, b) => a.id - b.id);
 
   for (const m of pendientes) {
     await db.exec(m.sql);
-    await db.run(
-      "INSERT INTO _migracion (id, nombre, aplicada_at) VALUES (?, ?, ?)",
-      [m.id, m.nombre, new Date().toISOString()],
-    );
+    await db.run("INSERT INTO _migracion (id, nombre, aplicada_at) VALUES (?, ?, ?)", [
+      m.id,
+      m.nombre,
+      new Date().toISOString(),
+    ]);
   }
 
   return pendientes;

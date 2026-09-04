@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  esCorreoValido,
-  esRncValido,
-  esCedulaValida,
-  esDocumentoValido,
-} from "../src/dominio/validacion.js";
+import { esCorreoValido, esRncValido, esCedulaValida, esDocumentoValido } from "../src/dominio/validacion.js";
 
 describe("validación — correo (§5)", () => {
   it("acepta correos válidos", () => {

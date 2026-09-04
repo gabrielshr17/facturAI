@@ -113,14 +113,18 @@ export async function cobrarConFiscal(
     throw new ValidacionError([
       {
         campo: "fiscal",
-        mensaje: "No se pudo transmitir el comprobante a la DGII (sin conexión). No se permite cobrar con NCF sin conexión; puede cobrar sin comprobante fiscal.",
+        mensaje:
+          "No se pudo transmitir el comprobante a la DGII (sin conexión). No se permite cobrar con NCF sin conexión; puede cobrar sin comprobante fiscal.",
       },
     ]);
   }
 
   if (resultadoTransmision.estado !== "aceptado") {
     throw new ValidacionError([
-      { campo: "fiscal", mensaje: `La DGII rechazó el comprobante: ${resultadoTransmision.motivoRechazo ?? "sin detalle"}.` },
+      {
+        campo: "fiscal",
+        mensaje: `La DGII rechazó el comprobante: ${resultadoTransmision.motivoRechazo ?? "sin detalle"}.`,
+      },
     ]);
   }
 

@@ -30,7 +30,11 @@ export function CorteCaja() {
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  useAtajosTeclado({ "Ctrl+S": () => { if (resumen && !guardando) void registrarCorte(); } });
+  useAtajosTeclado({
+    "Ctrl+S": () => {
+      if (resumen && !guardando) void registrarCorte();
+    },
+  });
 
   const cargarResumen = useCallback(async () => {
     setError(null);
@@ -45,8 +49,12 @@ export function CorteCaja() {
     setHistorial(await repo.listar());
   }, [repo]);
 
-  useEffect(() => { void cargarResumen(); }, [cargarResumen]);
-  useEffect(() => { void cargarHistorial(); }, [cargarHistorial]);
+  useEffect(() => {
+    void cargarResumen();
+  }, [cargarResumen]);
+  useEffect(() => {
+    void cargarHistorial();
+  }, [cargarHistorial]);
 
   const { efectivoEsperado, diferencia } = calcularCorteCaja({
     montoInicial: Number(montoInicial) || 0,
@@ -88,14 +96,30 @@ export function CorteCaja() {
           </div>
           <div>
             <label style={s.label}>Fondo de caja inicial</label>
-            <input style={s.input} type="text" inputMode="decimal" value={montoInicial} onChange={(e) => setMontoInicial(filtrarNumero(e.target.value))} />
+            <input
+              style={s.input}
+              type="text"
+              inputMode="decimal"
+              value={montoInicial}
+              onChange={(e) => setMontoInicial(filtrarNumero(e.target.value))}
+            />
           </div>
           <div>
             <label style={s.label}>Efectivo contado</label>
-            <input style={s.input} type="text" inputMode="decimal" value={efectivoContado} onChange={(e) => setEfectivoContado(filtrarNumero(e.target.value))} />
+            <input
+              style={s.input}
+              type="text"
+              inputMode="decimal"
+              value={efectivoContado}
+              onChange={(e) => setEfectivoContado(filtrarNumero(e.target.value))}
+            />
           </div>
         </div>
-        {error && <div role="alert" style={s.errorBox}>{error}</div>}
+        {error && (
+          <div role="alert" style={s.errorBox}>
+            {error}
+          </div>
+        )}
         {mensaje && (
           <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>{mensaje}</div>
         )}
@@ -104,49 +128,89 @@ export function CorteCaja() {
       {resumen && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div style={s.tarjeta}>
-            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><ChartColumn size={16} /> Ventas del período</h4>
+            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}>
+              <ChartColumn size={16} /> Ventas del período
+            </h4>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>Facturas cobradas</span><span>{resumen.cantidadFacturas}</span>
+              <span style={{ color: c.gris }}>Facturas cobradas</span>
+              <span>{resumen.cantidadFacturas}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>ITBIS</span><span>RD$ {money(resumen.totalItbis)}</span>
+              <span style={{ color: c.gris }}>ITBIS</span>
+              <span>RD$ {money(resumen.totalItbis)}</span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 700, borderTop: `1px solid ${c.borde}`, paddingTop: 8, marginBottom: 12 }}>
-              <span>Total ventas</span><span>RD$ {money(resumen.totalVentas)}</span>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 18,
+                fontWeight: 700,
+                borderTop: `1px solid ${c.borde}`,
+                paddingTop: 8,
+                marginBottom: 12,
+              }}
+            >
+              <span>Total ventas</span>
+              <span>RD$ {money(resumen.totalVentas)}</span>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>Efectivo</span><span>RD$ {money(resumen.totalEfectivo)}</span>
+              <span style={{ color: c.gris }}>Efectivo</span>
+              <span>RD$ {money(resumen.totalEfectivo)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>Tarjeta</span><span>RD$ {money(resumen.totalTarjeta)}</span>
+              <span style={{ color: c.gris }}>Tarjeta</span>
+              <span>RD$ {money(resumen.totalTarjeta)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>Transferencia</span><span>RD$ {money(resumen.totalTransferencia)}</span>
+              <span style={{ color: c.gris }}>Transferencia</span>
+              <span>RD$ {money(resumen.totalTransferencia)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-              <span style={{ color: c.gris }}>Crédito</span><span>RD$ {money(resumen.totalCredito)}</span>
+              <span style={{ color: c.gris }}>Crédito</span>
+              <span>RD$ {money(resumen.totalCredito)}</span>
             </div>
           </div>
 
           <div style={s.tarjeta}>
-            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><Banknote size={16} /> Efectivo</h4>
+            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}>
+              <Banknote size={16} /> Efectivo
+            </h4>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>Fondo inicial</span><span>RD$ {money(Number(montoInicial) || 0)}</span>
+              <span style={{ color: c.gris }}>Fondo inicial</span>
+              <span>RD$ {money(Number(montoInicial) || 0)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
-              <span style={{ color: c.gris }}>+ Ventas en efectivo</span><span>RD$ {money(resumen.totalEfectivo)}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, borderTop: `1px solid ${c.borde}`, paddingTop: 8, marginBottom: 8 }}>
-              <span>Efectivo esperado</span><span>RD$ {money(efectivoEsperado)}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 12 }}>
-              <span style={{ color: c.gris }}>Efectivo contado</span><span>RD$ {money(Number(efectivoContado) || 0)}</span>
+              <span style={{ color: c.gris }}>+ Ventas en efectivo</span>
+              <span>RD$ {money(resumen.totalEfectivo)}</span>
             </div>
             <div
               style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                fontSize: 18, fontWeight: 700, borderRadius: 8, padding: "10px 14px",
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 16,
+                fontWeight: 700,
+                borderTop: `1px solid ${c.borde}`,
+                paddingTop: 8,
+                marginBottom: 8,
+              }}
+            >
+              <span>Efectivo esperado</span>
+              <span>RD$ {money(efectivoEsperado)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 12 }}>
+              <span style={{ color: c.gris }}>Efectivo contado</span>
+              <span>RD$ {money(Number(efectivoContado) || 0)}</span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                fontSize: 18,
+                fontWeight: 700,
+                borderRadius: 8,
+                padding: "10px 14px",
                 background: diferencia === 0 ? c.verdeFondo : c.rojoFondo,
                 color: diferencia === 0 ? c.verde : c.rojo,
               }}
@@ -163,28 +227,48 @@ export function CorteCaja() {
       )}
 
       <div style={{ ...s.tarjeta, marginTop: 16 }}>
-        <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><ClipboardList size={16} /> Cortes anteriores</h4>
+        <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}>
+          <ClipboardList size={16} /> Cortes anteriores
+        </h4>
         <table style={s.tabla}>
           <thead>
             <tr>
-              <th scope="col" style={s.th}>Período</th>
-              <th scope="col" style={s.th}>Total ventas</th>
-              <th scope="col" style={s.th}>Efectivo esperado</th>
-              <th scope="col" style={s.th}>Efectivo contado</th>
-              <th scope="col" style={s.th}>Diferencia</th>
+              <th scope="col" style={s.th}>
+                Período
+              </th>
+              <th scope="col" style={s.th}>
+                Total ventas
+              </th>
+              <th scope="col" style={s.th}>
+                Efectivo esperado
+              </th>
+              <th scope="col" style={s.th}>
+                Efectivo contado
+              </th>
+              <th scope="col" style={s.th}>
+                Diferencia
+              </th>
             </tr>
           </thead>
           <tbody>
             {historial.length === 0 && (
-              <tr><td style={s.filaVacia} colSpan={5}>Todavía no se ha registrado ningún corte.</td></tr>
+              <tr>
+                <td style={s.filaVacia} colSpan={5}>
+                  Todavía no se ha registrado ningún corte.
+                </td>
+              </tr>
             )}
             {historial.map((h) => (
               <tr key={h.id}>
-                <td style={s.td}>{h.fecha_apertura === h.fecha_cierre ? h.fecha_apertura : `${h.fecha_apertura} – ${h.fecha_cierre}`}</td>
+                <td style={s.td}>
+                  {h.fecha_apertura === h.fecha_cierre ? h.fecha_apertura : `${h.fecha_apertura} – ${h.fecha_cierre}`}
+                </td>
                 <td style={s.tdDerecha}>RD$ {money(h.total_ventas)}</td>
                 <td style={s.tdDerecha}>RD$ {money(h.efectivo_esperado)}</td>
                 <td style={s.tdDerecha}>RD$ {money(h.efectivo_contado)}</td>
-                <td style={{ ...s.tdDerecha, color: h.diferencia === 0 ? c.verde : c.rojo, fontWeight: 600 }}>RD$ {money(h.diferencia)}</td>
+                <td style={{ ...s.tdDerecha, color: h.diferencia === 0 ? c.verde : c.rojo, fontWeight: 600 }}>
+                  RD$ {money(h.diferencia)}
+                </td>
               </tr>
             ))}
           </tbody>

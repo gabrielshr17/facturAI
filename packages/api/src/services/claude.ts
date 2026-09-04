@@ -43,7 +43,11 @@ conversación, pide que lo consulten en la pantalla correspondiente. Responde en
 español, corto y directo (es un punto de venta, no hay tiempo para párrafos).`;
 
 /** Conversación de texto (+ opcionalmente una imagen adjunta en el último turno). */
-export async function enviarMensaje(historial: MensajeChat[], mensaje: string, imagen?: ImagenAdjunta): Promise<string> {
+export async function enviarMensaje(
+  historial: MensajeChat[],
+  mensaje: string,
+  imagen?: ImagenAdjunta,
+): Promise<string> {
   const anthropic = obtenerCliente();
 
   const mensajesPrevios: Anthropic.MessageParam[] = historial.map((m) => ({
@@ -55,7 +59,11 @@ export async function enviarMensaje(historial: MensajeChat[], mensaje: string, i
   if (imagen) {
     contenidoActual.push({
       type: "image",
-      source: { type: "base64", media_type: imagen.tipoMime as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: imagen.data },
+      source: {
+        type: "base64",
+        media_type: imagen.tipoMime as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+        data: imagen.data,
+      },
     });
   }
   contenidoActual.push({ type: "text", text: mensaje });
@@ -96,7 +104,11 @@ const HERRAMIENTA_EXTRAER: Anthropic.Tool = {
       monto: { type: ["number", "null"], description: "Monto total de la factura, o null." },
       itbis: { type: ["number", "null"], description: "Monto de ITBIS, o null si no se distingue." },
       clasificacion: { type: "string", enum: ["con_fiscal", "sin_fiscal", "pendiente_revision"] },
-      confianza: { type: "string", enum: ["alta", "media", "baja"], description: "Qué tan seguro estás de la lectura." },
+      confianza: {
+        type: "string",
+        enum: ["alta", "media", "baja"],
+        description: "Qué tan seguro estás de la lectura.",
+      },
       notas: { type: ["string", "null"], description: "Cualquier duda o algo que el usuario debería revisar." },
     },
     required: ["proveedor", "rnc", "ncf", "fecha", "monto", "itbis", "clasificacion", "confianza", "notas"],
@@ -131,7 +143,11 @@ export async function analizarComprobante(imagen: ImagenAdjunta): Promise<DatosE
         content: [
           {
             type: "image",
-            source: { type: "base64", media_type: imagen.tipoMime as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: imagen.data },
+            source: {
+              type: "base64",
+              media_type: imagen.tipoMime as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+              data: imagen.data,
+            },
           },
           { type: "text", text: "Extrae los datos de este comprobante." },
         ],

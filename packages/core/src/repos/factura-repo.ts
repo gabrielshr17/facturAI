@@ -1,13 +1,7 @@
 import type { SqlDriver } from "../db/driver.js";
 import { newId, now } from "../ids.js";
 import { tieneValor, type ErrorValidacion } from "../dominio/validacion.js";
-import {
-  calcularLinea,
-  calcularTotales,
-  procesarCobro,
-  type LineaInput,
-  type PagoInput,
-} from "../dominio/factura.js";
+import { calcularLinea, calcularTotales, procesarCobro, type LineaInput, type PagoInput } from "../dominio/factura.js";
 import { evaluarDisponibilidad } from "../dominio/inventario.js";
 import { ValidacionError } from "./producto-repo.js";
 import { registrarAccion } from "./bitacora-repo.js";
@@ -98,9 +92,7 @@ export function crearFacturaRepo(db: SqlDriver) {
    * del producto, que ya tiene en mano al buscarlo).
    */
   async function verificarDisponibilidad(productoId: string, cantidad: number): Promise<void> {
-    const negocio = await db.get<{ inventario_activo: number }>(
-      "SELECT inventario_activo FROM negocio LIMIT 1",
-    );
+    const negocio = await db.get<{ inventario_activo: number }>("SELECT inventario_activo FROM negocio LIMIT 1");
     const producto = await db.get<{ existencia: number | null; politica_sin_existencia: "bloquear" | "advertir" }>(
       "SELECT existencia, politica_sin_existencia FROM producto WHERE id=?",
       [productoId],
@@ -114,17 +106,13 @@ export function crearFacturaRepo(db: SqlDriver) {
       cantidadSolicitada: cantidad,
     });
     if (!permitido) {
-      throw new ValidacionError([
-        { campo: "cantidad", mensaje: `No hay existencia suficiente (faltan ${faltante}).` },
-      ]);
+      throw new ValidacionError([{ campo: "cantidad", mensaje: `No hay existencia suficiente (faltan ${faltante}).` }]);
     }
   }
 
   /** Descuenta existencia y registra el movimiento 'venta' (solo si inventario está activo). */
   async function descontarExistenciaPorVenta(facturaId: string, lineas: FacturaLinea[]): Promise<void> {
-    const negocio = await db.get<{ inventario_activo: number }>(
-      "SELECT inventario_activo FROM negocio LIMIT 1",
-    );
+    const negocio = await db.get<{ inventario_activo: number }>("SELECT inventario_activo FROM negocio LIMIT 1");
     if (negocio?.inventario_activo !== 1) return;
 
     const ts = now();
@@ -137,9 +125,7 @@ export function crearFacturaRepo(db: SqlDriver) {
       if (!producto) continue;
 
       const nuevaExistencia = (producto.existencia ?? 0) - l.cantidad;
-      await db.run("UPDATE producto SET existencia=?, updated_at=? WHERE id=?", [
-        nuevaExistencia, ts, l.producto_id,
-      ]);
+      await db.run("UPDATE producto SET existencia=?, updated_at=? WHERE id=?", [nuevaExistencia, ts, l.producto_id]);
       await db.run(
         `INSERT INTO movimiento_inventario
            (id, producto_id, tipo, cantidad, costo, referencia_tipo, referencia_id, fecha, usuario_id, created_at, updated_at, deleted_at)
@@ -170,9 +156,7 @@ export function crearFacturaRepo(db: SqlDriver) {
   const repo = {
     /** Abre un ticket nuevo (factura en estado 'abierta', totales en cero). */
     async abrirTicket(input: AbrirTicketInput = {}): Promise<Factura> {
-      const ultimo = await db.get<{ max: number | null }>(
-        "SELECT MAX(numero_interno) as max FROM factura",
-      );
+      const ultimo = await db.get<{ max: number | null }>("SELECT MAX(numero_interno) as max FROM factura");
       const numero_interno = (ultimo?.max ?? 0) + 1;
       const ts = now();
 
@@ -198,14 +182,27 @@ export function crearFacturaRepo(db: SqlDriver) {
         deleted_at: null,
       };
 
-      await db.run(
-        `INSERT INTO factura (${COLS_FACTURA}) VALUES (${Array(19).fill("?").join(",")})`,
-        [
-          f.id, f.numero_interno, f.fecha_hora, f.cliente_id, f.caja_id, f.usuario_id, f.tipo,
-          f.subtotal_gravado, f.subtotal_exento, f.total_itbis, f.total, f.monto_pagado, f.cambio,
-          f.notas, f.estado, f.comprobante_id, f.created_at, f.updated_at, f.deleted_at,
-        ],
-      );
+      await db.run(`INSERT INTO factura (${COLS_FACTURA}) VALUES (${Array(19).fill("?").join(",")})`, [
+        f.id,
+        f.numero_interno,
+        f.fecha_hora,
+        f.cliente_id,
+        f.caja_id,
+        f.usuario_id,
+        f.tipo,
+        f.subtotal_gravado,
+        f.subtotal_exento,
+        f.total_itbis,
+        f.total,
+        f.monto_pagado,
+        f.cambio,
+        f.notas,
+        f.estado,
+        f.comprobante_id,
+        f.created_at,
+        f.updated_at,
+        f.deleted_at,
+      ]);
       return f;
     },
 
@@ -219,10 +216,7 @@ export function crearFacturaRepo(db: SqlDriver) {
     },
 
     async obtener(id: string): Promise<Factura | undefined> {
-      return db.get<Factura>(
-        `SELECT ${COLS_FACTURA} FROM factura WHERE id=? AND deleted_at IS NULL`,
-        [id],
-      );
+      return db.get<Factura>(`SELECT ${COLS_FACTURA} FROM factura WHERE id=? AND deleted_at IS NULL`, [id]);
     },
 
     async obtenerLineas(facturaId: string): Promise<FacturaLinea[]> {
@@ -264,14 +258,22 @@ export function crearFacturaRepo(db: SqlDriver) {
         deleted_at: null,
       };
 
-      await db.run(
-        `INSERT INTO factura_linea (${COLS_LINEA}) VALUES (${Array(14).fill("?").join(",")})`,
-        [
-          l.id, l.factura_id, l.producto_id, l.descripcion, l.cantidad, l.precio_unitario,
-          l.es_mayoreo, l.impuesto_tipo, l.tasa_impuesto, l.monto_itbis, l.subtotal,
-          l.created_at, l.updated_at, l.deleted_at,
-        ],
-      );
+      await db.run(`INSERT INTO factura_linea (${COLS_LINEA}) VALUES (${Array(14).fill("?").join(",")})`, [
+        l.id,
+        l.factura_id,
+        l.producto_id,
+        l.descripcion,
+        l.cantidad,
+        l.precio_unitario,
+        l.es_mayoreo,
+        l.impuesto_tipo,
+        l.tasa_impuesto,
+        l.monto_itbis,
+        l.subtotal,
+        l.created_at,
+        l.updated_at,
+        l.deleted_at,
+      ]);
       await recalcularTotales(facturaId);
       return l;
     },
@@ -281,10 +283,7 @@ export function crearFacturaRepo(db: SqlDriver) {
       if (!(cantidad > 0)) {
         throw new ValidacionError([{ campo: "cantidad", mensaje: "La cantidad debe ser mayor que cero." }]);
       }
-      const linea = await db.get<FacturaLinea>(
-        `SELECT ${COLS_LINEA} FROM factura_linea WHERE id=?`,
-        [lineaId],
-      );
+      const linea = await db.get<FacturaLinea>(`SELECT ${COLS_LINEA} FROM factura_linea WHERE id=?`, [lineaId]);
       if (!linea) throw new Error(MSG.lineaNoExiste);
       if (linea.producto_id) await verificarDisponibilidad(linea.producto_id, cantidad);
 
@@ -294,23 +293,21 @@ export function crearFacturaRepo(db: SqlDriver) {
         tasaImpuesto: linea.tasa_impuesto,
       });
 
-      await db.run(
-        "UPDATE factura_linea SET cantidad=?, monto_itbis=?, subtotal=?, updated_at=? WHERE id=?",
-        [cantidad, calc.montoItbis, calc.subtotal, now(), lineaId],
-      );
+      await db.run("UPDATE factura_linea SET cantidad=?, monto_itbis=?, subtotal=?, updated_at=? WHERE id=?", [
+        cantidad,
+        calc.montoItbis,
+        calc.subtotal,
+        now(),
+        lineaId,
+      ]);
       await recalcularTotales(linea.factura_id);
     },
 
     /** Borra (lógico) una línea y recalcula. */
     async eliminarLinea(lineaId: string): Promise<void> {
-      const linea = await db.get<FacturaLinea>(
-        `SELECT ${COLS_LINEA} FROM factura_linea WHERE id=?`,
-        [lineaId],
-      );
+      const linea = await db.get<FacturaLinea>(`SELECT ${COLS_LINEA} FROM factura_linea WHERE id=?`, [lineaId]);
       if (!linea) return;
-      await db.run("UPDATE factura_linea SET deleted_at=?, updated_at=? WHERE id=?", [
-        now(), now(), lineaId,
-      ]);
+      await db.run("UPDATE factura_linea SET deleted_at=?, updated_at=? WHERE id=?", [now(), now(), lineaId]);
       await recalcularTotales(linea.factura_id);
     },
 
@@ -318,23 +315,16 @@ export function crearFacturaRepo(db: SqlDriver) {
      *  recalcula. Como el borrado es lógico, la fila conserva sus datos originales tal cual — restaurar
      *  es exactamente el inverso de `eliminarLinea`, sin perder cantidad/precio/régimen mayoreo. */
     async restaurarLinea(lineaId: string): Promise<void> {
-      const linea = await db.get<FacturaLinea>(
-        `SELECT ${COLS_LINEA} FROM factura_linea WHERE id=?`,
-        [lineaId],
-      );
+      const linea = await db.get<FacturaLinea>(`SELECT ${COLS_LINEA} FROM factura_linea WHERE id=?`, [lineaId]);
       if (!linea) return;
       if (linea.producto_id) await verificarDisponibilidad(linea.producto_id, linea.cantidad);
-      await db.run("UPDATE factura_linea SET deleted_at=NULL, updated_at=? WHERE id=?", [
-        now(), lineaId,
-      ]);
+      await db.run("UPDATE factura_linea SET deleted_at=NULL, updated_at=? WHERE id=?", [now(), lineaId]);
       await recalcularTotales(linea.factura_id);
     },
 
     /** Asigna (o quita, con null) el cliente del ticket. */
     async asignarCliente(facturaId: string, clienteId: string | null): Promise<void> {
-      await db.run("UPDATE factura SET cliente_id=?, updated_at=? WHERE id=?", [
-        clienteId, now(), facturaId,
-      ]);
+      await db.run("UPDATE factura SET cliente_id=?, updated_at=? WHERE id=?", [clienteId, now(), facturaId]);
     },
 
     async actualizarNotas(facturaId: string, notas: string): Promise<void> {
@@ -364,7 +354,11 @@ export function crearFacturaRepo(db: SqlDriver) {
         const nuevoPrecio = l.es_mayoreo ? input.precioMayoreo : input.precioVenta;
         if (nuevoPrecio == null) continue;
 
-        const calc = calcularLinea({ precioUnitario: nuevoPrecio, cantidad: l.cantidad, tasaImpuesto: input.tasaImpuesto });
+        const calc = calcularLinea({
+          precioUnitario: nuevoPrecio,
+          cantidad: l.cantidad,
+          tasaImpuesto: input.tasaImpuesto,
+        });
         await db.run(
           `UPDATE factura_linea
              SET precio_unitario=?, impuesto_tipo=?, tasa_impuesto=?, monto_itbis=?, subtotal=?, updated_at=?
@@ -380,9 +374,7 @@ export function crearFacturaRepo(db: SqlDriver) {
     /** Elimina el ticket completo (factura + sus líneas), borrado lógico. */
     async eliminarTicket(facturaId: string): Promise<void> {
       const ts = now();
-      await db.run("UPDATE factura_linea SET deleted_at=?, updated_at=? WHERE factura_id=?", [
-        ts, ts, facturaId,
-      ]);
+      await db.run("UPDATE factura_linea SET deleted_at=?, updated_at=? WHERE factura_id=?", [ts, ts, facturaId]);
       await db.run("UPDATE factura SET deleted_at=?, updated_at=? WHERE id=?", [ts, ts, facturaId]);
       await registrarAccion(db, { accion: "eliminar", entidad: "factura", entidadId: facturaId });
     },
@@ -420,10 +412,16 @@ export function crearFacturaRepo(db: SqlDriver) {
 
       const ts = now();
       for (const p of input.pagos) {
-        await db.run(
-          `INSERT INTO pago (${COLS_PAGO}) VALUES (?,?,?,?,?,?,?,?)`,
-          [newId(), facturaId, p.metodo, p.monto, null, ts, ts, null],
-        );
+        await db.run(`INSERT INTO pago (${COLS_PAGO}) VALUES (?,?,?,?,?,?,?,?)`, [
+          newId(),
+          facturaId,
+          p.metodo,
+          p.monto,
+          null,
+          ts,
+          ts,
+          null,
+        ]);
       }
 
       await db.run(
@@ -434,7 +432,9 @@ export function crearFacturaRepo(db: SqlDriver) {
 
       await descontarExistenciaPorVenta(facturaId, lineas);
       await registrarAccion(db, {
-        accion: "cobrar", entidad: "factura", entidadId: facturaId,
+        accion: "cobrar",
+        entidad: "factura",
+        entidadId: facturaId,
         resumen: `Total RD$ ${factura.total.toFixed(2)}, cambio RD$ ${resultado.cambio.toFixed(2)}`,
       });
 
@@ -450,10 +450,11 @@ export function crearFacturaRepo(db: SqlDriver) {
 
     /** Enlaza la factura a su comprobante fiscal y la marca tipo='fiscal'. */
     async marcarFiscal(facturaId: string, comprobanteId: string): Promise<void> {
-      await db.run(
-        "UPDATE factura SET tipo='fiscal', comprobante_id=?, updated_at=? WHERE id=?",
-        [comprobanteId, now(), facturaId],
-      );
+      await db.run("UPDATE factura SET tipo='fiscal', comprobante_id=?, updated_at=? WHERE id=?", [
+        comprobanteId,
+        now(),
+        facturaId,
+      ]);
     },
 
     /** Última factura cobrada (para "reimprimir último ticket"). */

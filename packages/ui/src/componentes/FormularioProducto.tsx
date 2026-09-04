@@ -1,4 +1,12 @@
-import { type Producto, type ProductoInput, type ImpuestoTipo, type TipoVenta, pctGananciaDesdePrecio, calcularPrecioVenta, PCT_GANANCIA_POR_DEFECTO } from "@sfr/core";
+import {
+  type Producto,
+  type ProductoInput,
+  type ImpuestoTipo,
+  type TipoVenta,
+  pctGananciaDesdePrecio,
+  calcularPrecioVenta,
+  PCT_GANANCIA_POR_DEFECTO,
+} from "@sfr/core";
 import { Package } from "lucide-react";
 import { s, money } from "../estilos.js";
 import { filtrarNumero } from "../utilidades/numero.js";
@@ -16,8 +24,14 @@ const TIPOS_VENTA: { valor: TipoVenta; etiqueta: string }[] = [
   { valor: "kit", etiqueta: "Kit" },
 ];
 
-const ETIQUETA_IMPUESTO = Object.fromEntries(IMPUESTOS.map((i) => [i.valor, i.etiqueta])) as Record<ImpuestoTipo, string>;
-const ETIQUETA_TIPO_VENTA = Object.fromEntries(TIPOS_VENTA.map((t) => [t.valor, t.etiqueta])) as Record<TipoVenta, string>;
+const ETIQUETA_IMPUESTO = Object.fromEntries(IMPUESTOS.map((i) => [i.valor, i.etiqueta])) as Record<
+  ImpuestoTipo,
+  string
+>;
+const ETIQUETA_TIPO_VENTA = Object.fromEntries(TIPOS_VENTA.map((t) => [t.valor, t.etiqueta])) as Record<
+  TipoVenta,
+  string
+>;
 const ETIQUETA_POLITICA: Record<"bloquear" | "advertir", string> = {
   bloquear: "Bloquear la venta",
   advertir: "Advertir y permitir la venta",
@@ -52,7 +66,11 @@ export function diferenciasProducto(original: Producto, form: ProductoInput): Ca
     `${pctGananciaDesdePrecio(original.costo, original.precio_venta)}%`,
     `${form.pct_ganancia ?? 0}%`,
   );
-  agregar("Precio venta", money(original.precio_venta), form.precio_venta != null ? money(form.precio_venta) : "(automático)");
+  agregar(
+    "Precio venta",
+    money(original.precio_venta),
+    form.precio_venta != null ? money(form.precio_venta) : "(automático)",
+  );
   agregar(
     "Precio mayoreo",
     original.precio_mayoreo != null ? money(original.precio_mayoreo) : "(ninguno)",
@@ -80,10 +98,20 @@ export interface FormularioProductoProps {
 /** Campos para crear/editar un producto (§ Productos). Componente controlado sin estado propio ni
  *  llamadas al repo — así lo puede envolver tanto la pantalla Productos como el botón "Modificar"
  *  de la búsqueda en Ventas, para corregir un precio sin salir del ticket que se está armando. */
-export function FormularioProducto({ form, onCambiar, editando, inventarioActivo, errores, onGuardar, onCancelar }: FormularioProductoProps) {
+export function FormularioProducto({
+  form,
+  onCambiar,
+  editando,
+  inventarioActivo,
+  errores,
+  onGuardar,
+  onCancelar,
+}: FormularioProductoProps) {
   return (
     <div style={{ ...s.tarjeta, marginBottom: 16 }}>
-      <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Package size={18} /> {editando ? "Editar producto" : "Nuevo producto"}</h3>
+      <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+        <Package size={18} /> {editando ? "Editar producto" : "Nuevo producto"}
+      </h3>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
           <label style={s.label}>Descripción *</label>
@@ -110,7 +138,9 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             onChange={(e) => onCambiar({ ...form, tipo_venta: e.target.value as TipoVenta })}
           >
             {TIPOS_VENTA.map((t) => (
-              <option key={t.valor} value={t.valor}>{t.etiqueta}</option>
+              <option key={t.valor} value={t.valor}>
+                {t.etiqueta}
+              </option>
             ))}
           </select>
         </div>
@@ -139,7 +169,11 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
               // insumo (y % Ganancia el reflejo) solo cuando se escribe directamente ahí abajo —
               // así cambiar la ganancia sí mueve el precio, en vez de quedarse pegado al que
               // tenía al abrir el formulario. El impuesto ya no entra: va incluido en el precio.
-              const precio_venta = calcularPrecioVenta({ costo, pctGanancia: form.pct_ganancia ?? PCT_GANANCIA_POR_DEFECTO, precioManual: null });
+              const precio_venta = calcularPrecioVenta({
+                costo,
+                pctGanancia: form.pct_ganancia ?? PCT_GANANCIA_POR_DEFECTO,
+                precioManual: null,
+              });
               onCambiar({ ...form, costo, precio_venta });
             }}
           />
@@ -153,7 +187,11 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             value={form.pct_ganancia ?? 0}
             onChange={(e) => {
               const pct_ganancia = Number(filtrarNumero(e.target.value)) || 0;
-              const precio_venta = calcularPrecioVenta({ costo: form.costo ?? 0, pctGanancia: pct_ganancia, precioManual: null });
+              const precio_venta = calcularPrecioVenta({
+                costo: form.costo ?? 0,
+                pctGanancia: pct_ganancia,
+                precioManual: null,
+              });
               onCambiar({ ...form, pct_ganancia, precio_venta });
             }}
           />
@@ -168,9 +206,8 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             onChange={(e) => {
               const texto = filtrarNumero(e.target.value);
               const precio_venta = texto === "" ? null : Number(texto) || 0;
-              const pct_ganancia = precio_venta != null
-                ? pctGananciaDesdePrecio(form.costo ?? 0, precio_venta)
-                : form.pct_ganancia;
+              const pct_ganancia =
+                precio_venta != null ? pctGananciaDesdePrecio(form.costo ?? 0, precio_venta) : form.pct_ganancia;
               onCambiar({ ...form, precio_venta, pct_ganancia });
             }}
           />
@@ -202,7 +239,9 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             onChange={(e) => onCambiar({ ...form, impuesto_tipo: e.target.value as ImpuestoTipo })}
           >
             {IMPUESTOS.map((i) => (
-              <option key={i.valor} value={i.valor}>{i.etiqueta}</option>
+              <option key={i.valor} value={i.valor}>
+                {i.etiqueta}
+              </option>
             ))}
           </select>
         </div>
@@ -212,7 +251,9 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
             <select
               style={s.input}
               value={form.politica_sin_existencia ?? "advertir"}
-              onChange={(e) => onCambiar({ ...form, politica_sin_existencia: e.target.value as "bloquear" | "advertir" })}
+              onChange={(e) =>
+                onCambiar({ ...form, politica_sin_existencia: e.target.value as "bloquear" | "advertir" })
+              }
             >
               <option value="advertir">Advertir y permitir la venta</option>
               <option value="bloquear">Bloquear la venta</option>
@@ -222,12 +263,18 @@ export function FormularioProducto({ form, onCambiar, editando, inventarioActivo
       </div>
 
       {errores.length > 0 && (
-        <div role="alert" style={s.errorBox}>{errores.join(" ")}</div>
+        <div role="alert" style={s.errorBox}>
+          {errores.join(" ")}
+        </div>
       )}
 
       <div style={s.formFooter}>
-        <button style={s.boton} onClick={onGuardar}>Guardar (Ctrl+S)</button>
-        <button style={s.botonSecundario} onClick={onCancelar}>Cancelar (Esc)</button>
+        <button style={s.boton} onClick={onGuardar}>
+          Guardar (Ctrl+S)
+        </button>
+        <button style={s.botonSecundario} onClick={onCancelar}>
+          Cancelar (Esc)
+        </button>
       </div>
     </div>
   );

@@ -19,7 +19,9 @@ async function nuevaDb(): Promise<SqlDriver> {
 
 describe("proveedorRepo — CRUD", () => {
   let db: SqlDriver;
-  beforeEach(async () => { db = await nuevaDb(); });
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
 
   it("crea, actualiza y busca por nombre", async () => {
     const proveedores = crearProveedorRepo(db);
@@ -42,7 +44,9 @@ describe("proveedorRepo — CRUD", () => {
 
 describe("compraRepo — registrar compra (§ Compras e inventario)", () => {
   let db: SqlDriver;
-  beforeEach(async () => { db = await nuevaDb(); });
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
 
   it("registra la compra, calcula totales y guarda las líneas", async () => {
     const compras = crearCompraRepo(db);
@@ -68,7 +72,9 @@ describe("compraRepo — registrar compra (§ Compras e inventario)", () => {
     const compra = await compras.crear({
       tieneComprobanteFiscal: true,
       ncf_proveedor: "B0100000001",
-      lineas: [{ descripcion: "Detergente", cantidad: 1, costoUnitario: 100, impuestoTipo: "itbis18", tasaImpuesto: 0.18 }],
+      lineas: [
+        { descripcion: "Detergente", cantidad: 1, costoUnitario: 100, impuestoTipo: "itbis18", tasaImpuesto: 0.18 },
+      ],
     });
     expect(compra.estado_clasificacion).toBe("con_fiscal");
     expect(compra.tiene_comprobante_fiscal).toBe(1);
@@ -85,7 +91,16 @@ describe("compraRepo — registrar compra (§ Compras e inventario)", () => {
     const p = await productos.crear({ descripcion: "Arroz 5lb", costo: 35, precio_venta: 50 });
 
     await compras.crear({
-      lineas: [{ producto_id: p.id, descripcion: "Arroz 5lb", cantidad: 20, costoUnitario: 42, impuestoTipo: "itbis18", tasaImpuesto: 0.18 }],
+      lineas: [
+        {
+          producto_id: p.id,
+          descripcion: "Arroz 5lb",
+          cantidad: 20,
+          costoUnitario: 42,
+          impuestoTipo: "itbis18",
+          tasaImpuesto: 0.18,
+        },
+      ],
     });
 
     const actualizado = await productos.obtener(p.id);
@@ -104,7 +119,16 @@ describe("compraRepo — registrar compra (§ Compras e inventario)", () => {
     await productos.ajustarExistencia(p.id, 5);
 
     const compra = await compras.crear({
-      lineas: [{ producto_id: p.id, descripcion: "Arroz 5lb", cantidad: 20, costoUnitario: 42, impuestoTipo: "itbis18", tasaImpuesto: 0.18 }],
+      lineas: [
+        {
+          producto_id: p.id,
+          descripcion: "Arroz 5lb",
+          cantidad: 20,
+          costoUnitario: 42,
+          impuestoTipo: "itbis18",
+          tasaImpuesto: 0.18,
+        },
+      ],
     });
 
     const actualizado = await productos.obtener(p.id);
@@ -121,7 +145,18 @@ describe("compraRepo — registrar compra (§ Compras e inventario)", () => {
     await negocioRepo.guardar({ nombre_comercial: "Test", inventario_activo: true });
     const compras = crearCompraRepo(db);
     await expect(
-      compras.crear({ lineas: [{ producto_id: null, descripcion: "Artículo nuevo", cantidad: 1, costoUnitario: 10, impuestoTipo: "itbis18", tasaImpuesto: 0.18 }] }),
+      compras.crear({
+        lineas: [
+          {
+            producto_id: null,
+            descripcion: "Artículo nuevo",
+            cantidad: 1,
+            costoUnitario: 10,
+            impuestoTipo: "itbis18",
+            tasaImpuesto: 0.18,
+          },
+        ],
+      }),
     ).resolves.toBeDefined();
   });
 
@@ -132,11 +167,13 @@ describe("compraRepo — registrar compra (§ Compras e inventario)", () => {
     const prov2 = await proveedores.crear({ nombre: "Proveedor 2" });
 
     const c1 = await compras.crear({
-      fecha: "2026-07-01T10:00:00.000Z", proveedor_id: prov1.id,
+      fecha: "2026-07-01T10:00:00.000Z",
+      proveedor_id: prov1.id,
       lineas: [{ descripcion: "X", cantidad: 1, costoUnitario: 10, impuestoTipo: "itbis18", tasaImpuesto: 0.18 }],
     });
     await compras.crear({
-      fecha: "2026-06-01T10:00:00.000Z", proveedor_id: prov2.id,
+      fecha: "2026-06-01T10:00:00.000Z",
+      proveedor_id: prov2.id,
       lineas: [{ descripcion: "Y", cantidad: 1, costoUnitario: 10, impuestoTipo: "itbis18", tasaImpuesto: 0.18 }],
     });
 

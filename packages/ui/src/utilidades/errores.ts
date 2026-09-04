@@ -54,28 +54,31 @@ function traducir(crudo: string): string | null {
 
   if (t.includes("unique constraint failed")) {
     if (t.includes("producto.codigo_barra")) {
-      return "Ese código de barra ya está asignado a otro producto. Cámbialo, déjalo vacío, " +
-        "o busca el producto que ya existe y edítalo.";
+      return (
+        "Ese código de barra ya está asignado a otro producto. Cámbialo, déjalo vacío, " +
+        "o busca el producto que ya existe y edítalo."
+      );
     }
     if (t.includes("comprobante_fiscal.ncf")) {
-      return "Ese NCF ya fue usado en otro comprobante. Revisa la secuencia en " +
-        "Configuración → Comprobantes fiscales.";
+      return (
+        "Ese NCF ya fue usado en otro comprobante. Revisa la secuencia en " + "Configuración → Comprobantes fiscales."
+      );
     }
     const campo = /unique constraint failed: ([a-z_]+)\.([a-z_]+)/i.exec(crudo);
-    const entidad = campo ? TABLA_EN_ESPANOL[campo[1]] ?? campo[1] : "registro";
+    const entidad = campo ? (TABLA_EN_ESPANOL[campo[1]] ?? campo[1]) : "registro";
     return `Ya existe un ${entidad} con ese dato y no se permite repetirlo.`;
   }
 
   if (t.includes("foreign key constraint failed")) {
-    return "No se puede guardar porque el registro está enlazado a otro que ya no existe " +
-      "(o que todavía lo usa). Actualiza la pantalla y vuelve a intentarlo.";
+    return (
+      "No se puede guardar porque el registro está enlazado a otro que ya no existe " +
+      "(o que todavía lo usa). Actualiza la pantalla y vuelve a intentarlo."
+    );
   }
 
   if (t.includes("not null constraint failed")) {
     const campo = /not null constraint failed: [a-z_]+\.([a-z_]+)/i.exec(crudo);
-    return campo
-      ? `Falta llenar el campo "${campo[1].replace(/_/g, " ")}".`
-      : "Falta llenar un campo obligatorio.";
+    return campo ? `Falta llenar el campo "${campo[1].replace(/_/g, " ")}".` : "Falta llenar un campo obligatorio.";
   }
 
   if (t.includes("check constraint failed")) {
@@ -83,18 +86,24 @@ function traducir(crudo: string): string | null {
   }
 
   if (t.includes("database is locked") || t.includes("sqlite_busy")) {
-    return "La base de datos está ocupada en este momento (¿hay otra ventana del programa guardando?). " +
-      "Espera un segundo y vuelve a intentarlo.";
+    return (
+      "La base de datos está ocupada en este momento (¿hay otra ventana del programa guardando?). " +
+      "Espera un segundo y vuelve a intentarlo."
+    );
   }
 
   if (t.includes("disk i/o error") || t.includes("database or disk is full") || t.includes("enospc")) {
-    return "No se pudo escribir en el disco: puede estar lleno o la carpeta de datos sin permiso. " +
-      "Libera espacio y vuelve a intentarlo.";
+    return (
+      "No se pudo escribir en el disco: puede estar lleno o la carpeta de datos sin permiso. " +
+      "Libera espacio y vuelve a intentarlo."
+    );
   }
 
   if (t.includes("database disk image is malformed") || t.includes("file is not a database")) {
-    return "El archivo de la base de datos está dañado. Restaura la copia de seguridad más reciente " +
-      "desde Configuración antes de seguir trabajando.";
+    return (
+      "El archivo de la base de datos está dañado. Restaura la copia de seguridad más reciente " +
+      "desde Configuración antes de seguir trabajando."
+    );
   }
 
   if (t.includes("failed to fetch") || t.includes("networkerror") || t.includes("err_connection")) {

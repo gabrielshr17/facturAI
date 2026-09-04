@@ -76,7 +76,9 @@ export function ConsultaCotizaciones() {
   const enfocarBusqueda = useCallback(() => busquedaRef.current?.focus(), []);
   useAtajosTeclado({
     F10: enfocarBusqueda,
-    "Ctrl+P": () => { if (seleccionada) descargarPdf(seleccionada); },
+    "Ctrl+P": () => {
+      if (seleccionada) descargarPdf(seleccionada);
+    },
     Escape: () => setSeleccionadaId(null),
   });
 
@@ -92,7 +94,7 @@ export function ConsultaCotizaciones() {
       const enriquecidas = await Promise.all(
         cotizaciones.map(async (cotizacion) => ({
           cotizacion,
-          cliente: cotizacion.cliente_id ? (await clientes.obtener(cotizacion.cliente_id)) ?? null : null,
+          cliente: cotizacion.cliente_id ? ((await clientes.obtener(cotizacion.cliente_id)) ?? null) : null,
         })),
       );
       setFilas(enriquecidas);
@@ -113,7 +115,8 @@ export function ConsultaCotizaciones() {
   }, [repo, seleccionadaId]);
 
   async function anular(fila: FilaCotizacion) {
-    if (!(await confirmar(`¿Anular la cotización #${fila.cotizacion.numero_interno}?`, { textoConfirmar: "Anular" }))) return;
+    if (!(await confirmar(`¿Anular la cotización #${fila.cotizacion.numero_interno}?`, { textoConfirmar: "Anular" })))
+      return;
     await repo.anular(fila.cotizacion.id);
     await cargar();
   }
@@ -152,7 +155,10 @@ export function ConsultaCotizaciones() {
   }
 
   function descargarPdf(fila: FilaCotizacion) {
-    guardarPdf(generarPdfCotizacion(datosImpresionCotizacion(fila)), `Cotizacion-${fila.cotizacion.numero_interno}.pdf`);
+    guardarPdf(
+      generarPdfCotizacion(datosImpresionCotizacion(fila)),
+      `Cotizacion-${fila.cotizacion.numero_interno}.pdf`,
+    );
   }
 
   function imprimir(fila: FilaCotizacion) {
@@ -173,64 +179,112 @@ export function ConsultaCotizaciones() {
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
             <label style={s.label}>Buscar (número, cliente) (F10)</label>
-            <input ref={busquedaRef} style={s.input} value={busqueda} autoFocus onChange={(e) => setBusqueda(e.target.value)} />
+            <input
+              ref={busquedaRef}
+              style={s.input}
+              value={busqueda}
+              autoFocus
+              onChange={(e) => setBusqueda(e.target.value)}
+            />
           </div>
         </div>
-        {error && <div role="alert" style={s.errorBox}>{error}</div>}
+        {error && (
+          <div role="alert" style={s.errorBox}>
+            {error}
+          </div>
+        )}
       </div>
 
       {/* Al angostar, el detalle deja de ser una columna al lado y pasa a apilarse debajo del listado. */}
-      <div style={{ display: "grid", gridTemplateColumns: seleccionada && !esAngosto ? "minmax(0, 1fr) 340px" : "minmax(0, 1fr)", gap: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: seleccionada && !esAngosto ? "minmax(0, 1fr) 340px" : "minmax(0, 1fr)",
+          gap: 16,
+        }}
+      >
         <div style={s.tarjeta}>
           <div className="sfr-tabla-scroll">
-          <table style={s.tabla}>
-            <thead>
-              <tr>
-                <th scope="col" style={s.th}>#</th>
-                <th scope="col" style={s.th}>Fecha</th>
-                <th scope="col" style={s.th}>Cliente</th>
-                <th scope="col" style={s.th}>Estado</th>
-                <th scope="col" style={s.th}>Total</th>
-                <th scope="col" style={s.th}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {!cargando && filasFiltradas.length === 0 && (
-                <tr><td style={s.filaVacia} colSpan={6}>No hay cotizaciones que coincidan con el filtro.</td></tr>
-              )}
-              {filasFiltradas.map((f) => (
-                <tr
-                  key={f.cotizacion.id}
-                  onClick={() => setSeleccionadaId(f.cotizacion.id)}
-                  style={{ cursor: "pointer", background: f.cotizacion.id === seleccionadaId ? c.azulClaro : undefined }}
-                >
-                  <td style={s.td}>{f.cotizacion.numero_interno}</td>
-                  <td style={s.td}>{new Date(f.cotizacion.fecha_hora).toLocaleString("es-DO", { dateStyle: "short", timeStyle: "short" })}</td>
-                  <td style={s.td}>{f.cliente ? `${f.cliente.nombre} ${f.cliente.apellidos ?? ""}` : "—"}</td>
-                  <td style={s.td}>
-                    <span style={{ ...s.badge, ...(estaVencida(f.cotizacion) ? { background: c.amarilloFondo, color: c.amarillo } : {}) }}>
-                      {estaVencida(f.cotizacion) ? "Vencida" : ETIQUETA_ESTADO[f.cotizacion.estado]}
-                    </span>
-                  </td>
-                  <td style={s.tdDerecha}>RD$ {money(f.cotizacion.total)}</td>
-                  <td style={s.td}>
-                    <button
-                      style={s.botonSecundario}
-                      onClick={(e) => { e.stopPropagation(); setSeleccionadaId(f.cotizacion.id); }}
-                    >
-                      Ver
-                    </button>
-                  </td>
+            <table style={s.tabla}>
+              <thead>
+                <tr>
+                  <th scope="col" style={s.th}>
+                    #
+                  </th>
+                  <th scope="col" style={s.th}>
+                    Fecha
+                  </th>
+                  <th scope="col" style={s.th}>
+                    Cliente
+                  </th>
+                  <th scope="col" style={s.th}>
+                    Estado
+                  </th>
+                  <th scope="col" style={s.th}>
+                    Total
+                  </th>
+                  <th scope="col" style={s.th}></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {!cargando && filasFiltradas.length === 0 && (
+                  <tr>
+                    <td style={s.filaVacia} colSpan={6}>
+                      No hay cotizaciones que coincidan con el filtro.
+                    </td>
+                  </tr>
+                )}
+                {filasFiltradas.map((f) => (
+                  <tr
+                    key={f.cotizacion.id}
+                    onClick={() => setSeleccionadaId(f.cotizacion.id)}
+                    style={{
+                      cursor: "pointer",
+                      background: f.cotizacion.id === seleccionadaId ? c.azulClaro : undefined,
+                    }}
+                  >
+                    <td style={s.td}>{f.cotizacion.numero_interno}</td>
+                    <td style={s.td}>
+                      {new Date(f.cotizacion.fecha_hora).toLocaleString("es-DO", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </td>
+                    <td style={s.td}>{f.cliente ? `${f.cliente.nombre} ${f.cliente.apellidos ?? ""}` : "—"}</td>
+                    <td style={s.td}>
+                      <span
+                        style={{
+                          ...s.badge,
+                          ...(estaVencida(f.cotizacion) ? { background: c.amarilloFondo, color: c.amarillo } : {}),
+                        }}
+                      >
+                        {estaVencida(f.cotizacion) ? "Vencida" : ETIQUETA_ESTADO[f.cotizacion.estado]}
+                      </span>
+                    </td>
+                    <td style={s.tdDerecha}>RD$ {money(f.cotizacion.total)}</td>
+                    <td style={s.td}>
+                      <button
+                        style={s.botonSecundario}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSeleccionadaId(f.cotizacion.id);
+                        }}
+                      >
+                        Ver
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
         {seleccionada && (
           <div style={s.tarjeta}>
-            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><ClipboardList size={16} /> Cotización #{seleccionada.cotizacion.numero_interno}</h4>
+            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}>
+              <ClipboardList size={16} /> Cotización #{seleccionada.cotizacion.numero_interno}
+            </h4>
             <p style={{ color: c.gris, fontSize: 13, margin: "4px 0" }}>
               {new Date(seleccionada.cotizacion.fecha_hora).toLocaleString("es-DO")}
             </p>
@@ -238,22 +292,37 @@ export function ConsultaCotizaciones() {
               Válida hasta {formatearFechaIso(seleccionada.cotizacion.fecha_vencimiento)}
             </p>
             {seleccionada.cliente && (
-              <p style={{ margin: "4px 0" }}>{seleccionada.cliente.nombre} {seleccionada.cliente.apellidos ?? ""}</p>
+              <p style={{ margin: "4px 0" }}>
+                {seleccionada.cliente.nombre} {seleccionada.cliente.apellidos ?? ""}
+              </p>
             )}
 
             <table style={{ ...s.tabla, marginTop: 8 }}>
               <tbody>
                 {lineasSel.map((l) => (
                   <tr key={l.id}>
-                    <td style={s.td}>{l.descripcion} × {cantidad(l.cantidad)}</td>
+                    <td style={s.td}>
+                      {l.descripcion} × {cantidad(l.cantidad)}
+                    </td>
                     <td style={s.tdDerecha}>RD$ {money(l.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 16, borderTop: `1px solid ${c.borde}`, paddingTop: 8, marginTop: 8 }}>
-              <span>Total</span><span>RD$ {money(seleccionada.cotizacion.total)}</span>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontWeight: 700,
+                fontSize: 16,
+                borderTop: `1px solid ${c.borde}`,
+                paddingTop: 8,
+                marginTop: 8,
+              }}
+            >
+              <span>Total</span>
+              <span>RD$ {money(seleccionada.cotizacion.total)}</span>
             </div>
 
             {seleccionada.cotizacion.notas && (
@@ -268,7 +337,11 @@ export function ConsultaCotizaciones() {
                 Guardar PDF (Ctrl+P)
               </button>
               {seleccionada.cotizacion.estado === "vigente" && (
-                <button className="sfr-peligro" style={{ ...s.botonPeligro, flex: 1 }} onClick={() => void anular(seleccionada)}>
+                <button
+                  className="sfr-peligro"
+                  style={{ ...s.botonPeligro, flex: 1 }}
+                  onClick={() => void anular(seleccionada)}
+                >
                   Anular
                 </button>
               )}

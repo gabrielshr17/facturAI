@@ -25,9 +25,7 @@ describe("Fase 0 — migraciones y seed", () => {
     const aplicadas = await migrate(db);
     expect(aplicadas.length).toBeGreaterThan(0);
 
-    const filas = await db.all<{ name: string }>(
-      "SELECT name FROM sqlite_master WHERE type='table'",
-    );
+    const filas = await db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'");
     const nombres = filas.map((f) => f.name);
     for (const t of TABLAS_MVP) expect(nombres).toContain(t);
   });

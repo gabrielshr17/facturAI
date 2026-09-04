@@ -6,22 +6,9 @@ export {
   type ProductoInput,
   type ProductoRepo,
 } from "./producto-repo.js";
-export {
-  crearClienteRepo,
-  validarCliente,
-  type ClienteInput,
-  type ClienteRepo,
-} from "./cliente-repo.js";
-export {
-  crearDepartamentoRepo,
-  type DepartamentoRepo,
-} from "./departamento-repo.js";
-export {
-  crearNegocioRepo,
-  validarNegocio,
-  type NegocioInput,
-  type NegocioRepo,
-} from "./negocio-repo.js";
+export { crearClienteRepo, validarCliente, type ClienteInput, type ClienteRepo } from "./cliente-repo.js";
+export { crearDepartamentoRepo, type DepartamentoRepo } from "./departamento-repo.js";
+export { crearNegocioRepo, validarNegocio, type NegocioInput, type NegocioRepo } from "./negocio-repo.js";
 export {
   crearFacturaRepo,
   type AbrirTicketInput,
@@ -47,22 +34,9 @@ export {
   type RegistrarCorteInput,
   type CorteCajaRepo,
 } from "./corte-caja-repo.js";
-export {
-  crearMovimientoInventarioRepo,
-  type MovimientoInventarioRepo,
-} from "./movimiento-inventario-repo.js";
-export {
-  crearProveedorRepo,
-  validarProveedor,
-  type ProveedorInput,
-  type ProveedorRepo,
-} from "./proveedor-repo.js";
-export {
-  crearCompraRepo,
-  type LineaCompraInput,
-  type CompraInput,
-  type CompraRepo,
-} from "./compra-repo.js";
+export { crearMovimientoInventarioRepo, type MovimientoInventarioRepo } from "./movimiento-inventario-repo.js";
+export { crearProveedorRepo, validarProveedor, type ProveedorInput, type ProveedorRepo } from "./proveedor-repo.js";
+export { crearCompraRepo, type LineaCompraInput, type CompraInput, type CompraRepo } from "./compra-repo.js";
 export {
   crearComprobanteArchivoRepo,
   type CrearComprobanteArchivoInput,
@@ -91,16 +65,8 @@ export {
   type ResumenPorMetodo,
   type ReportesRepo,
 } from "./reportes-repo.js";
-export {
-  crearPromocionRepo,
-  type PromocionInput,
-  type PromocionRepo,
-} from "./promocion-repo.js";
-export {
-  crearBackupRepo,
-  type RespaldoCompleto,
-  type BackupRepo,
-} from "./backup-repo.js";
+export { crearPromocionRepo, type PromocionInput, type PromocionRepo } from "./promocion-repo.js";
+export { crearBackupRepo, type RespaldoCompleto, type BackupRepo } from "./backup-repo.js";
 export {
   crearCotizacionRepo,
   type LineaCotizacionInput,

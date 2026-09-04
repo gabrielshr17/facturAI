@@ -39,9 +39,9 @@ describe("productoRepo — CRUD persiste en SQLite", () => {
   it("avisa en español cuál producto tiene ya ese código de barra", async () => {
     const repo = crearProductoRepo(db);
     await repo.crear({ descripcion: "Coca Cola 2L", codigo_barra: "7501055300006" });
-    await expect(
-      repo.crear({ descripcion: "Coca Cola grande", codigo_barra: "7501055300006" }),
-    ).rejects.toThrow(/ya está asignado a "Coca Cola 2L"/);
+    await expect(repo.crear({ descripcion: "Coca Cola grande", codigo_barra: "7501055300006" })).rejects.toThrow(
+      /ya está asignado a "Coca Cola 2L"/,
+    );
   });
 
   it("editar un producto no choca con su propio código de barra", async () => {
@@ -156,9 +156,9 @@ describe("negocioRepo — configuración (singleton)", () => {
 
   it("rechaza ancho de impresora inválido", async () => {
     const repo = crearNegocioRepo(db);
-    await expect(
-      repo.guardar({ nombre_comercial: "X", ancho_impresora_default: 72 as 58 }),
-    ).rejects.toBeInstanceOf(ValidacionError);
+    await expect(repo.guardar({ nombre_comercial: "X", ancho_impresora_default: 72 as 58 })).rejects.toBeInstanceOf(
+      ValidacionError,
+    );
   });
 });
 

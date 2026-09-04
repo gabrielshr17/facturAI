@@ -87,15 +87,20 @@ export function Compras() {
   const enfocarBusquedaProducto = useCallback(() => busquedaProductoRef.current?.focus(), []);
   useAtajosTeclado({
     F10: enfocarBusquedaProducto,
-    F6: () => { if (!proveedorSel) setMostrarNuevoProveedor((v) => !v); },
-    "Ctrl+S": () => { if (!guardando) void guardarCompra(); },
+    F6: () => {
+      if (!proveedorSel) setMostrarNuevoProveedor((v) => !v);
+    },
+    "Ctrl+S": () => {
+      if (!guardando) void guardarCompra();
+    },
   });
 
   const cargarHistorial = useCallback(async () => {
     const lista = await repo.listar({ desde: filtroDesde || null, hasta: filtroHasta || null });
     setHistorial(lista);
-    const faltantes = [...new Set(lista.map((c) => c.proveedor_id).filter((id): id is string => !!id))]
-      .filter((id) => !proveedoresPorId[id]);
+    const faltantes = [...new Set(lista.map((c) => c.proveedor_id).filter((id): id is string => !!id))].filter(
+      (id) => !proveedoresPorId[id],
+    );
     if (faltantes.length > 0) {
       const nuevos: Record<string, Proveedor> = {};
       for (const id of faltantes) {
@@ -107,7 +112,9 @@ export function Compras() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, proveedores, filtroDesde, filtroHasta]);
 
-  useEffect(() => { void cargarHistorial(); }, [cargarHistorial]);
+  useEffect(() => {
+    void cargarHistorial();
+  }, [cargarHistorial]);
 
   useEffect(() => {
     if (!seleccionadaId) return;
@@ -142,20 +149,34 @@ export function Compras() {
   }
 
   function agregarLineaProducto(p: Producto) {
-    setLineas((prev) => [...prev, {
-      producto_id: p.id, descripcion: p.descripcion, cantidad: 1,
-      costoUnitario: p.costo, impuestoTipo: p.impuesto_tipo, tasaImpuesto: p.tasa_impuesto,
-    }]);
+    setLineas((prev) => [
+      ...prev,
+      {
+        producto_id: p.id,
+        descripcion: p.descripcion,
+        cantidad: 1,
+        costoUnitario: p.costo,
+        impuestoTipo: p.impuesto_tipo,
+        tasaImpuesto: p.tasa_impuesto,
+      },
+    ]);
     setBusquedaProducto("");
     setResultadosProducto([]);
   }
 
   function agregarLineaSuelta() {
     if (!sueltoDesc.trim()) return;
-    setLineas((prev) => [...prev, {
-      producto_id: null, descripcion: sueltoDesc, cantidad: 1,
-      costoUnitario: Number(sueltoCosto) || 0, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
-    }]);
+    setLineas((prev) => [
+      ...prev,
+      {
+        producto_id: null,
+        descripcion: sueltoDesc,
+        cantidad: 1,
+        costoUnitario: Number(sueltoCosto) || 0,
+        impuestoTipo: "itbis18",
+        tasaImpuesto: 0.18,
+      },
+    ]);
     setSueltoDesc("");
     setSueltoCosto("");
     setMostrarSuelto(false);
@@ -262,7 +283,9 @@ export function Compras() {
   return (
     <div>
       <div style={{ ...s.tarjeta, marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Truck size={18} /> Nueva compra</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <Truck size={18} /> Nueva compra
+        </h3>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
           <div>
@@ -274,12 +297,18 @@ export function Compras() {
             {proveedorSel ? (
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <span>{proveedorSel.nombre}</span>
-                <button style={s.botonSecundario} onClick={() => setProveedorSel(null)}>Quitar</button>
+                <button style={s.botonSecundario} onClick={() => setProveedorSel(null)}>
+                  Quitar
+                </button>
               </div>
             ) : (
               <>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <input ref={proveedorRef} style={s.input} placeholder="Buscar proveedor…" value={proveedorQ}
+                  <input
+                    ref={proveedorRef}
+                    style={s.input}
+                    placeholder="Buscar proveedor…"
+                    value={proveedorQ}
                     autoFocus
                     onChange={(e) => void buscarProveedor(e.target.value)}
                     onFocus={(e) => e.target.select()}
@@ -292,26 +321,55 @@ export function Compras() {
                         });
                         return;
                       }
-                      if (e.key === "Enter" && indiceResultadoProveedor >= 0 && proveedorResultados[indiceResultadoProveedor]) {
+                      if (
+                        e.key === "Enter" &&
+                        indiceResultadoProveedor >= 0 &&
+                        proveedorResultados[indiceResultadoProveedor]
+                      ) {
                         const p = proveedorResultados[indiceResultadoProveedor];
-                        setProveedorSel(p); setProveedorQ(""); setProveedorResultados([]);
+                        setProveedorSel(p);
+                        setProveedorQ("");
+                        setProveedorResultados([]);
                       }
-                    }} />
-                  <button style={s.botonSecundario} onClick={() => setMostrarNuevoProveedor((v) => !v)}>+ Nuevo (F6)</button>
+                    }}
+                  />
+                  <button style={s.botonSecundario} onClick={() => setMostrarNuevoProveedor((v) => !v)}>
+                    + Nuevo (F6)
+                  </button>
                 </div>
                 {proveedorResultados.map((p, i) => (
-                  <div key={p.id} className="sfr-fila-clickeable"
-                    onClick={() => { setProveedorSel(p); setProveedorQ(""); setProveedorResultados([]); }}
+                  <div
+                    key={p.id}
+                    className="sfr-fila-clickeable"
+                    onClick={() => {
+                      setProveedorSel(p);
+                      setProveedorQ("");
+                      setProveedorResultados([]);
+                    }}
                     onMouseEnter={() => setIndiceResultadoProveedor(i)}
-                    style={{ padding: "6px 8px", cursor: "pointer", fontSize: 14, borderRadius: 6, ...(i === indiceResultadoProveedor ? { background: c.seleccion } : {}) }}>
+                    style={{
+                      padding: "6px 8px",
+                      cursor: "pointer",
+                      fontSize: 14,
+                      borderRadius: 6,
+                      ...(i === indiceResultadoProveedor ? { background: c.seleccion } : {}),
+                    }}
+                  >
                     {p.nombre}
                   </div>
                 ))}
                 {mostrarNuevoProveedor && (
                   <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                    <input autoFocus style={s.input} placeholder="Nombre del proveedor" value={nuevoProveedorNombre}
-                      onChange={(e) => setNuevoProveedorNombre(e.target.value)} />
-                    <button style={s.boton} onClick={crearProveedorRapido}>Crear</button>
+                    <input
+                      autoFocus
+                      style={s.input}
+                      placeholder="Nombre del proveedor"
+                      value={nuevoProveedorNombre}
+                      onChange={(e) => setNuevoProveedorNombre(e.target.value)}
+                    />
+                    <button style={s.boton} onClick={crearProveedorRapido}>
+                      Crear
+                    </button>
                   </div>
                 )}
               </>
@@ -324,12 +382,20 @@ export function Compras() {
         </div>
 
         <label style={{ ...s.label, display: "flex", alignItems: "center", gap: 8 }}>
-          <input type="checkbox" checked={tieneComprobanteFiscal} onChange={(e) => setTieneComprobanteFiscal(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={tieneComprobanteFiscal}
+            onChange={(e) => setTieneComprobanteFiscal(e.target.checked)}
+          />
           Tiene comprobante fiscal
         </label>
 
         <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
-          <input ref={busquedaProductoRef} style={s.input} placeholder="Buscar producto para agregar a la compra… (F10)" value={busquedaProducto}
+          <input
+            ref={busquedaProductoRef}
+            style={s.input}
+            placeholder="Buscar producto para agregar a la compra… (F10)"
+            value={busquedaProducto}
             onChange={(e) => void buscarProducto(e.target.value)}
             onFocus={(e) => e.target.select()}
             onKeyDown={(e) => {
@@ -344,91 +410,206 @@ export function Compras() {
               if (e.key === "Enter" && indiceResultadoProducto >= 0 && resultadosProducto[indiceResultadoProducto]) {
                 agregarLineaProducto(resultadosProducto[indiceResultadoProducto]);
               }
-            }} />
-          <button style={s.botonSecundario} onClick={() => setMostrarSuelto((v) => !v)}>+ Producto nuevo</button>
+            }}
+          />
+          <button style={s.botonSecundario} onClick={() => setMostrarSuelto((v) => !v)}>
+            + Producto nuevo
+          </button>
         </div>
         {resultadosProducto.length > 0 && (
           <div style={{ marginTop: 8, border: `1px solid ${c.borde}`, borderRadius: 8, overflow: "hidden" }}>
             {resultadosProducto.map((p, i) => (
-              <div key={p.id} className="sfr-fila-clickeable" onClick={() => agregarLineaProducto(p)}
+              <div
+                key={p.id}
+                className="sfr-fila-clickeable"
+                onClick={() => agregarLineaProducto(p)}
                 onMouseEnter={() => setIndiceResultadoProducto(i)}
-                style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${c.borde}`, display: "flex", justifyContent: "space-between", ...(i === indiceResultadoProducto ? { background: c.seleccion } : {}) }}>
-                <span>{p.favorito === 1 && <span title="Favorito" style={{ color: c.amarillo, marginRight: 4, display: "inline-flex", verticalAlign: "middle" }}><Star size={12} fill="currentColor" /></span>}{p.descripcion} {p.codigo_barra ? <span style={{ color: c.gris, fontSize: 12 }}>({p.codigo_barra})</span> : ""}</span>
-                <span style={{ color: c.gris, fontVariantNumeric: "tabular-nums" }}>costo actual RD$ {money(p.costo)}</span>
+                style={{
+                  padding: "10px 12px",
+                  cursor: "pointer",
+                  borderBottom: `1px solid ${c.borde}`,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  ...(i === indiceResultadoProducto ? { background: c.seleccion } : {}),
+                }}
+              >
+                <span>
+                  {p.favorito === 1 && (
+                    <span
+                      title="Favorito"
+                      style={{ color: c.amarillo, marginRight: 4, display: "inline-flex", verticalAlign: "middle" }}
+                    >
+                      <Star size={12} fill="currentColor" />
+                    </span>
+                  )}
+                  {p.descripcion}{" "}
+                  {p.codigo_barra ? <span style={{ color: c.gris, fontSize: 12 }}>({p.codigo_barra})</span> : ""}
+                </span>
+                <span style={{ color: c.gris, fontVariantNumeric: "tabular-nums" }}>
+                  costo actual RD$ {money(p.costo)}
+                </span>
               </div>
             ))}
           </div>
         )}
         {mostrarSuelto && (
           <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-            <input autoFocus style={s.input} placeholder="Descripción" value={sueltoDesc} onChange={(e) => setSueltoDesc(e.target.value)} />
-            <input style={{ ...s.input, maxWidth: 140 }} placeholder="Costo unitario" type="text" inputMode="decimal" value={sueltoCosto}
-              onChange={(e) => setSueltoCosto(filtrarNumero(e.target.value))} />
-            <button style={s.boton} onClick={agregarLineaSuelta}>Agregar</button>
+            <input
+              autoFocus
+              style={s.input}
+              placeholder="Descripción"
+              value={sueltoDesc}
+              onChange={(e) => setSueltoDesc(e.target.value)}
+            />
+            <input
+              style={{ ...s.input, maxWidth: 140 }}
+              placeholder="Costo unitario"
+              type="text"
+              inputMode="decimal"
+              value={sueltoCosto}
+              onChange={(e) => setSueltoCosto(filtrarNumero(e.target.value))}
+            />
+            <button style={s.boton} onClick={agregarLineaSuelta}>
+              Agregar
+            </button>
           </div>
         )}
 
         <table style={{ ...s.tabla, marginTop: 12 }}>
           <thead>
             <tr>
-              <th scope="col" style={s.th}>Descripción</th>
-              <th scope="col" style={s.th}>Cantidad</th>
-              <th scope="col" style={s.th}>Costo unitario</th>
-              <th scope="col" style={s.th}>Subtotal</th>
+              <th scope="col" style={s.th}>
+                Descripción
+              </th>
+              <th scope="col" style={s.th}>
+                Cantidad
+              </th>
+              <th scope="col" style={s.th}>
+                Costo unitario
+              </th>
+              <th scope="col" style={s.th}>
+                Subtotal
+              </th>
               <th scope="col" style={s.th}></th>
             </tr>
           </thead>
           <tbody>
             {lineas.length === 0 && (
-              <tr><td style={s.filaVacia} colSpan={5}>Sin artículos. Busca un producto o agrega uno nuevo arriba.</td></tr>
+              <tr>
+                <td style={s.filaVacia} colSpan={5}>
+                  Sin artículos. Busca un producto o agrega uno nuevo arriba.
+                </td>
+              </tr>
             )}
             {lineas.map((l, i) => (
               <tr key={i}>
                 <td style={s.td}>
                   {l.descripcion}
-                  {!l.producto_id && <span style={{ ...s.badge, marginLeft: 6, background: c.amarilloFondo, color: c.amarillo }}>no registrado</span>}
+                  {!l.producto_id && (
+                    <span style={{ ...s.badge, marginLeft: 6, background: c.amarilloFondo, color: c.amarillo }}>
+                      no registrado
+                    </span>
+                  )}
                 </td>
                 <td style={s.td}>
-                  <input style={{ ...s.input, width: 70 }} type="text" inputMode="decimal" value={l.cantidad}
-                    onChange={(e) => actualizarLinea(i, { cantidad: Number(filtrarNumero(e.target.value)) || 0 })} />
+                  <input
+                    style={{ ...s.input, width: 70 }}
+                    type="text"
+                    inputMode="decimal"
+                    value={l.cantidad}
+                    onChange={(e) => actualizarLinea(i, { cantidad: Number(filtrarNumero(e.target.value)) || 0 })}
+                  />
                 </td>
                 <td style={s.td}>
-                  <input style={{ ...s.input, width: 100 }} type="text" inputMode="decimal" value={l.costoUnitario}
-                    onChange={(e) => actualizarLinea(i, { costoUnitario: Number(filtrarNumero(e.target.value)) || 0 })} />
+                  <input
+                    style={{ ...s.input, width: 100 }}
+                    type="text"
+                    inputMode="decimal"
+                    value={l.costoUnitario}
+                    onChange={(e) => actualizarLinea(i, { costoUnitario: Number(filtrarNumero(e.target.value)) || 0 })}
+                  />
                 </td>
                 <td style={s.tdDerecha}>RD$ {money(l.cantidad * l.costoUnitario)}</td>
-                <td style={s.td}><button className="sfr-peligro" style={s.botonPeligro} onClick={() => quitarLinea(i)}>Borrar</button></td>
+                <td style={s.td}>
+                  <button className="sfr-peligro" style={s.botonPeligro} onClick={() => quitarLinea(i)}>
+                    Borrar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 20, fontWeight: 700, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${c.borde}`, fontVariantNumeric: "tabular-nums" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            fontSize: 20,
+            fontWeight: 700,
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: `1px solid ${c.borde}`,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           Total: RD$ {money(total)}
         </div>
 
         <div style={{ marginTop: 12 }}>
           <label style={s.label}>Adjuntar comprobante (foto o PDF, opcional)</label>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input type="file" accept="image/*,.pdf" onChange={(e) => {
-              setArchivo(e.target.files?.[0] ?? null);
-              setDatosIA(null);
-              setErrorIA(null);
-            }} />
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => {
+                setArchivo(e.target.files?.[0] ?? null);
+                setDatosIA(null);
+                setErrorIA(null);
+              }}
+            />
             {archivo && archivo.type.startsWith("image/") && (
-              <button type="button" style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }} disabled={analizando} onClick={() => void analizarConIA()}>
-                {analizando ? "Analizando…" : <><Sparkles size={15} /> Analizar con IA</>}
+              <button
+                type="button"
+                style={{ ...s.botonSecundario, display: "inline-flex", alignItems: "center", gap: 6 }}
+                disabled={analizando}
+                onClick={() => void analizarConIA()}
+              >
+                {analizando ? (
+                  "Analizando…"
+                ) : (
+                  <>
+                    <Sparkles size={15} /> Analizar con IA
+                  </>
+                )}
               </button>
             )}
           </div>
           {errorIA && <div style={{ ...s.errorBox, marginTop: 8 }}>{errorIA}</div>}
           {datosIA && (
-            <div style={{ marginTop: 8, padding: 10, borderRadius: 8, background: c.verdeFondo, border: `1px solid ${c.verde}`, fontSize: 13 }}>
+            <div
+              style={{
+                marginTop: 8,
+                padding: 10,
+                borderRadius: 8,
+                background: c.verdeFondo,
+                border: `1px solid ${c.verde}`,
+                fontSize: 13,
+              }}
+            >
               <strong>Lo que leyó la IA (revisa antes de guardar):</strong>
-              <div>Proveedor: {datosIA.proveedor ?? "—"} · RNC: {datosIA.rnc ?? "—"}</div>
-              <div>NCF: {datosIA.ncf ?? "—"} · Fecha: {datosIA.fecha ?? "—"}</div>
-              <div>Monto: {datosIA.monto != null ? `RD$ ${money(datosIA.monto)}` : "—"} · ITBIS: {datosIA.itbis != null ? `RD$ ${money(datosIA.itbis)}` : "—"}</div>
-              <div>Clasificación: {datosIA.clasificacion} · Confianza: {datosIA.confianza}</div>
+              <div>
+                Proveedor: {datosIA.proveedor ?? "—"} · RNC: {datosIA.rnc ?? "—"}
+              </div>
+              <div>
+                NCF: {datosIA.ncf ?? "—"} · Fecha: {datosIA.fecha ?? "—"}
+              </div>
+              <div>
+                Monto: {datosIA.monto != null ? `RD$ ${money(datosIA.monto)}` : "—"} · ITBIS:{" "}
+                {datosIA.itbis != null ? `RD$ ${money(datosIA.itbis)}` : "—"}
+              </div>
+              <div>
+                Clasificación: {datosIA.clasificacion} · Confianza: {datosIA.confianza}
+              </div>
               {datosIA.notas && <div style={{ marginTop: 4, fontStyle: "italic" }}>Nota: {datosIA.notas}</div>}
               <div style={{ marginTop: 4, color: c.gris }}>
                 Se rellenaron NCF/fecha/clasificación arriba. Los artículos de la compra hay que agregarlos manualmente.
@@ -440,8 +621,14 @@ export function Compras() {
         <label style={s.label}>Notas</label>
         <textarea style={{ ...s.input, minHeight: 50 }} value={notas} onChange={(e) => setNotas(e.target.value)} />
 
-        {error && <div role="alert" style={s.errorBox}>{error}</div>}
-        {mensaje && <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>{mensaje}</div>}
+        {error && (
+          <div role="alert" style={s.errorBox}>
+            {error}
+          </div>
+        )}
+        {mensaje && (
+          <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>{mensaje}</div>
+        )}
 
         <div style={s.formFooter}>
           <button style={s.boton} disabled={guardando} onClick={guardarCompra}>
@@ -468,22 +655,39 @@ export function Compras() {
           <table style={s.tabla}>
             <thead>
               <tr>
-                <th scope="col" style={s.th}>Fecha</th>
-                <th scope="col" style={s.th}>Proveedor</th>
-                <th scope="col" style={s.th}>Clasificación</th>
-                <th scope="col" style={s.th}>Total</th>
+                <th scope="col" style={s.th}>
+                  Fecha
+                </th>
+                <th scope="col" style={s.th}>
+                  Proveedor
+                </th>
+                <th scope="col" style={s.th}>
+                  Clasificación
+                </th>
+                <th scope="col" style={s.th}>
+                  Total
+                </th>
               </tr>
             </thead>
             <tbody>
               {historial.length === 0 && (
-                <tr><td style={s.filaVacia} colSpan={4}>No hay compras registradas para este período.</td></tr>
+                <tr>
+                  <td style={s.filaVacia} colSpan={4}>
+                    No hay compras registradas para este período.
+                  </td>
+                </tr>
               )}
               {historial.map((h) => (
-                <tr key={h.id} onClick={() => setSeleccionadaId(h.id)}
-                  style={{ cursor: "pointer", background: h.id === seleccionadaId ? c.azulClaro : undefined }}>
+                <tr
+                  key={h.id}
+                  onClick={() => setSeleccionadaId(h.id)}
+                  style={{ cursor: "pointer", background: h.id === seleccionadaId ? c.azulClaro : undefined }}
+                >
                   <td style={s.td}>{new Date(h.fecha).toLocaleDateString("es-DO")}</td>
                   <td style={s.td}>{h.proveedor_id ? (proveedoresPorId[h.proveedor_id]?.nombre ?? "—") : "—"}</td>
-                  <td style={s.td}><span style={s.badge}>{h.estado_clasificacion}</span></td>
+                  <td style={s.td}>
+                    <span style={s.badge}>{h.estado_clasificacion}</span>
+                  </td>
                   <td style={s.tdDerecha}>RD$ {money(h.total)}</td>
                 </tr>
               ))}
@@ -493,20 +697,38 @@ export function Compras() {
 
         {seleccionada && (
           <div style={s.tarjeta}>
-            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}><Truck size={16} /> Compra del {new Date(seleccionada.fecha).toLocaleDateString("es-DO")}</h4>
-            {seleccionada.ncf_proveedor && <p style={{ margin: "4px 0", fontSize: 13 }}>NCF proveedor: {seleccionada.ncf_proveedor}</p>}
+            <h4 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 6 }}>
+              <Truck size={16} /> Compra del {new Date(seleccionada.fecha).toLocaleDateString("es-DO")}
+            </h4>
+            {seleccionada.ncf_proveedor && (
+              <p style={{ margin: "4px 0", fontSize: 13 }}>NCF proveedor: {seleccionada.ncf_proveedor}</p>
+            )}
             <table style={{ ...s.tabla, marginTop: 8 }}>
               <tbody>
                 {lineasSel.map((l) => (
                   <tr key={l.id}>
-                    <td style={s.td}>{l.descripcion} × {l.cantidad}</td>
+                    <td style={s.td}>
+                      {l.descripcion} × {l.cantidad}
+                    </td>
                     <td style={s.tdDerecha}>RD$ {money(l.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, borderTop: `1px solid ${c.borde}`, paddingTop: 8, marginTop: 8, fontVariantNumeric: "tabular-nums" }}>
-              <span>Total</span><span>RD$ {money(seleccionada.total)}</span>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 16,
+                fontWeight: 700,
+                borderTop: `1px solid ${c.borde}`,
+                paddingTop: 8,
+                marginTop: 8,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              <span>Total</span>
+              <span>RD$ {money(seleccionada.total)}</span>
             </div>
 
             {archivosSel.length > 0 && (
@@ -514,7 +736,11 @@ export function Compras() {
                 <label style={s.label}>Comprobante adjunto</label>
                 {archivosSel.map((a) => (
                   <div key={a.id}>
-                    <a href={`data:${a.tipo_mime};base64,${a.contenido_base64}`} download={a.nombre_archivo} style={{ color: c.azul, fontSize: 13 }}>
+                    <a
+                      href={`data:${a.tipo_mime};base64,${a.contenido_base64}`}
+                      download={a.nombre_archivo}
+                      style={{ color: c.azul, fontSize: 13 }}
+                    >
                       {a.nombre_archivo}
                     </a>
                   </div>

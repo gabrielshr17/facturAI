@@ -12,7 +12,9 @@ async function nuevaDb(): Promise<SqlDriver> {
 
 describe("comprobanteArchivoRepo — adjuntar comprobante a una compra", () => {
   let db: SqlDriver;
-  beforeEach(async () => { db = await nuevaDb(); });
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
 
   it("adjunta un archivo a una compra y lo recupera", async () => {
     const compras = crearCompraRepo(db);
@@ -45,7 +47,11 @@ describe("comprobanteArchivoRepo — adjuntar comprobante a una compra", () => {
       lineas: [{ descripcion: "Arroz", cantidad: 1, costoUnitario: 40, impuestoTipo: "itbis18", tasaImpuesto: 0.18 }],
     });
     const archivo = await archivos.crear({
-      compraId: compra.id, nombreArchivo: "x.png", tipoMime: "image/png", contenidoBase64: "abc", mesAno: "2026-07",
+      compraId: compra.id,
+      nombreArchivo: "x.png",
+      tipoMime: "image/png",
+      contenidoBase64: "abc",
+      mesAno: "2026-07",
     });
 
     await archivos.eliminar(archivo.id);

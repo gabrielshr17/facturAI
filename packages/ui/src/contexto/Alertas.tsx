@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { TriangleAlert, CircleHelp, CircleX, Info } from "lucide-react";
 import { s, c, sombra } from "../estilos.js";
 import { useModalAccesible } from "../hooks/useModalAccesible.js";
@@ -33,7 +42,13 @@ export interface OpcionesElegir {
 type Solicitud =
   | { tipo: "confirmar"; mensaje: string; opciones: OpcionesConfirmar; resolver: (v: boolean) => void }
   | { tipo: "avisar"; mensaje: string; opciones: OpcionesAvisar; resolver: () => void }
-  | { tipo: "elegir"; mensaje: string; choices: OpcionElegir[]; opciones: OpcionesElegir; resolver: (v: string | null) => void };
+  | {
+      tipo: "elegir";
+      mensaje: string;
+      choices: OpcionElegir[];
+      opciones: OpcionesElegir;
+      resolver: (v: string | null) => void;
+    };
 
 interface AlertasApi {
   /** Reemplazo de `confirm()` nativo: devuelve una promesa en vez de bloquear el hilo, así que el
@@ -96,14 +111,23 @@ export function ProveedorAlertas({ children }: { children: ReactNode }) {
   return (
     <AlertasContext.Provider value={{ confirmar, avisar, elegir }}>
       {children}
-      {solicitud && (solicitud.tipo === "elegir"
-        ? <ModalElegir solicitud={solicitud} onCerrar={responderElegir} />
-        : <ModalAlerta solicitud={solicitud} onCerrar={responder} />)}
+      {solicitud &&
+        (solicitud.tipo === "elegir" ? (
+          <ModalElegir solicitud={solicitud} onCerrar={responderElegir} />
+        ) : (
+          <ModalAlerta solicitud={solicitud} onCerrar={responder} />
+        ))}
     </AlertasContext.Provider>
   );
 }
 
-function ModalAlerta({ solicitud, onCerrar }: { solicitud: Exclude<Solicitud, { tipo: "elegir" }>; onCerrar: (valor: boolean) => void }) {
+function ModalAlerta({
+  solicitud,
+  onCerrar,
+}: {
+  solicitud: Exclude<Solicitud, { tipo: "elegir" }>;
+  onCerrar: (valor: boolean) => void;
+}) {
   const esError = solicitud.tipo === "avisar" && (solicitud.opciones.variante ?? "error") === "error";
   const esPeligro = solicitud.tipo === "confirmar" && (solicitud.opciones.peligro ?? true);
   const acentuado = esError || esPeligro;
@@ -115,19 +139,26 @@ function ModalAlerta({ solicitud, onCerrar }: { solicitud: Exclude<Solicitud, { 
   useEffect(() => {
     botonConfirmarRef.current?.focus();
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") { e.preventDefault(); onCerrar(false); }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCerrar(false);
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const titulo = solicitud.opciones.titulo ?? (
-    solicitud.tipo === "confirmar"
-      ? (esPeligro ? "¿Estás seguro?" : "Confirmar")
-      : (esError ? "Ocurrió un problema" : "Aviso")
-  );
-  const Icono = solicitud.tipo === "confirmar" ? (esPeligro ? TriangleAlert : CircleHelp) : (esError ? CircleX : Info);
+  const titulo =
+    solicitud.opciones.titulo ??
+    (solicitud.tipo === "confirmar"
+      ? esPeligro
+        ? "¿Estás seguro?"
+        : "Confirmar"
+      : esError
+        ? "Ocurrió un problema"
+        : "Aviso");
+  const Icono = solicitud.tipo === "confirmar" ? (esPeligro ? TriangleAlert : CircleHelp) : esError ? CircleX : Info;
 
   return (
     <div style={overlay} onClick={() => onCerrar(false)}>
@@ -143,12 +174,24 @@ function ModalAlerta({ solicitud, onCerrar }: { solicitud: Exclude<Solicitud, { 
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-          <span aria-hidden="true" style={{ ...iconoCirculo, background: acentuado ? c.rojoFondo : c.azulClaro, color: acentuado ? c.rojo : c.azul }}>
+          <span
+            aria-hidden="true"
+            style={{
+              ...iconoCirculo,
+              background: acentuado ? c.rojoFondo : c.azulClaro,
+              color: acentuado ? c.rojo : c.azul,
+            }}
+          >
             <Icono size={20} />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 id="sfr-alerta-titulo" style={{ margin: "2px 0 8px", fontSize: 18 }}>{titulo}</h3>
-            <p id="sfr-alerta-mensaje" style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: c.texto, wordBreak: "break-word" }}>
+            <h3 id="sfr-alerta-titulo" style={{ margin: "2px 0 8px", fontSize: 18 }}>
+              {titulo}
+            </h3>
+            <p
+              id="sfr-alerta-mensaje"
+              style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: c.texto, wordBreak: "break-word" }}
+            >
               {solicitud.mensaje}
             </p>
           </div>
@@ -168,7 +211,11 @@ function ModalAlerta({ solicitud, onCerrar }: { solicitud: Exclude<Solicitud, { 
               </button>
             </>
           ) : (
-            <button ref={botonConfirmarRef} style={esError ? botonPeligroSolido : s.boton} onClick={() => onCerrar(true)}>
+            <button
+              ref={botonConfirmarRef}
+              style={esError ? botonPeligroSolido : s.boton}
+              onClick={() => onCerrar(true)}
+            >
               {solicitud.opciones.textoBoton ?? "Entendido"} (Enter)
             </button>
           )}
@@ -178,7 +225,13 @@ function ModalAlerta({ solicitud, onCerrar }: { solicitud: Exclude<Solicitud, { 
   );
 }
 
-function ModalElegir({ solicitud, onCerrar }: { solicitud: Extract<Solicitud, { tipo: "elegir" }>; onCerrar: (valor: string | null) => void }) {
+function ModalElegir({
+  solicitud,
+  onCerrar,
+}: {
+  solicitud: Extract<Solicitud, { tipo: "elegir" }>;
+  onCerrar: (valor: string | null) => void;
+}) {
   const primerBotonRef = useRef<HTMLButtonElement>(null);
   const tarjetaRef = useModalAccesible<HTMLDivElement>();
 
@@ -187,7 +240,10 @@ function ModalElegir({ solicitud, onCerrar }: { solicitud: Extract<Solicitud, { 
   useEffect(() => {
     primerBotonRef.current?.focus();
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") { e.preventDefault(); onCerrar(null); }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCerrar(null);
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -210,8 +266,13 @@ function ModalElegir({ solicitud, onCerrar }: { solicitud: Extract<Solicitud, { 
             <CircleHelp size={20} />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 id="sfr-elegir-titulo" style={{ margin: "2px 0 8px", fontSize: 18 }}>{solicitud.opciones.titulo ?? "¿Qué quieres hacer?"}</h3>
-            <p id="sfr-elegir-mensaje" style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: c.texto, wordBreak: "break-word" }}>
+            <h3 id="sfr-elegir-titulo" style={{ margin: "2px 0 8px", fontSize: 18 }}>
+              {solicitud.opciones.titulo ?? "¿Qué quieres hacer?"}
+            </h3>
+            <p
+              id="sfr-elegir-mensaje"
+              style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: c.texto, wordBreak: "break-word" }}
+            >
               {solicitud.mensaje}
             </p>
           </div>
@@ -227,7 +288,8 @@ function ModalElegir({ solicitud, onCerrar }: { solicitud: Extract<Solicitud, { 
               style={s.boton}
               onClick={() => onCerrar(op.valor)}
             >
-              {op.etiqueta}{i === 0 ? " (Enter)" : ""}
+              {op.etiqueta}
+              {i === 0 ? " (Enter)" : ""}
             </button>
           ))}
         </div>
