@@ -34,3 +34,13 @@ export {
   type DevolucionConFiscalDeps,
   type ResultadoDevolucionFiscal,
 } from "./fiscal/devolucion-fiscal.js";
+export {
+  crearClienteAuth,
+  iniciarSesionGoogleWeb,
+  iniciarSesionGoogleDesktop,
+  completarInicioSesionDesktop,
+  obtenerSesion,
+  cerrarSesion,
+  alCambiarSesion,
+  type SesionAuth,
+} from "./auth/supabase.js";

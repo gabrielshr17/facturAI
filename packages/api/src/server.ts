@@ -18,10 +18,17 @@ const config = cargarConfig();
 const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
 
 await app.register(cors, { origin: true });
-registrarAuth(app);
+// `/health` vive FUERA del contexto protegido: tiene que "responder siempre" para servir de
+// chequeo de conectividad, sin importar si hay token o no. El orden de las líneas no alcanza para
+// lograr esto — Fastify resuelve los hooks por jerarquía de `.register()`, no por orden en el
+// archivo — así que el hook de auth se agrega dentro de un child context propio (`protegido`), y
+// `rutaSalud`, registrada como hermana sobre `app` y no como su hija, queda afuera.
 await app.register(rutaSalud);
-await app.register(rutaFiscal);
-await app.register(rutaChatbot);
+await app.register(async (protegido) => {
+  registrarAuth(protegido);
+  await protegido.register(rutaFiscal);
+  await protegido.register(rutaChatbot);
+});
 
 await app.listen({ port: config.puerto, host: "0.0.0.0" });
 

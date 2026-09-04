@@ -1,6 +1,7 @@
 export { AppShell } from "./AppShell.js";
 export { Marca, type MarcaProps } from "./componentes/Marca.js";
 export { ProveedorDatos, useRepos, type Repos } from "./data/contexto.js";
+export { ProveedorAuth, useAuth, type AuthApi } from "./contexto/Auth.js";
 export { Ventas } from "./pantallas/Ventas.js";
 export { Productos } from "./pantallas/Productos.js";
 export { Clientes } from "./pantallas/Clientes.js";

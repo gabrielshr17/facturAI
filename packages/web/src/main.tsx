@@ -1,9 +1,16 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AppShell, ProveedorDatos } from "@sfr/ui";
-import { migrate, seed, type SqlDriver } from "@sfr/core";
+import { AppShell, ProveedorDatos, ProveedorAuth, mensajeError } from "@sfr/ui";
+import { migrate, seed, crearClienteAuth, iniciarSesionGoogleWeb, type SqlDriver } from "@sfr/core";
 import { crearSqlJsDriver } from "./db/sqljs-driver.js";
 import "@sfr/ui/estilos-globales.css";
+
+// Sign in with Google (§ Fase 2 opcional, ver SeccionCuentaGoogle): sin estas variables
+// `clienteAuth` queda en `null` y esa sección de Configuración ni se muestra — el resto de la
+// app sigue funcionando 100% local, que es el modo por defecto.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const clienteAuth = supabaseUrl && supabaseAnonKey ? crearClienteAuth(supabaseUrl, supabaseAnonKey) : null;
 
 /**
  * Arranque de la PWA: inicializa SQLite (sql.js + IndexedDB), aplica migraciones
@@ -30,7 +37,7 @@ function App() {
         await seed(driver);
         setDb(driver);
       } catch (e) {
-        setError(String(e));
+        setError(mensajeError(e));
       }
     })();
   }, []);
@@ -42,9 +49,11 @@ function App() {
     return <div style={{ padding: 24, fontFamily: "system-ui", color: "#6b7280" }}>Cargando base de datos…</div>;
   }
   return (
-    <ProveedorDatos db={db}>
-      <AppShell plataforma="Web" />
-    </ProveedorDatos>
+    <ProveedorAuth cliente={clienteAuth} onIniciarSesion={(c) => iniciarSesionGoogleWeb(c, window.location.origin)}>
+      <ProveedorDatos db={db}>
+        <AppShell plataforma="Web" />
+      </ProveedorDatos>
+    </ProveedorAuth>
   );
 }
 
