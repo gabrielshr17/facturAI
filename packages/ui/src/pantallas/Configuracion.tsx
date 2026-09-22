@@ -7,6 +7,7 @@ import { SeccionSecuenciasNcf } from "../componentes/SeccionSecuenciasNcf.js";
 import { SeccionBitacora } from "../componentes/SeccionBitacora.js";
 import { SeccionImpresoraTermica } from "../componentes/SeccionImpresoraTermica.js";
 import { SeccionCuentaGoogle } from "../componentes/SeccionCuentaGoogle.js";
+import { SeccionSetupTransferencias } from "../componentes/SeccionSetupTransferencias.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { mensajesError } from "../utilidades/errores.js";
 
@@ -249,6 +250,8 @@ export function Configuracion() {
       <SeccionBitacora />
 
       <SeccionCuentaGoogle />
+
+      <SeccionSetupTransferencias />
     </div>
   );
 }

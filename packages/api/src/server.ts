@@ -5,6 +5,8 @@ import { registrarAuth } from "./plugins/auth.js";
 import { rutaSalud } from "./routes/health.js";
 import { rutaFiscal } from "./routes/fiscal.js";
 import { rutaChatbot } from "./routes/chatbot.js";
+import { rutaTransferencias } from "./routes/transferencias.js";
+import { iniciarPollerTransferencias } from "./jobs/poller-transferencias.js";
 
 /**
  * Backend del modo multi-caja/multiusuario (§ Flujo de datos y modos).
@@ -28,9 +30,12 @@ await app.register(async (protegido) => {
   registrarAuth(protegido);
   await protegido.register(rutaFiscal);
   await protegido.register(rutaChatbot);
+  await protegido.register(rutaTransferencias);
 });
 
 await app.listen({ port: config.puerto, host: "0.0.0.0" });
+
+iniciarPollerTransferencias(app, config.transferenciasPollIntervaloMs);
 
 if (!config.supabaseConfigurado) {
   app.log.warn(

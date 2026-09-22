@@ -8,4 +8,5 @@ export { Clientes } from "./pantallas/Clientes.js";
 export { Configuracion } from "./pantallas/Configuracion.js";
 export { configurarAdaptadorImpresora, type AdaptadorImpresora } from "./impresion/termica.js";
 export { configurarAdaptadorImpresoraTexto, type AdaptadorImpresoraTexto } from "./impresion/termica.js";
+export { configurarAbrirEnlaceExterno, type AdaptadorAbrirEnlace } from "./enlaces.js";
 export { mensajeError, mensajesError } from "./utilidades/errores.js";

@@ -31,6 +31,42 @@ negocio (`db/schema.sql`) siguen sin conectar**:
 - `sync-rules.yaml`: reglas de PowerSync de referencia (bucket único,
   asumiendo negocio single-tenant); se sube al dashboard de PowerSync cuando
   haya un proyecto.
+- `notificacion_transferencia` (§ Últimas transferencias recibidas) es la
+  **excepción**: esa tabla sí está creada en el Postgres real del proyecto
+  (aplicada directo, no vía el resto de `schema.sql` que sigue desactualizado
+  — ver más abajo). Las rutas `/transferencias/*` funcionan en cuanto
+  `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` estén configuradas, sin
+  depender de Gmail/Claude.
+
+## Últimas transferencias recibidas (correo del banco)
+
+Sin agregador bancario: el banco manda un correo de notificación por cada
+transferencia, y el backend sondea una casilla Gmail dedicada cada
+`TRANSFERENCIAS_POLL_INTERVALO_MS` (default 5 min) para leerlos con la
+Gmail API y pedirle a Claude que extraiga monto/fecha/banco/referencia.
+
+Pasos de configuración manual (una sola vez):
+
+1. Crear una casilla Gmail nueva y gratis, dedicada solo a esto.
+2. En Gmail y Outlook (las cuentas reales del negocio), crear una regla de
+   reenvío automático nativa hacia esa casilla dedicada — nunca guardar la
+   contraseña del banco ni de esas cuentas en ningún lado.
+3. En Google Cloud Console, crear un proyecto, habilitar la Gmail API, y
+   crear credenciales OAuth 2.0 (tipo "Desktop app") con el scope
+   `https://www.googleapis.com/auth/gmail.modify` (lectura + quitar la
+   etiqueta "no leído").
+4. Generar un refresh token para la casilla dedicada (flujo OAuth estándar,
+   una sola vez) y copiar client id/secret/refresh token a
+   `GMAIL_OAUTH_CLIENT_ID`/`GMAIL_OAUTH_CLIENT_SECRET`/`GMAIL_OAUTH_REFRESH_TOKEN`
+   en `.env`.
+
+Sin esas tres variables (o sin `ANTHROPIC_API_KEY`), el poller simplemente
+no arranca (log de advertencia al iniciar) — `GET /transferencias/recientes`
+sigue respondiendo con lo que ya haya en la tabla.
+
+Este paquete no corre 24/7 en ningún hosting todavía — el poller solo lee
+correo mientras el proceso está vivo. Un plan gratuito de Render/Railway/
+Fly.io alcanza para el volumen de un negocio pequeño.
 
 ## Qué falta para el resto de Fase 2
 

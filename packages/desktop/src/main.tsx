@@ -8,6 +8,7 @@ import {
   ProveedorAuth,
   configurarAdaptadorImpresora,
   configurarAdaptadorImpresoraTexto,
+  configurarAbrirEnlaceExterno,
   mensajeError,
 } from "@sfr/ui";
 import {
@@ -24,6 +25,7 @@ import "@sfr/ui/estilos-globales.css";
 
 configurarAdaptadorImpresora(adaptadorImpresoraTauri);
 configurarAdaptadorImpresoraTexto(adaptadorImpresoraTextoTauri);
+configurarAbrirEnlaceExterno({ abrir: openUrl });
 
 // Sign in with Google (§ Fase 2 opcional, ver SeccionCuentaGoogle): sin estas variables
 // `clienteAuth` queda en `null` y esa sección de Configuración ni se muestra — el resto de la

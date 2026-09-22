@@ -8,6 +8,7 @@ import {
   Banknote,
   ChartColumn,
   Tag,
+  Landmark,
   Settings,
   Sun,
   Moon,
@@ -23,6 +24,7 @@ import { CorteCaja } from "./pantallas/CorteCaja.js";
 import { Compras } from "./pantallas/Compras.js";
 import { Reportes } from "./pantallas/Reportes.js";
 import { Promociones } from "./pantallas/Promociones.js";
+import { Transferencias } from "./pantallas/Transferencias.js";
 import { Configuracion } from "./pantallas/Configuracion.js";
 import { ErrorBoundary } from "./componentes/ErrorBoundary.js";
 import { ProveedorAlertas } from "./contexto/Alertas.js";
@@ -41,6 +43,7 @@ type Modulo =
   | "Corte de caja"
   | "Reportes"
   | "Promociones"
+  | "Transferencias"
   | "Configuración";
 
 const MODULOS: Modulo[] = [
@@ -52,6 +55,7 @@ const MODULOS: Modulo[] = [
   "Corte de caja",
   "Reportes",
   "Promociones",
+  "Transferencias",
   "Configuración",
 ];
 
@@ -64,6 +68,7 @@ const ICONO: Record<Modulo, ComponentType<LucideProps>> = {
   "Corte de caja": Banknote,
   Reportes: ChartColumn,
   Promociones: Tag,
+  Transferencias: Landmark,
   Configuración: Settings,
 };
 
@@ -239,6 +244,7 @@ export function AppShell({ plataforma }: { plataforma: "Escritorio" | "Web" }) {
             {activo === "Corte de caja" && <CorteCaja />}
             {activo === "Reportes" && <Reportes />}
             {activo === "Promociones" && <Promociones />}
+            {activo === "Transferencias" && <Transferencias />}
             {activo === "Configuración" && <Configuracion />}
           </ErrorBoundary>
         </main>

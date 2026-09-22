@@ -314,6 +314,29 @@ CREATE TABLE comprobante_archivo (
 );
 CREATE INDEX ix_comprobante_archivo_compra ON comprobante_archivo(compra_id);
 
+-- Últimas transferencias recibidas, vía correo de notificación del banco (no hay agregador
+-- bancario conectado). El backend sondea una casilla Gmail dedicada (reenvío manual desde las
+-- cuentas reales del negocio), le pasa el texto del correo a Claude para extraer los datos, y
+-- guarda una fila aquí pendiente de que alguien la confirme/descarte desde la app — mismo
+-- espíritu que comprobante_archivo (estado_revision/identificado_por), pero para transferencias
+-- entrantes en vez de comprobantes de compra.
+CREATE TABLE notificacion_transferencia (
+  id                   TEXT PRIMARY KEY,
+  monto                NUMERIC(12,2),
+  fecha                DATE,
+  banco_origen         TEXT,
+  remitente            TEXT,
+  referencia           TEXT,
+  correo_snippet       TEXT NOT NULL,
+  estado_confirmacion  TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|confirmada|descartada
+  identificado_por     TEXT NOT NULL DEFAULT 'chatbot', -- chatbot|usuario
+  datos_extraidos_json JSONB,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at           TIMESTAMPTZ
+);
+CREATE INDEX ix_notificacion_transferencia_estado ON notificacion_transferencia(estado_confirmacion);
+
 -- Bitácora (pendiente en el modo local, ver plan.md §"Caja y auditoría") ----
 CREATE TABLE bitacora_accion (
   id          TEXT PRIMARY KEY,

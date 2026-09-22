@@ -161,3 +161,66 @@ export async function analizarComprobante(imagen: ImagenAdjunta): Promise<DatosE
   }
   return bloqueHerramienta.input as DatosExtraidosComprobante;
 }
+
+export interface DatosExtraidosTransferencia {
+  monto: number | null;
+  fecha: string | null;
+  bancoOrigen: string | null;
+  remitente: string | null;
+  referencia: string | null;
+  confianza: "alta" | "media" | "baja";
+  notas: string | null;
+}
+
+const HERRAMIENTA_EXTRAER_TRANSFERENCIA: Anthropic.Tool = {
+  name: "extraer_transferencia",
+  description: "Registra los datos extraídos de un correo de notificación bancaria de transferencia recibida.",
+  input_schema: {
+    type: "object",
+    properties: {
+      monto: { type: ["number", "null"], description: "Monto de la transferencia, o null si no se lee." },
+      fecha: { type: ["string", "null"], description: "Fecha de la transferencia en formato AAAA-MM-DD, o null." },
+      bancoOrigen: { type: ["string", "null"], description: "Banco que envía la notificación, o null." },
+      remitente: { type: ["string", "null"], description: "Nombre de quien envió la transferencia, o null." },
+      referencia: { type: ["string", "null"], description: "Número de referencia/confirmación, o null." },
+      confianza: {
+        type: "string",
+        enum: ["alta", "media", "baja"],
+        description: "Qué tan seguro estás de la lectura.",
+      },
+      notas: { type: ["string", "null"], description: "Cualquier duda o algo que la persona debería revisar." },
+    },
+    required: ["monto", "fecha", "bancoOrigen", "remitente", "referencia", "confianza", "notas"],
+  },
+};
+
+const PROMPT_SISTEMA_TRANSFERENCIA = `Analizas el texto de correos de notificación bancaria (República Dominicana)
+que avisan que una transferencia fue recibida en la cuenta del negocio.
+Extrae monto, fecha, banco origen, remitente y referencia. Si algo no
+aparece con claridad en el texto, dilo en "notas" y baja la confianza —
+NUNCA inventes un dato que no está en el correo. Usa siempre la
+herramienta extraer_transferencia para responder.`;
+
+/**
+ * Extrae los datos de un correo de notificación bancaria (§ Últimas
+ * transferencias recibidas). SIEMPRE debe confirmarse/descartarse a mano
+ * desde la app antes de darlo por bueno — este servicio solo lee.
+ */
+export async function extraerTransferencia(asunto: string, cuerpo: string): Promise<DatosExtraidosTransferencia> {
+  const anthropic = obtenerCliente();
+
+  const respuesta = await anthropic.messages.create({
+    model: MODELO,
+    max_tokens: 512,
+    system: PROMPT_SISTEMA_TRANSFERENCIA,
+    tools: [HERRAMIENTA_EXTRAER_TRANSFERENCIA],
+    tool_choice: { type: "tool", name: "extraer_transferencia" },
+    messages: [{ role: "user", content: `Asunto: ${asunto}\n\nCuerpo:\n${cuerpo}` }],
+  });
+
+  const bloqueHerramienta = respuesta.content.find((b) => b.type === "tool_use");
+  if (!bloqueHerramienta || bloqueHerramienta.type !== "tool_use") {
+    throw new Error("Claude no devolvió los datos extraídos.");
+  }
+  return bloqueHerramienta.input as DatosExtraidosTransferencia;
+}
