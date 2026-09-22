@@ -40,14 +40,21 @@ export function crearComprobanteArchivoRepo(db: SqlDriver) {
         updated_at: ts,
         deleted_at: null,
       };
-      await db.run(
-        `INSERT INTO comprobante_archivo (${COLS}) VALUES (${Array(13).fill("?").join(",")})`,
-        [
-          a.id, a.compra_id, a.nombre_archivo, a.tipo_mime, a.contenido_base64, a.mes_ano,
-          a.tiene_fiscal, a.estado_revision, a.identificado_por, a.datos_extraidos_json,
-          a.created_at, a.updated_at, a.deleted_at,
-        ],
-      );
+      await db.run(`INSERT INTO comprobante_archivo (${COLS}) VALUES (${Array(13).fill("?").join(",")})`, [
+        a.id,
+        a.compra_id,
+        a.nombre_archivo,
+        a.tipo_mime,
+        a.contenido_base64,
+        a.mes_ano,
+        a.tiene_fiscal,
+        a.estado_revision,
+        a.identificado_por,
+        a.datos_extraidos_json,
+        a.created_at,
+        a.updated_at,
+        a.deleted_at,
+      ]);
       return a;
     },
 

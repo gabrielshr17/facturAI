@@ -23,7 +23,11 @@ describe("corteCajaRepo — resumen y registro (Corte de caja)", () => {
     const t = await facturas.abrirTicket();
     const total = pagos.reduce((s, p) => s + p.monto, 0);
     await facturas.agregarLinea(t.id, {
-      descripcion: "Artículo", cantidad: 1, precioUnitario: total, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "Artículo",
+      cantidad: 1,
+      precioUnitario: total,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     await facturas.cobrar(t.id, { pagos });
   }
@@ -33,7 +37,10 @@ describe("corteCajaRepo — resumen y registro (Corte de caja)", () => {
     const cortes = crearCorteCajaRepo(db);
 
     await venta(facturas, [{ metodo: "efectivo", monto: 100 }]);
-    await venta(facturas, [{ metodo: "tarjeta", monto: 60 }, { metodo: "efectivo", monto: 40 }]);
+    await venta(facturas, [
+      { metodo: "tarjeta", monto: 60 },
+      { metodo: "efectivo", monto: 40 },
+    ]);
 
     const hoy = new Date().toISOString().slice(0, 10);
     const resumen = await cortes.calcularResumen(hoy, hoy);
@@ -67,7 +74,10 @@ describe("corteCajaRepo — resumen y registro (Corte de caja)", () => {
 
     const hoy = new Date().toISOString().slice(0, 10);
     const corte = await cortes.registrarCorte({
-      desde: hoy, hasta: hoy, montoInicial: 500, efectivoContado: 610,
+      desde: hoy,
+      hasta: hoy,
+      montoInicial: 500,
+      efectivoContado: 610,
     });
 
     expect(corte.total_efectivo).toBe(100);

@@ -102,9 +102,7 @@ export interface ResultadoCobro {
 export function procesarCobro(total: number, pagos: PagoInput[]): ResultadoCobro {
   const totalR = redondear2(total);
   const montoPagado = sumar(pagos.map((p) => p.monto));
-  const efectivo = sumar(
-    pagos.filter((p) => p.metodo === "efectivo").map((p) => p.monto),
-  );
+  const efectivo = sumar(pagos.filter((p) => p.metodo === "efectivo").map((p) => p.monto));
 
   const suficiente = montoPagado >= totalR;
   const faltante = suficiente ? 0 : redondear2(totalR - montoPagado);

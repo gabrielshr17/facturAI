@@ -10,6 +10,7 @@ import {
 import { ValidacionError } from "./producto-repo.js";
 import { registrarAccion } from "./bitacora-repo.js";
 import type { Cliente } from "./tipos.js";
+import { MSG } from "../dominio/mensajes.js";
 
 export interface ClienteInput {
   nombre: string;
@@ -69,14 +70,23 @@ export function crearClienteRepo(db: SqlDriver) {
         deleted_at: null,
       };
 
-      await db.run(
-        `INSERT INTO cliente (${COLS}) VALUES (${Array(15).fill("?").join(",")})`,
-        [
-          c.id, c.nombre, c.apellidos, c.telefono, c.correo, c.direccion, c.comentarios,
-          c.aplica_credito, c.limite_credito, c.saldo_credito, c.documento_tipo, c.documento_numero,
-          c.created_at, c.updated_at, c.deleted_at,
-        ],
-      );
+      await db.run(`INSERT INTO cliente (${COLS}) VALUES (${Array(15).fill("?").join(",")})`, [
+        c.id,
+        c.nombre,
+        c.apellidos,
+        c.telefono,
+        c.correo,
+        c.direccion,
+        c.comentarios,
+        c.aplica_credito,
+        c.limite_credito,
+        c.saldo_credito,
+        c.documento_tipo,
+        c.documento_numero,
+        c.created_at,
+        c.updated_at,
+        c.deleted_at,
+      ]);
       return c;
     },
 
@@ -85,7 +95,7 @@ export function crearClienteRepo(db: SqlDriver) {
       if (errores.length) throw new ValidacionError(errores);
 
       const actual = await this.obtener(id);
-      if (!actual) throw new Error(`Cliente ${id} no existe`);
+      if (!actual) throw new Error(MSG.clienteNoExiste);
 
       await db.run(
         `UPDATE cliente SET nombre=?, apellidos=?, telefono=?, correo=?, direccion=?,
@@ -103,7 +113,8 @@ export function crearClienteRepo(db: SqlDriver) {
           input.limite_credito ?? actual.limite_credito,
           input.documento_tipo ?? actual.documento_tipo,
           input.documento_numero ?? actual.documento_numero,
-          now(), id,
+          now(),
+          id,
         ],
       );
     },
@@ -112,7 +123,9 @@ export function crearClienteRepo(db: SqlDriver) {
       const actual = await this.obtener(id);
       await db.run("UPDATE cliente SET deleted_at=?, updated_at=? WHERE id=?", [now(), now(), id]);
       await registrarAccion(db, {
-        accion: "eliminar", entidad: "cliente", entidadId: id,
+        accion: "eliminar",
+        entidad: "cliente",
+        entidadId: id,
         resumen: actual ? `Cliente eliminado: ${actual.nombre} ${actual.apellidos ?? ""}`.trim() : null,
       });
     },
@@ -126,9 +139,7 @@ export function crearClienteRepo(db: SqlDriver) {
      * mayúsculas. Filtro en JS (SQLite no quita diacríticos); suficiente para el MVP.
      */
     async listar(q?: string): Promise<Cliente[]> {
-      const todos = await db.all<Cliente>(
-        `SELECT ${COLS} FROM cliente WHERE deleted_at IS NULL ORDER BY nombre`,
-      );
+      const todos = await db.all<Cliente>(`SELECT ${COLS} FROM cliente WHERE deleted_at IS NULL ORDER BY nombre`);
       if (!q || !q.trim()) return todos;
       const t = normalizar(q);
       return todos.filter((c) =>

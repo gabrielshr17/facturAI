@@ -2,7 +2,8 @@ import type { SqlDriver } from "../db/driver.js";
 import { newId, now } from "../ids.js";
 import { tieneValor, normalizar, type ErrorValidacion } from "../dominio/validacion.js";
 import { tasaDe } from "../dominio/impuesto.js";
-import { calcularPrecioVenta } from "../dominio/precio.js";
+import { MSG } from "../dominio/mensajes.js";
+import { calcularPrecioVenta, PCT_GANANCIA_POR_DEFECTO } from "../dominio/precio.js";
 import { registrarAccion } from "./bitacora-repo.js";
 import type { Producto } from "./tipos.js";
 
@@ -45,6 +46,37 @@ export class ValidacionError extends Error {
   }
 }
 
+/**
+ * Antes de tocar la base, avisa en español de qué producto choca (§ "ya existe").
+ *
+ * Sin esto el choque lo detectaba SQLite (índice único `ux_producto_codigo_barra`)
+ * y al usuario le llegaba en pantalla el texto crudo del motor —
+ * "UNIQUE constraint failed: producto.codigo_barra" — que no dice ni cuál producto
+ * es ni qué hacer. Acá se busca primero el que estorba y se nombra.
+ *
+ * La descripción repetida NO se bloquea (una tienda puede tener dos presentaciones
+ * escritas igual): eso se avisa arriba, en la pantalla, con opción de continuar.
+ */
+async function verificarDuplicados(db: SqlDriver, input: ProductoInput, idActual: string | null): Promise<void> {
+  const codigo = input.codigo_barra?.trim();
+  if (!codigo) return;
+  const existente = await db.get<{ id: string; descripcion: string }>(
+    "SELECT id, descripcion FROM producto WHERE codigo_barra=? AND deleted_at IS NULL",
+    [codigo],
+  );
+  if (existente && existente.id !== idActual) {
+    throw new ValidacionError([
+      {
+        campo: "codigo_barra",
+        mensaje:
+          `El código de barra ${codigo} ya está asignado a "${existente.descripcion}". ` +
+          "Dos productos no pueden compartir el mismo código: cámbialo, déjalo vacío, " +
+          "o edita el producto que ya existe.",
+      },
+    ]);
+  }
+}
+
 const COLS = `id, codigo_barra, descripcion, tipo_venta, unidad_medida, costo,
   pct_ganancia, precio_venta, precio_mayoreo, departamento_id, impuesto_tipo,
   tasa_impuesto, existencia, politica_sin_existencia, activo, favorito,
@@ -56,15 +88,15 @@ export function crearProductoRepo(db: SqlDriver) {
     async crear(input: ProductoInput): Promise<Producto> {
       const errores = validarProducto(input);
       if (errores.length) throw new ValidacionError(errores);
+      await verificarDuplicados(db, input, null);
 
       const impuesto_tipo = input.impuesto_tipo ?? "itbis18";
       const tasa = tasaDe(impuesto_tipo);
       const costo = input.costo ?? 0;
-      const pct = input.pct_ganancia ?? 0;
+      const pct = input.pct_ganancia ?? PCT_GANANCIA_POR_DEFECTO;
       const precio = calcularPrecioVenta({
         costo,
         pctGanancia: pct,
-        tasaImpuesto: tasa,
         precioManual: input.precio_venta ?? null,
       });
 
@@ -91,15 +123,27 @@ export function crearProductoRepo(db: SqlDriver) {
         deleted_at: null,
       };
 
-      await db.run(
-        `INSERT INTO producto (${COLS}) VALUES (${Array(19).fill("?").join(",")})`,
-        [
-          p.id, p.codigo_barra, p.descripcion, p.tipo_venta, p.unidad_medida, p.costo,
-          p.pct_ganancia, p.precio_venta, p.precio_mayoreo, p.departamento_id, p.impuesto_tipo,
-          p.tasa_impuesto, p.existencia, p.politica_sin_existencia, p.activo, p.favorito,
-          p.created_at, p.updated_at, p.deleted_at,
-        ],
-      );
+      await db.run(`INSERT INTO producto (${COLS}) VALUES (${Array(19).fill("?").join(",")})`, [
+        p.id,
+        p.codigo_barra,
+        p.descripcion,
+        p.tipo_venta,
+        p.unidad_medida,
+        p.costo,
+        p.pct_ganancia,
+        p.precio_venta,
+        p.precio_mayoreo,
+        p.departamento_id,
+        p.impuesto_tipo,
+        p.tasa_impuesto,
+        p.existencia,
+        p.politica_sin_existencia,
+        p.activo,
+        p.favorito,
+        p.created_at,
+        p.updated_at,
+        p.deleted_at,
+      ]);
       return p;
     },
 
@@ -109,7 +153,8 @@ export function crearProductoRepo(db: SqlDriver) {
       if (errores.length) throw new ValidacionError(errores);
 
       const actual = await this.obtener(id);
-      if (!actual) throw new Error(`Producto ${id} no existe`);
+      if (!actual) throw new ValidacionError([{ campo: "id", mensaje: MSG.productoNoExiste }]);
+      await verificarDuplicados(db, input, id);
 
       const impuesto_tipo = input.impuesto_tipo ?? actual.impuesto_tipo;
       const tasa = tasaDe(impuesto_tipo);
@@ -118,7 +163,6 @@ export function crearProductoRepo(db: SqlDriver) {
       const precio = calcularPrecioVenta({
         costo,
         pctGanancia: pct,
-        tasaImpuesto: tasa,
         precioManual: input.precio_venta ?? null,
       });
 
@@ -132,13 +176,17 @@ export function crearProductoRepo(db: SqlDriver) {
           (input.descripcion ?? actual.descripcion).trim(),
           input.tipo_venta ?? actual.tipo_venta,
           input.unidad_medida ?? actual.unidad_medida,
-          costo, pct, precio,
+          costo,
+          pct,
+          precio,
           input.precio_mayoreo ?? actual.precio_mayoreo,
           input.departamento_id ?? actual.departamento_id,
-          impuesto_tipo, tasa,
+          impuesto_tipo,
+          tasa,
           input.politica_sin_existencia ?? actual.politica_sin_existencia,
           input.activo === false ? 0 : 1,
-          now(), id,
+          now(),
+          id,
         ],
       );
     },
@@ -148,7 +196,9 @@ export function crearProductoRepo(db: SqlDriver) {
       const actual = await this.obtener(id);
       await db.run("UPDATE producto SET deleted_at=?, updated_at=? WHERE id=?", [now(), now(), id]);
       await registrarAccion(db, {
-        accion: "eliminar", entidad: "producto", entidadId: id,
+        accion: "eliminar",
+        entidad: "producto",
+        entidadId: id,
         resumen: actual ? `Producto eliminado: ${actual.descripcion}` : null,
       });
     },
@@ -162,7 +212,7 @@ export function crearProductoRepo(db: SqlDriver) {
         throw new ValidacionError([{ campo: "existencia", mensaje: "La existencia no puede ser negativa." }]);
       }
       const actual = await this.obtener(id);
-      if (!actual) throw new Error(`Producto ${id} no existe`);
+      if (!actual) throw new ValidacionError([{ campo: "id", mensaje: MSG.productoNoExiste }]);
 
       const anterior = actual.existencia ?? 0;
       const delta = nuevaExistencia - anterior;
@@ -178,25 +228,33 @@ export function crearProductoRepo(db: SqlDriver) {
           [newId(), id, "ajuste", delta, null, null, null, ts, null, ts, ts, null],
         );
         await registrarAccion(db, {
-          accion: "ajustar_existencia", entidad: "producto", entidadId: id,
+          accion: "ajustar_existencia",
+          entidad: "producto",
+          entidadId: id,
           resumen: `${actual.descripcion}: ${anterior} → ${nuevaExistencia} (${delta > 0 ? "+" : ""}${delta})`,
         });
       }
     },
 
     async obtener(id: string): Promise<Producto | undefined> {
-      return db.get<Producto>(
-        `SELECT ${COLS} FROM producto WHERE id=? AND deleted_at IS NULL`,
-        [id],
-      );
+      return db.get<Producto>(`SELECT ${COLS} FROM producto WHERE id=? AND deleted_at IS NULL`, [id]);
+    },
+
+    /**
+     * Busca un producto activo con exactamente esa descripción (ignorando mayúsculas,
+     * acentos y espacios de sobra). La pantalla lo usa para avisar "ya existe un
+     * producto llamado así" ANTES de crear un duplicado por descuido.
+     */
+    async porDescripcion(descripcion: string, excluirId?: string): Promise<Producto | undefined> {
+      const buscada = normalizar(descripcion);
+      if (!buscada) return undefined;
+      const todos = await db.all<Producto>(`SELECT ${COLS} FROM producto WHERE deleted_at IS NULL`);
+      return todos.find((p) => normalizar(p.descripcion) === buscada && p.id !== excluirId);
     },
 
     /** Busca por código de barra exacto (para el escaneo en Ventas). */
     async porCodigoBarra(codigo: string): Promise<Producto | undefined> {
-      return db.get<Producto>(
-        `SELECT ${COLS} FROM producto WHERE codigo_barra=? AND deleted_at IS NULL`,
-        [codigo],
-      );
+      return db.get<Producto>(`SELECT ${COLS} FROM producto WHERE codigo_barra=? AND deleted_at IS NULL`, [codigo]);
     },
 
     /** Marca/desmarca un producto como favorito (§ Ventas: sube al tope de la búsqueda). */

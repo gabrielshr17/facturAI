@@ -1,9 +1,12 @@
 export { AppShell } from "./AppShell.js";
 export { Marca, type MarcaProps } from "./componentes/Marca.js";
 export { ProveedorDatos, useRepos, type Repos } from "./data/contexto.js";
+export { ProveedorAuth, useAuth, type AuthApi } from "./contexto/Auth.js";
 export { Ventas } from "./pantallas/Ventas.js";
 export { Productos } from "./pantallas/Productos.js";
 export { Clientes } from "./pantallas/Clientes.js";
 export { Configuracion } from "./pantallas/Configuracion.js";
 export { configurarAdaptadorImpresora, type AdaptadorImpresora } from "./impresion/termica.js";
 export { configurarAdaptadorImpresoraTexto, type AdaptadorImpresoraTexto } from "./impresion/termica.js";
+export { configurarAbrirEnlaceExterno, type AdaptadorAbrirEnlace } from "./enlaces.js";
+export { mensajeError, mensajesError } from "./utilidades/errores.js";

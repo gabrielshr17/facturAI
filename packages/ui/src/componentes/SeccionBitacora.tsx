@@ -26,7 +26,9 @@ export function SeccionBitacora() {
   return (
     <div style={{ ...s.tarjeta, marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><ScrollText size={18} /> Bitácora de auditoría</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <ScrollText size={18} /> Bitácora de auditoría
+        </h3>
         <select style={{ ...s.input, width: 200 }} value={entidad} onChange={(e) => setEntidad(e.target.value)}>
           <option value="">Todas las entidades</option>
           <option value="producto">Producto</option>
@@ -42,20 +44,34 @@ export function SeccionBitacora() {
       <table style={s.tabla}>
         <thead>
           <tr>
-            <th scope="col" style={s.th}>Fecha</th>
-            <th scope="col" style={s.th}>Acción</th>
-            <th scope="col" style={s.th}>Entidad</th>
-            <th scope="col" style={s.th}>Detalle</th>
+            <th scope="col" style={s.th}>
+              Fecha
+            </th>
+            <th scope="col" style={s.th}>
+              Acción
+            </th>
+            <th scope="col" style={s.th}>
+              Entidad
+            </th>
+            <th scope="col" style={s.th}>
+              Detalle
+            </th>
           </tr>
         </thead>
         <tbody>
           {lista.length === 0 && (
-            <tr><td style={s.filaVacia} colSpan={4}>Sin registros todavía.</td></tr>
+            <tr>
+              <td style={s.filaVacia} colSpan={4}>
+                Sin registros todavía.
+              </td>
+            </tr>
           )}
           {lista.map((r) => (
             <tr key={r.id}>
               <td style={s.td}>{new Date(r.timestamp).toLocaleString("es-DO")}</td>
-              <td style={s.td}><span style={s.badge}>{ETIQUETA_ACCION[r.accion] ?? r.accion}</span></td>
+              <td style={s.td}>
+                <span style={s.badge}>{ETIQUETA_ACCION[r.accion] ?? r.accion}</span>
+              </td>
               <td style={{ ...s.td, color: c.gris }}>{r.entidad}</td>
               <td style={s.td}>{r.resumen ?? "—"}</td>
             </tr>

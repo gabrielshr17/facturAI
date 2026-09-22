@@ -12,7 +12,9 @@ async function nuevaDb(): Promise<SqlDriver> {
 
 describe("reportesRepo", () => {
   let db: SqlDriver;
-  beforeEach(async () => { db = await nuevaDb(); });
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
 
   async function venta(
     facturas: ReturnType<typeof crearFacturaRepo>,
@@ -24,7 +26,12 @@ describe("reportesRepo", () => {
   ) {
     const t = await facturas.abrirTicket();
     await facturas.agregarLinea(t.id, {
-      producto_id: productoId, descripcion, cantidad, precioUnitario, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      producto_id: productoId,
+      descripcion,
+      cantidad,
+      precioUnitario,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     await facturas.cobrar(t.id, { pagos: [{ metodo, monto: cantidad * precioUnitario }] });
     return t;

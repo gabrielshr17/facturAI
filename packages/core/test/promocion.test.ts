@@ -2,7 +2,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createNodeSqliteDriver } from "../src/db/drivers/node-sqlite.js";
 import { migrate } from "../src/db/migrator.js";
 import type { SqlDriver } from "../src/db/driver.js";
-import { crearPromocionRepo, crearProductoRepo, crearDepartamentoRepo, aplicarDescuento, ValidacionError } from "../src/index.js";
+import {
+  crearPromocionRepo,
+  crearProductoRepo,
+  crearDepartamentoRepo,
+  aplicarDescuento,
+  ValidacionError,
+} from "../src/index.js";
 
 async function nuevaDb(): Promise<SqlDriver> {
   const db = createNodeSqliteDriver();
@@ -32,7 +38,9 @@ describe("dominio promocion — aplicarDescuento", () => {
 
 describe("promocionRepo", () => {
   let db: SqlDriver;
-  beforeEach(async () => { db = await nuevaDb(); });
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
 
   it("crea una promoción de producto y la encuentra vigente", async () => {
     const productos = crearProductoRepo(db);
@@ -40,8 +48,13 @@ describe("promocionRepo", () => {
     const p = await productos.crear({ descripcion: "Arroz", costo: 30, precio_venta: 50 });
 
     await promociones.crear({
-      nombre: "20% Arroz", tipo: "porcentaje", valor: 20, aplicaA: "producto", productoId: p.id,
-      fechaInicio: hoyMasDias(-1), fechaFin: hoyMasDias(1),
+      nombre: "20% Arroz",
+      tipo: "porcentaje",
+      valor: 20,
+      aplicaA: "producto",
+      productoId: p.id,
+      fechaInicio: hoyMasDias(-1),
+      fechaFin: hoyMasDias(1),
     });
 
     const hoy = hoyMasDias(0);
@@ -55,8 +68,13 @@ describe("promocionRepo", () => {
     const p = await productos.crear({ descripcion: "Arroz", costo: 30, precio_venta: 50 });
 
     await promociones.crear({
-      nombre: "Vencida", tipo: "porcentaje", valor: 20, aplicaA: "producto", productoId: p.id,
-      fechaInicio: hoyMasDias(-10), fechaFin: hoyMasDias(-5),
+      nombre: "Vencida",
+      tipo: "porcentaje",
+      valor: 20,
+      aplicaA: "producto",
+      productoId: p.id,
+      fechaInicio: hoyMasDias(-10),
+      fechaFin: hoyMasDias(-5),
     });
 
     expect(await promociones.obtenerAplicable(p.id, null, hoyMasDias(0))).toBeUndefined();
@@ -70,12 +88,22 @@ describe("promocionRepo", () => {
     const p = await productos.crear({ descripcion: "Arroz", costo: 30, precio_venta: 50, departamento_id: dep.id });
 
     await promociones.crear({
-      nombre: "Depto 10%", tipo: "porcentaje", valor: 10, aplicaA: "departamento", departamentoId: dep.id,
-      fechaInicio: hoyMasDias(-1), fechaFin: hoyMasDias(1),
+      nombre: "Depto 10%",
+      tipo: "porcentaje",
+      valor: 10,
+      aplicaA: "departamento",
+      departamentoId: dep.id,
+      fechaInicio: hoyMasDias(-1),
+      fechaFin: hoyMasDias(1),
     });
     await promociones.crear({
-      nombre: "Producto 25%", tipo: "porcentaje", valor: 25, aplicaA: "producto", productoId: p.id,
-      fechaInicio: hoyMasDias(-1), fechaFin: hoyMasDias(1),
+      nombre: "Producto 25%",
+      tipo: "porcentaje",
+      valor: 25,
+      aplicaA: "producto",
+      productoId: p.id,
+      fechaInicio: hoyMasDias(-1),
+      fechaFin: hoyMasDias(1),
     });
 
     const aplicable = await promociones.obtenerAplicable(p.id, dep.id, hoyMasDias(0));
@@ -85,8 +113,12 @@ describe("promocionRepo", () => {
   it("una promoción 'todo' aplica incluso a artículos no registrados (sin producto_id)", async () => {
     const promociones = crearPromocionRepo(db);
     await promociones.crear({
-      nombre: "Todo 5%", tipo: "porcentaje", valor: 5, aplicaA: "todo",
-      fechaInicio: hoyMasDias(-1), fechaFin: hoyMasDias(1),
+      nombre: "Todo 5%",
+      tipo: "porcentaje",
+      valor: 5,
+      aplicaA: "todo",
+      fechaInicio: hoyMasDias(-1),
+      fechaFin: hoyMasDias(1),
     });
 
     const aplicable = await promociones.obtenerAplicable(null, null, hoyMasDias(0));
@@ -96,14 +128,28 @@ describe("promocionRepo", () => {
   it("rechaza un descuento porcentual mayor a 100", async () => {
     const promociones = crearPromocionRepo(db);
     await expect(
-      promociones.crear({ nombre: "X", tipo: "porcentaje", valor: 150, aplicaA: "todo", fechaInicio: hoyMasDias(0), fechaFin: hoyMasDias(1) }),
+      promociones.crear({
+        nombre: "X",
+        tipo: "porcentaje",
+        valor: 150,
+        aplicaA: "todo",
+        fechaInicio: hoyMasDias(0),
+        fechaFin: hoyMasDias(1),
+      }),
     ).rejects.toBeInstanceOf(ValidacionError);
   });
 
   it("rechaza aplicaA='producto' sin productoId", async () => {
     const promociones = crearPromocionRepo(db);
     await expect(
-      promociones.crear({ nombre: "X", tipo: "porcentaje", valor: 10, aplicaA: "producto", fechaInicio: hoyMasDias(0), fechaFin: hoyMasDias(1) }),
+      promociones.crear({
+        nombre: "X",
+        tipo: "porcentaje",
+        valor: 10,
+        aplicaA: "producto",
+        fechaInicio: hoyMasDias(0),
+        fechaFin: hoyMasDias(1),
+      }),
     ).rejects.toBeInstanceOf(ValidacionError);
   });
 
@@ -112,8 +158,14 @@ describe("promocionRepo", () => {
     const promociones = crearPromocionRepo(db);
     const p = await productos.crear({ descripcion: "Arroz", costo: 30, precio_venta: 50 });
     await promociones.crear({
-      nombre: "Inactiva", tipo: "porcentaje", valor: 20, aplicaA: "producto", productoId: p.id,
-      fechaInicio: hoyMasDias(-1), fechaFin: hoyMasDias(1), activa: false,
+      nombre: "Inactiva",
+      tipo: "porcentaje",
+      valor: 20,
+      aplicaA: "producto",
+      productoId: p.id,
+      fechaInicio: hoyMasDias(-1),
+      fechaFin: hoyMasDias(1),
+      activa: false,
     });
     expect(await promociones.obtenerAplicable(p.id, null, hoyMasDias(0))).toBeUndefined();
   });

@@ -54,7 +54,10 @@ export function adivinarMapeo(columnas: string[]): Record<string, CampoDestino> 
     let encontrado: CampoDestino = "ignorar";
     for (const [campo, pistas] of Object.entries(PISTAS) as [CampoDestino, string[]][]) {
       if (usados.has(campo)) continue;
-      if (pistas.some((p) => n.includes(p))) { encontrado = campo; break; }
+      if (pistas.some((p) => n.includes(p))) {
+        encontrado = campo;
+        break;
+      }
     }
     mapeo[col] = encontrado;
     if (encontrado !== "ignorar") usados.add(encontrado);

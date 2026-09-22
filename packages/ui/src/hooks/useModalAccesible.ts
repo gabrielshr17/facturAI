@@ -25,8 +25,9 @@ export function useModalAccesible<T extends HTMLElement = HTMLDivElement>() {
       if (e.key !== "Tab") return;
       const cont = contenedorRef.current;
       if (!cont) return;
-      const enfocables = Array.from(cont.querySelectorAll<HTMLElement>(ENFOCABLES))
-        .filter((el) => el.offsetParent !== null);
+      const enfocables = Array.from(cont.querySelectorAll<HTMLElement>(ENFOCABLES)).filter(
+        (el) => el.offsetParent !== null,
+      );
       if (enfocables.length === 0) return;
       const primero = enfocables[0];
       const ultimo = enfocables[enfocables.length - 1];

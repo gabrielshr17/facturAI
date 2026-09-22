@@ -13,8 +13,11 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.114.0",
     "@fastify/cors": "^10.0.1",
+    "@google/genai": "^0.15.0",
     "@sfr/core": "workspace:*",
-    "fastify": "^5.2.0"
+    "@supabase/supabase-js": "^2.115.0",
+    "fastify": "^5.2.0",
+    "googleapis": "^144.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

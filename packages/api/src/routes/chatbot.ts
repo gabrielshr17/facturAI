@@ -1,5 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
-import { claudeDisponible, enviarMensaje, analizarComprobante, type MensajeChat, type ImagenAdjunta } from "../services/claude.js";
+import {
+  claudeDisponible,
+  enviarMensaje,
+  analizarComprobante,
+  type MensajeChat,
+  type ImagenAdjunta,
+} from "../services/claude.js";
 
 interface CuerpoMensaje {
   historial?: MensajeChat[];
@@ -39,7 +45,9 @@ export const rutaChatbot: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: CuerpoAnalizar }>("/chatbot/analizar-comprobante", async (request, reply) => {
     if (!claudeDisponible()) {
-      await reply.code(501).send({ error: "El análisis de comprobantes no está configurado: falta ANTHROPIC_API_KEY en el backend." });
+      await reply
+        .code(501)
+        .send({ error: "El análisis de comprobantes no está configurado: falta ANTHROPIC_API_KEY en el backend." });
       return;
     }
     if (!request.body?.imagen) {
@@ -51,7 +59,9 @@ export const rutaChatbot: FastifyPluginAsync = async (app) => {
       return { datos };
     } catch (e) {
       app.log.error(e);
-      await reply.code(502).send({ error: "No se pudo analizar la imagen. Intenta de nuevo o ingresa los datos manualmente." });
+      await reply
+        .code(502)
+        .send({ error: "No se pudo analizar la imagen. Intenta de nuevo o ingresa los datos manualmente." });
     }
   });
 };

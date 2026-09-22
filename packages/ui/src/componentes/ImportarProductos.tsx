@@ -1,15 +1,32 @@
 import { useState, type CSSProperties } from "react";
-import { normalizar, ValidacionError, type ProductoInput } from "@sfr/core";
+import { normalizar, type ProductoInput } from "@sfr/core";
 import { Upload, TriangleAlert } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, sombra } from "../estilos.js";
 import { useAlertas } from "../contexto/Alertas.js";
 import { parseArchivoProductos, type ArchivoParseado } from "../importacion/parseArchivo.js";
-import { adivinarMapeo, normalizarImpuesto, normalizarTipoVenta, columnaDe, ETIQUETA_CAMPO, type CampoDestino } from "../importacion/mapeo.js";
+import {
+  adivinarMapeo,
+  normalizarImpuesto,
+  normalizarTipoVenta,
+  columnaDe,
+  ETIQUETA_CAMPO,
+  type CampoDestino,
+} from "../importacion/mapeo.js";
+import { mensajeError } from "../utilidades/errores.js";
 
 const CAMPOS: CampoDestino[] = [
-  "descripcion", "codigo_barra", "costo", "precio_venta", "precio_mayoreo",
-  "impuesto_tipo", "existencia", "departamento", "tipo_venta", "unidad_medida", "ignorar",
+  "descripcion",
+  "codigo_barra",
+  "costo",
+  "precio_venta",
+  "precio_mayoreo",
+  "impuesto_tipo",
+  "existencia",
+  "departamento",
+  "tipo_venta",
+  "unidad_medida",
+  "ignorar",
 ];
 
 type Paso = "seleccion" | "mapeo" | "importando" | "resultado";
@@ -27,14 +44,18 @@ function valorDeFila(
   campo: CampoDestino,
 ): string | number | null {
   const col = columnaDe(mapeo, campo);
-  return col ? fila[col] ?? null : null;
+  return col ? (fila[col] ?? null) : null;
 }
 
 /** Acepta números crudos (celdas numéricas de Excel) y texto con formato de moneda ("$162.00", "RD$1,500.00", celdas de Excel guardadas como texto). */
 function aNumero(v: string | number | null): number | null {
   if (v == null || v === "") return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  const limpio = v.trim().replace(/^RD\$?\s?/i, "").replace(/[$\s]/g, "").replace(/,/g, "");
+  const limpio = v
+    .trim()
+    .replace(/^RD\$?\s?/i, "")
+    .replace(/[$\s]/g, "")
+    .replace(/,/g, "");
   const n = Number(limpio);
   return Number.isFinite(n) ? n : null;
 }
@@ -66,7 +87,7 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
       setMapeo(adivinarMapeo(parseado.columnas));
       setPaso("mapeo");
     } catch (e) {
-      setError(String(e));
+      setError(mensajeError(e));
     }
   }
 
@@ -83,8 +104,8 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
     if (!columnaDe(mapeo, "precio_venta") && !columnaDe(mapeo, "costo")) {
       const continuar = await confirmar(
         "No asignaste ninguna columna a 'Precio de venta' ni 'Costo': " +
-        "TODOS los productos se importarán con precio RD$0.00. " +
-        "¿Seguro que quieres continuar así?",
+          "TODOS los productos se importarán con precio RD$0.00. " +
+          "¿Seguro que quieres continuar así?",
         { textoConfirmar: "Continuar así" },
       );
       if (!continuar) return;
@@ -103,7 +124,10 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
       setProgreso(i + 1);
       try {
         const descripcion = String(valorDeFila(fila, mapeo, "descripcion") ?? "").trim();
-        if (!descripcion) { res.omitidos++; continue; }
+        if (!descripcion) {
+          res.omitidos++;
+          continue;
+        }
 
         const codigoRaw = valorDeFila(fila, mapeo, "codigo_barra");
         const codigo_barra = codigoRaw != null && String(codigoRaw).trim() ? String(codigoRaw).trim() : null;
@@ -148,7 +172,10 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
 
         const existente = codigo_barra ? await productos.porCodigoBarra(codigo_barra) : undefined;
         if (existente) {
-          if (!actualizarExistentes) { res.omitidos++; continue; }
+          if (!actualizarExistentes) {
+            res.omitidos++;
+            continue;
+          }
           await productos.actualizar(existente.id, input);
           if (existencia != null) await productos.ajustarExistencia(existente.id, existencia);
           res.actualizados++;
@@ -160,7 +187,7 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
       } catch (e) {
         res.errores.push({
           fila: i + 2, // +1 por encabezado, +1 por índice 0-based
-          motivo: e instanceof ValidacionError ? e.errores.map((x) => x.mensaje).join(" ") : String(e),
+          motivo: mensajeError(e),
         });
       }
     }
@@ -173,22 +200,33 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
   return (
     <div style={overlay} onClick={onCerrar}>
       <div style={tarjeta} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}><Upload size={18} /> Importar productos</h3>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <Upload size={18} /> Importar productos
+        </h3>
 
         {paso === "seleccion" && (
           <>
             <p style={{ color: c.gris, fontSize: 14 }}>
-              Selecciona un archivo Excel (.xlsx) o CSV exportado de tu otro sistema.
-              En el siguiente paso podrás indicar qué columna corresponde a cada dato.
+              Selecciona un archivo Excel (.xlsx) o CSV exportado de tu otro sistema. En el siguiente paso podrás
+              indicar qué columna corresponde a cada dato.
             </p>
             <input
               type="file"
               accept=".xlsx,.csv"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void manejarArchivo(f); }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void manejarArchivo(f);
+              }}
             />
-            {error && <div role="alert" style={s.errorBox}>{error}</div>}
+            {error && (
+              <div role="alert" style={s.errorBox}>
+                {error}
+              </div>
+            )}
             <div style={s.formFooter}>
-              <button style={s.botonSecundario} onClick={onCerrar}>Cancelar</button>
+              <button style={s.botonSecundario} onClick={onCerrar}>
+                Cancelar
+              </button>
             </div>
           </>
         )}
@@ -196,15 +234,21 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
         {paso === "mapeo" && archivo && (
           <>
             <p style={{ color: c.gris, fontSize: 14 }}>
-              {archivo.filas.length} fila(s) encontradas. Asigna cada columna de tu archivo a un campo
-              (o "No importar"). "Descripción" es obligatoria.
+              {archivo.filas.length} fila(s) encontradas. Asigna cada columna de tu archivo a un campo (o &ldquo;No
+              importar&rdquo;). &ldquo;Descripción&rdquo; es obligatoria.
             </p>
             <table style={s.tabla}>
               <thead>
                 <tr>
-                  <th scope="col" style={s.th}>Columna del archivo</th>
-                  <th scope="col" style={s.th}>Se importa como</th>
-                  <th scope="col" style={s.th}>Ejemplo</th>
+                  <th scope="col" style={s.th}>
+                    Columna del archivo
+                  </th>
+                  <th scope="col" style={s.th}>
+                    Se importa como
+                  </th>
+                  <th scope="col" style={s.th}>
+                    Ejemplo
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -217,12 +261,14 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
                         value={mapeo[col] ?? "ignorar"}
                         onChange={(e) => cambiarMapeo(col, e.target.value as CampoDestino)}
                       >
-                        {CAMPOS.map((cmp) => <option key={cmp} value={cmp}>{ETIQUETA_CAMPO[cmp]}</option>)}
+                        {CAMPOS.map((cmp) => (
+                          <option key={cmp} value={cmp}>
+                            {ETIQUETA_CAMPO[cmp]}
+                          </option>
+                        ))}
                       </select>
                     </td>
-                    <td style={{ ...s.td, color: c.gris, fontSize: 13 }}>
-                      {String(archivo.filas[0]?.[col] ?? "")}
-                    </td>
+                    <td style={{ ...s.td, color: c.gris, fontSize: 13 }}>{String(archivo.filas[0]?.[col] ?? "")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -238,24 +284,49 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
             </label>
 
             {!columnaDe(mapeo, "precio_venta") && !columnaDe(mapeo, "costo") && (
-              <div style={{ background: c.amarilloFondo, border: `1px solid ${c.amarillo}`, color: c.amarillo, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 10, display: "flex", alignItems: "flex-start", gap: 6 }}>
+              <div
+                style={{
+                  background: c.amarilloFondo,
+                  border: `1px solid ${c.amarillo}`,
+                  color: c.amarillo,
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  marginTop: 10,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 6,
+                }}
+              >
                 <TriangleAlert size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                <span>Ninguna columna está asignada a "Precio de venta" ni "Costo": todos los productos se
-                importarán con precio RD$0.00. Revisa el mapeo si tu archivo sí tiene precios.</span>
+                <span>
+                  Ninguna columna está asignada a &ldquo;Precio de venta&rdquo; ni &ldquo;Costo&rdquo;: todos los
+                  productos se importarán con precio RD$0.00. Revisa el mapeo si tu archivo sí tiene precios.
+                </span>
               </div>
             )}
 
-            {error && <div role="alert" style={s.errorBox}>{error}</div>}
+            {error && (
+              <div role="alert" style={s.errorBox}>
+                {error}
+              </div>
+            )}
 
             <div style={s.formFooter}>
-              <button style={s.boton} onClick={ejecutarImportacion}>Importar {archivo.filas.length} fila(s)</button>
-              <button style={s.botonSecundario} onClick={onCerrar}>Cancelar</button>
+              <button style={s.boton} onClick={ejecutarImportacion}>
+                Importar {archivo.filas.length} fila(s)
+              </button>
+              <button style={s.botonSecundario} onClick={onCerrar}>
+                Cancelar
+              </button>
             </div>
           </>
         )}
 
         {paso === "importando" && archivo && (
-          <p style={{ color: c.gris }}>Importando fila {progreso} de {archivo.filas.length}…</p>
+          <p style={{ color: c.gris }}>
+            Importando fila {progreso} de {archivo.filas.length}…
+          </p>
         )}
 
         {paso === "resultado" && resultado && (
@@ -270,13 +341,17 @@ export function ImportarProductos({ onCerrar, onImportado }: { onCerrar: () => v
                 </p>
                 <div style={{ maxHeight: 160, overflow: "auto", fontSize: 13 }}>
                   {resultado.errores.map((e, i) => (
-                    <div key={i} style={{ color: c.rojo }}>Fila {e.fila}: {e.motivo}</div>
+                    <div key={i} style={{ color: c.rojo }}>
+                      Fila {e.fila}: {e.motivo}
+                    </div>
                   ))}
                 </div>
               </div>
             )}
             <div style={s.formFooter}>
-              <button style={s.boton} onClick={onCerrar}>Cerrar</button>
+              <button style={s.boton} onClick={onCerrar}>
+                Cerrar
+              </button>
             </div>
           </>
         )}

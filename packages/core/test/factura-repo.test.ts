@@ -80,10 +80,18 @@ describe("facturaRepo — armar ticket (§7.1)", () => {
     const repo = crearFacturaRepo(db);
     const t = await repo.abrirTicket();
     const l1 = await repo.agregarLinea(t.id, {
-      descripcion: "A", cantidad: 1, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "A",
+      cantidad: 1,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     await repo.agregarLinea(t.id, {
-      descripcion: "B", cantidad: 1, precioUnitario: 20, impuestoTipo: "exento", tasaImpuesto: 0,
+      descripcion: "B",
+      cantidad: 1,
+      precioUnitario: 20,
+      impuestoTipo: "exento",
+      tasaImpuesto: 0,
     });
 
     await repo.eliminarLinea(l1.id);
@@ -97,10 +105,18 @@ describe("facturaRepo — armar ticket (§7.1)", () => {
     const repo = crearFacturaRepo(db);
     const t = await repo.abrirTicket();
     const l1 = await repo.agregarLinea(t.id, {
-      descripcion: "A", cantidad: 2, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "A",
+      cantidad: 2,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     await repo.agregarLinea(t.id, {
-      descripcion: "B", cantidad: 1, precioUnitario: 20, impuestoTipo: "exento", tasaImpuesto: 0,
+      descripcion: "B",
+      cantidad: 1,
+      precioUnitario: 20,
+      impuestoTipo: "exento",
+      tasaImpuesto: 0,
     });
 
     await repo.eliminarLinea(l1.id);
@@ -142,10 +158,22 @@ describe("facturaRepo — armar ticket (§7.1)", () => {
     const repo = crearFacturaRepo(db);
     const t = await repo.abrirTicket();
     await expect(
-      repo.agregarLinea(t.id, { descripcion: "  ", cantidad: 1, precioUnitario: 10, impuestoTipo: "exento", tasaImpuesto: 0 }),
+      repo.agregarLinea(t.id, {
+        descripcion: "  ",
+        cantidad: 1,
+        precioUnitario: 10,
+        impuestoTipo: "exento",
+        tasaImpuesto: 0,
+      }),
     ).rejects.toBeInstanceOf(ValidacionError);
     await expect(
-      repo.agregarLinea(t.id, { descripcion: "X", cantidad: 0, precioUnitario: 10, impuestoTipo: "exento", tasaImpuesto: 0 }),
+      repo.agregarLinea(t.id, {
+        descripcion: "X",
+        cantidad: 0,
+        precioUnitario: 10,
+        impuestoTipo: "exento",
+        tasaImpuesto: 0,
+      }),
     ).rejects.toBeInstanceOf(ValidacionError);
   });
 });
@@ -159,7 +187,11 @@ describe("facturaRepo — cobrar (§7.2)", () => {
   async function ticketCon100(repo: ReturnType<typeof crearFacturaRepo>) {
     const t = await repo.abrirTicket();
     await repo.agregarLinea(t.id, {
-      descripcion: "Arroz", cantidad: 2, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "Arroz",
+      cantidad: 2,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     return t;
   }
@@ -202,26 +234,24 @@ describe("facturaRepo — cobrar (§7.2)", () => {
     const repo = crearFacturaRepo(db);
     const t = await ticketCon100(repo);
 
-    await expect(
-      repo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 70 }] }),
-    ).rejects.toThrow(/30\.00/);
+    await expect(repo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 70 }] })).rejects.toThrow(/30\.00/);
   });
 
   it("rechaza cobrar un ticket sin artículos", async () => {
     const repo = crearFacturaRepo(db);
     const t = await repo.abrirTicket();
-    await expect(
-      repo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 0 }] }),
-    ).rejects.toBeInstanceOf(ValidacionError);
+    await expect(repo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 0 }] })).rejects.toBeInstanceOf(
+      ValidacionError,
+    );
   });
 
   it("rechaza cobrar dos veces el mismo ticket", async () => {
     const repo = crearFacturaRepo(db);
     const t = await ticketCon100(repo);
     await repo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 100 }] });
-    await expect(
-      repo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 100 }] }),
-    ).rejects.toBeInstanceOf(ValidacionError);
+    await expect(repo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 100 }] })).rejects.toBeInstanceOf(
+      ValidacionError,
+    );
   });
 
   it("obtenerUltimaCobrada devuelve la más reciente cobrada", async () => {
@@ -246,13 +276,14 @@ describe("facturaRepo — listarCobradas (Consulta de facturas)", () => {
     db = await nuevaDb();
   });
 
-  async function cobrarTicket(
-    repo: ReturnType<typeof crearFacturaRepo>,
-    clienteId: string | null,
-  ) {
+  async function cobrarTicket(repo: ReturnType<typeof crearFacturaRepo>, clienteId: string | null) {
     const t = await repo.abrirTicket({ cliente_id: clienteId });
     await repo.agregarLinea(t.id, {
-      descripcion: "Arroz", cantidad: 1, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "Arroz",
+      cantidad: 1,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     const { factura } = await repo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 50 }] });
     return factura;

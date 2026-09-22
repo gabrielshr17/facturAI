@@ -44,13 +44,17 @@ export async function registrarAccion(db: SqlDriver, input: RegistrarAccionInput
     confirmada: input.confirmada === false ? 0 : 1,
     timestamp: now(),
   };
-  await db.run(
-    `INSERT INTO bitacora_accion (${COLS}) VALUES (?,?,?,?,?,?,?,?,?)`,
-    [
-      registro.id, registro.usuario_id, registro.origen, registro.accion, registro.entidad,
-      registro.entidad_id, registro.resumen, registro.confirmada, registro.timestamp,
-    ],
-  );
+  await db.run(`INSERT INTO bitacora_accion (${COLS}) VALUES (?,?,?,?,?,?,?,?,?)`, [
+    registro.id,
+    registro.usuario_id,
+    registro.origen,
+    registro.accion,
+    registro.entidad,
+    registro.entidad_id,
+    registro.resumen,
+    registro.confirmada,
+    registro.timestamp,
+  ]);
   return registro;
 }
 
@@ -64,9 +68,18 @@ export function crearBitacoraRepo(db: SqlDriver) {
     async listar(filtro: FiltroBitacora = {}): Promise<BitacoraAccion[]> {
       const condiciones: string[] = ["1=1"];
       const params: unknown[] = [];
-      if (filtro.entidad) { condiciones.push("entidad = ?"); params.push(filtro.entidad); }
-      if (filtro.desde) { condiciones.push("date(timestamp) >= date(?)"); params.push(filtro.desde); }
-      if (filtro.hasta) { condiciones.push("date(timestamp) <= date(?)"); params.push(filtro.hasta); }
+      if (filtro.entidad) {
+        condiciones.push("entidad = ?");
+        params.push(filtro.entidad);
+      }
+      if (filtro.desde) {
+        condiciones.push("date(timestamp) >= date(?)");
+        params.push(filtro.desde);
+      }
+      if (filtro.hasta) {
+        condiciones.push("date(timestamp) <= date(?)");
+        params.push(filtro.hasta);
+      }
 
       const limite = filtro.limite ?? 100;
       return db.all<BitacoraAccion>(

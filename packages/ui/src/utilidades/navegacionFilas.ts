@@ -15,7 +15,11 @@ export function moverIndiceFila(actual: number, delta: number, longitud: number)
 /** Nueva acción resaltada dentro de la fila: recorre ["fila", ...disponibles] sin salirse de los bordes
  *  — así ← siempre puede volver a "fila" y → nunca pasa de la última acción de ESA fila en particular
  *  (dos filas pueden tener distintas acciones disponibles, p.ej. "Ajustar" solo si hay inventario). */
-export function moverAccionFila<T extends string>(actual: T | "fila", delta: number, disponibles: readonly T[]): T | "fila" {
+export function moverAccionFila<T extends string>(
+  actual: T | "fila",
+  delta: number,
+  disponibles: readonly T[],
+): T | "fila" {
   const orden: (T | "fila")[] = ["fila", ...disponibles];
   const i = orden.indexOf(actual);
   const siguiente = Math.min(Math.max((i === -1 ? 0 : i) + delta, 0), orden.length - 1);

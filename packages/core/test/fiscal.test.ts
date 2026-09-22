@@ -110,7 +110,11 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
   async function ticketCon100(facturaRepo: ReturnType<typeof crearFacturaRepo>) {
     const t = await facturaRepo.abrirTicket();
     await facturaRepo.agregarLinea(t.id, {
-      descripcion: "Arroz", cantidad: 2, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "Arroz",
+      cantidad: 2,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     return t;
   }

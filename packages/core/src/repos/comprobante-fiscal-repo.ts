@@ -54,24 +54,37 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
         deleted_at: null,
       };
 
-      await db.run(
-        `INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(22).fill("?").join(",")})`,
-        [
-          c.id, c.factura_id, c.tipo_ecf, c.ncf, c.secuencia_id, c.rnc_emisor,
-          c.receptor_documento_tipo, c.receptor_documento_numero, c.fecha_emision,
-          c.monto_gravado, c.monto_exento, c.monto_itbis, c.total, c.estado_dgii,
-          c.track_id_dgii, c.codigo_seguridad, c.xml_firmado_ruta, c.qr_url,
-          c.fecha_transmision, c.created_at, c.updated_at, c.deleted_at,
-        ],
-      );
+      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(22).fill("?").join(",")})`, [
+        c.id,
+        c.factura_id,
+        c.tipo_ecf,
+        c.ncf,
+        c.secuencia_id,
+        c.rnc_emisor,
+        c.receptor_documento_tipo,
+        c.receptor_documento_numero,
+        c.fecha_emision,
+        c.monto_gravado,
+        c.monto_exento,
+        c.monto_itbis,
+        c.total,
+        c.estado_dgii,
+        c.track_id_dgii,
+        c.codigo_seguridad,
+        c.xml_firmado_ruta,
+        c.qr_url,
+        c.fecha_transmision,
+        c.created_at,
+        c.updated_at,
+        c.deleted_at,
+      ]);
       return c;
     },
 
     async obtener(id: string): Promise<ComprobanteFiscal | undefined> {
-      return db.get<ComprobanteFiscal>(
-        `SELECT ${COLS} FROM comprobante_fiscal WHERE id=? AND deleted_at IS NULL`,
-        [id],
-      );
+      return db.get<ComprobanteFiscal>(`SELECT ${COLS} FROM comprobante_fiscal WHERE id=? AND deleted_at IS NULL`, [
+        id,
+      ]);
     },
 
     async obtenerPorFactura(facturaId: string): Promise<ComprobanteFiscal | undefined> {

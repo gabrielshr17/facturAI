@@ -7,6 +7,7 @@ import { formatearNcf, type TipoEcf } from "../dominio/ecf.js";
 import { esDocumentoValido } from "../dominio/validacion.js";
 import { ValidacionError } from "../repos/producto-repo.js";
 import type { Factura, ComprobanteFiscal } from "../repos/tipos.js";
+import { MSG } from "../dominio/mensajes.js";
 
 export interface CobrarConFiscalInput {
   pagos: PagoInput[];
@@ -64,7 +65,7 @@ export async function cobrarConFiscal(
   }
 
   const factura = await facturaRepo.obtener(facturaId);
-  if (!factura) throw new Error(`Ticket ${facturaId} no existe`);
+  if (!factura) throw new Error(MSG.ticketNoExiste);
   if (factura.estado !== "abierta") {
     throw new ValidacionError([{ campo: "estado", mensaje: "Este ticket ya fue cobrado o anulado." }]);
   }
@@ -112,14 +113,18 @@ export async function cobrarConFiscal(
     throw new ValidacionError([
       {
         campo: "fiscal",
-        mensaje: "No se pudo transmitir el comprobante a la DGII (sin conexión). No se permite cobrar con NCF sin conexión; puede cobrar sin comprobante fiscal.",
+        mensaje:
+          "No se pudo transmitir el comprobante a la DGII (sin conexión). No se permite cobrar con NCF sin conexión; puede cobrar sin comprobante fiscal.",
       },
     ]);
   }
 
   if (resultadoTransmision.estado !== "aceptado") {
     throw new ValidacionError([
-      { campo: "fiscal", mensaje: `La DGII rechazó el comprobante: ${resultadoTransmision.motivoRechazo ?? "sin detalle"}.` },
+      {
+        campo: "fiscal",
+        mensaje: `La DGII rechazó el comprobante: ${resultadoTransmision.motivoRechazo ?? "sin detalle"}.`,
+      },
     ]);
   }
 

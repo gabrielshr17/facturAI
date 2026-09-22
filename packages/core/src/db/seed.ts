@@ -119,21 +119,7 @@ export async function seed(db: SqlDriver): Promise<void> {
        precio_unitario, es_mayoreo, impuesto_tipo, tasa_impuesto, monto_itbis, subtotal,
        created_at, updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [
-      "lin-demo-1",
-      "fac-demo",
-      "prod-arroz",
-      "Arroz Selecto 5 lb",
-      2,
-      50.0,
-      0,
-      "itbis18",
-      0.18,
-      15.25,
-      100.0,
-      ts,
-      ts,
-    ],
+    ["lin-demo-1", "fac-demo", "prod-arroz", "Arroz Selecto 5 lb", 2, 50.0, 0, "itbis18", 0.18, 15.25, 100.0, ts, ts],
   );
 
   await db.run(

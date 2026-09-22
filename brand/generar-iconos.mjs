@@ -255,7 +255,9 @@ const WEB = [
 try {
   console.log(`Rasterizando con ${NAVEGADOR}\n`);
   const informe = (etiqueta, lado, m) =>
-    console.log(`  ${etiqueta.padEnd(30)} ${String(lado).padStart(3)}px  tinta ${(m.tinta * 100).toFixed(0)} %  marca ${(m.marca * 100).toFixed(0)} %`);
+    console.log(
+      `  ${etiqueta.padEnd(30)} ${String(lado).padStart(3)}px  tinta ${(m.tinta * 100).toFixed(0)} %  marca ${(m.marca * 100).toFixed(0)} %`,
+    );
 
   for (const [nombre, lado] of ESCRITORIO) {
     const { medida } = rasterizar("marca-ficha.svg", lado, join(ICONOS_TAURI, nombre));

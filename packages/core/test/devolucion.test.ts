@@ -32,7 +32,11 @@ function hoyMasDias(dias: number): string {
 async function ventaCobrada(facturas: ReturnType<typeof crearFacturaRepo>) {
   const t = await facturas.abrirTicket();
   const linea = await facturas.agregarLinea(t.id, {
-    descripcion: "Arroz", cantidad: 3, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+    descripcion: "Arroz",
+    cantidad: 3,
+    precioUnitario: 50,
+    impuestoTipo: "itbis18",
+    tasaImpuesto: 0.18,
   });
   await facturas.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 150 }] });
   return { facturaId: t.id, lineaId: linea.id };
@@ -40,7 +44,9 @@ async function ventaCobrada(facturas: ReturnType<typeof crearFacturaRepo>) {
 
 describe("devolucionRepo — sin comprobante fiscal", () => {
   let db: SqlDriver;
-  beforeEach(async () => { db = await nuevaDb(); });
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
 
   it("registra una devolución parcial y calcula el total", async () => {
     const facturas = crearFacturaRepo(db);
@@ -48,7 +54,8 @@ describe("devolucionRepo — sin comprobante fiscal", () => {
     const { facturaId, lineaId } = await ventaCobrada(facturas);
 
     const d = await devoluciones.crear({
-      facturaId, motivo: "Producto dañado",
+      facturaId,
+      motivo: "Producto dañado",
       lineas: [{ facturaLineaId: lineaId, cantidad: 1 }],
     });
 
@@ -63,7 +70,11 @@ describe("devolucionRepo — sin comprobante fiscal", () => {
     const devoluciones = crearDevolucionRepo(db);
     const t = await facturas.abrirTicket();
     const linea = await facturas.agregarLinea(t.id, {
-      descripcion: "Arroz", cantidad: 1, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "Arroz",
+      cantidad: 1,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
 
     await expect(
@@ -94,7 +105,12 @@ describe("devolucionRepo — sin comprobante fiscal", () => {
 
     const t = await facturas.abrirTicket();
     const linea = await facturas.agregarLinea(t.id, {
-      producto_id: p.id, descripcion: "Arroz", cantidad: 3, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      producto_id: p.id,
+      descripcion: "Arroz",
+      cantidad: 3,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     await facturas.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 150 }] });
     // existencia ahora 7 (10 - 3 vendidas)
@@ -116,7 +132,12 @@ describe("devolucionRepo — sin comprobante fiscal", () => {
 
     const t = await facturas.abrirTicket();
     const linea = await facturas.agregarLinea(t.id, {
-      producto_id: p.id, descripcion: "Arroz", cantidad: 3, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      producto_id: p.id,
+      descripcion: "Arroz",
+      cantidad: 3,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     await facturas.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 150 }] });
 
@@ -151,12 +172,22 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
 
     const t = await d.facturaRepo.abrirTicket();
     const linea = await d.facturaRepo.agregarLinea(t.id, {
-      descripcion: "Arroz", cantidad: 2, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "Arroz",
+      cantidad: 2,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
-    await cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 100 }], tipoEcf: "32", rncEmisor: "101023122" });
+    await cobrarConFiscal(d, t.id, {
+      pagos: [{ metodo: "efectivo", monto: 100 }],
+      tipoEcf: "32",
+      rncEmisor: "101023122",
+    });
 
     const { devolucion, comprobante } = await registrarDevolucionConFiscal(
-      d, { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] }, "101023122",
+      d,
+      { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
+      "101023122",
     );
 
     expect(comprobante.tipo_ecf).toBe("34");
@@ -169,12 +200,20 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
     const d = deps();
     const t = await d.facturaRepo.abrirTicket();
     const linea = await d.facturaRepo.agregarLinea(t.id, {
-      descripcion: "Arroz", cantidad: 1, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "Arroz",
+      cantidad: 1,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
     await d.facturaRepo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 50 }] }); // venta normal, sin NCF
 
     await expect(
-      registrarDevolucionConFiscal(d, { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] }, "101023122"),
+      registrarDevolucionConFiscal(
+        d,
+        { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
+        "101023122",
+      ),
     ).rejects.toBeInstanceOf(ValidacionError);
   });
 
@@ -184,12 +223,24 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
 
     const t = await d.facturaRepo.abrirTicket();
     const linea = await d.facturaRepo.agregarLinea(t.id, {
-      descripcion: "Arroz", cantidad: 1, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "Arroz",
+      cantidad: 1,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
-    await cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 50 }], tipoEcf: "32", rncEmisor: "101023122" });
+    await cobrarConFiscal(d, t.id, {
+      pagos: [{ metodo: "efectivo", monto: 50 }],
+      tipoEcf: "32",
+      rncEmisor: "101023122",
+    });
 
     await expect(
-      registrarDevolucionConFiscal(d, { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] }, "101023122"),
+      registrarDevolucionConFiscal(
+        d,
+        { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
+        "101023122",
+      ),
     ).rejects.toBeInstanceOf(ValidacionError);
   });
 
@@ -200,12 +251,22 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
 
     const t = await d.facturaRepo.abrirTicket();
     const linea = await d.facturaRepo.agregarLinea(t.id, {
-      descripcion: "Arroz", cantidad: 1, precioUnitario: 50, impuestoTipo: "itbis18", tasaImpuesto: 0.18,
+      descripcion: "Arroz",
+      cantidad: 1,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
     });
-    await cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 50 }], tipoEcf: "32", rncEmisor: "101023122" });
+    await cobrarConFiscal(d, t.id, {
+      pagos: [{ metodo: "efectivo", monto: 50 }],
+      tipoEcf: "32",
+      rncEmisor: "101023122",
+    });
 
     const proveedorQueRechaza: ProveedorFiscal = {
-      async transmitir() { return { estado: "rechazado", motivoRechazo: "prueba" }; },
+      async transmitir() {
+        return { estado: "rechazado", motivoRechazo: "prueba" };
+      },
     };
 
     await expect(

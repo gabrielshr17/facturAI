@@ -4,6 +4,7 @@ import { tieneValor, normalizar, esCorreoValido, type ErrorValidacion } from "..
 import { ValidacionError } from "./producto-repo.js";
 import { registrarAccion } from "./bitacora-repo.js";
 import type { Proveedor } from "./tipos.js";
+import { MSG } from "../dominio/mensajes.js";
 
 export interface ProveedorInput {
   nombre: string;
@@ -46,7 +47,15 @@ export function crearProveedorRepo(db: SqlDriver) {
       };
 
       await db.run(`INSERT INTO proveedor (${COLS}) VALUES (${Array(9).fill("?").join(",")})`, [
-        p.id, p.nombre, p.rnc, p.telefono, p.correo, p.direccion, p.created_at, p.updated_at, p.deleted_at,
+        p.id,
+        p.nombre,
+        p.rnc,
+        p.telefono,
+        p.correo,
+        p.direccion,
+        p.created_at,
+        p.updated_at,
+        p.deleted_at,
       ]);
       return p;
     },
@@ -56,26 +65,26 @@ export function crearProveedorRepo(db: SqlDriver) {
       if (errores.length) throw new ValidacionError(errores);
 
       const actual = await this.obtener(id);
-      if (!actual) throw new Error(`Proveedor ${id} no existe`);
+      if (!actual) throw new Error(MSG.proveedorNoExiste);
 
-      await db.run(
-        `UPDATE proveedor SET nombre=?, rnc=?, telefono=?, correo=?, direccion=?, updated_at=? WHERE id=?`,
-        [
-          input.nombre.trim(),
-          input.rnc ?? actual.rnc,
-          input.telefono ?? actual.telefono,
-          input.correo ?? actual.correo,
-          input.direccion ?? actual.direccion,
-          now(), id,
-        ],
-      );
+      await db.run(`UPDATE proveedor SET nombre=?, rnc=?, telefono=?, correo=?, direccion=?, updated_at=? WHERE id=?`, [
+        input.nombre.trim(),
+        input.rnc ?? actual.rnc,
+        input.telefono ?? actual.telefono,
+        input.correo ?? actual.correo,
+        input.direccion ?? actual.direccion,
+        now(),
+        id,
+      ]);
     },
 
     async eliminar(id: string): Promise<void> {
       const actual = await this.obtener(id);
       await db.run("UPDATE proveedor SET deleted_at=?, updated_at=? WHERE id=?", [now(), now(), id]);
       await registrarAccion(db, {
-        accion: "eliminar", entidad: "proveedor", entidadId: id,
+        accion: "eliminar",
+        entidad: "proveedor",
+        entidadId: id,
         resumen: actual ? `Proveedor eliminado: ${actual.nombre}` : null,
       });
     },
@@ -86,9 +95,7 @@ export function crearProveedorRepo(db: SqlDriver) {
 
     /** Lista/busca por nombre, ignorando acentos y mayúsculas. */
     async listar(q?: string): Promise<Proveedor[]> {
-      const todos = await db.all<Proveedor>(
-        `SELECT ${COLS} FROM proveedor WHERE deleted_at IS NULL ORDER BY nombre`,
-      );
+      const todos = await db.all<Proveedor>(`SELECT ${COLS} FROM proveedor WHERE deleted_at IS NULL ORDER BY nombre`);
       if (!q || !q.trim()) return todos;
       const t = normalizar(q);
       return todos.filter((p) => normalizar(p.nombre).includes(t));

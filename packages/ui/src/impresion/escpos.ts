@@ -167,7 +167,11 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
   // El TOTAL también a tamaño real doble — es el número que el cliente busca primero. A doble
   // ancho cada carácter ocupa el doble de espacio físico, así que `columnas()` recibe la MITAD
   // del ancho normal para no exceder el ancho real del papel.
-  b.negrita(true).tamano("grande").columnas("TOTAL", `RD$ ${money(factura.total)}`, Math.floor(ancho / 2)).tamano("alto").negrita(false);
+  b.negrita(true)
+    .tamano("grande")
+    .columnas("TOTAL", `RD$ ${money(factura.total)}`, Math.floor(ancho / 2))
+    .tamano("alto")
+    .negrita(false);
   b.separador(ancho);
 
   for (const p of pagos) {
@@ -223,7 +227,11 @@ export function generarEscPosCotizacion(datos: CotizacionImpresionDatos): Uint8A
   b.columnas("Gravado", `RD$ ${money(datos.subtotalGravado)}`, ancho);
   b.columnas("Exento", `RD$ ${money(datos.subtotalExento)}`, ancho);
   b.columnas("ITBIS", `RD$ ${money(datos.totalItbis)}`, ancho);
-  b.negrita(true).tamano("grande").columnas("TOTAL", `RD$ ${money(datos.total)}`, Math.floor(ancho / 2)).tamano("alto").negrita(false);
+  b.negrita(true)
+    .tamano("grande")
+    .columnas("TOTAL", `RD$ ${money(datos.total)}`, Math.floor(ancho / 2))
+    .tamano("alto")
+    .negrita(false);
   b.separador(ancho);
 
   if (notas) {
