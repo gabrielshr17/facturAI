@@ -24,3 +24,7 @@ productDatabase/
 
 # Salida local de herramientas de automatización de browser (screenshots, sesiones)
 .playwright-mcp/
+
+# Config personal de tooling de IA (por máquina/desarrollador, no del proyecto)
+/claude-config/
+/opencode.json
