@@ -66,7 +66,7 @@ export {
   type ReportesRepo,
 } from "./reportes-repo.js";
 export { crearPromocionRepo, type PromocionInput, type PromocionRepo } from "./promocion-repo.js";
-export { crearBackupRepo, type RespaldoCompleto, type BackupRepo } from "./backup-repo.js";
+export { crearBackupRepo, type RespaldoCompleto, type ResultadoImportacion, type BackupRepo } from "./backup-repo.js";
 export {
   crearCotizacionRepo,
   type LineaCotizacionInput,

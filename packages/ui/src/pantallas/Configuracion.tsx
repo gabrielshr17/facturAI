@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { type NegocioInput } from "@sfr/core";
+import { useEffect, useRef, useState } from "react";
+import { type NegocioInput, type RespaldoCompleto } from "@sfr/core";
 import { Store, Printer, Save } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c } from "../estilos.js";
@@ -28,6 +28,10 @@ export function Configuracion() {
   const [errores, setErrores] = useState<string[]>([]);
   const [guardado, setGuardado] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [erroresImportar, setErroresImportar] = useState<string[]>([]);
+  const [importado, setImportado] = useState<number | null>(null);
+  const inputImportarRef = useRef<HTMLInputElement>(null);
 
   useAtajosTeclado({ "Ctrl+S": () => void guardar() });
 
@@ -75,6 +79,23 @@ export function Configuracion() {
       URL.revokeObjectURL(url);
     } finally {
       setExportando(false);
+    }
+  }
+
+  async function importarRespaldo(archivo: File) {
+    setImportando(true);
+    setErroresImportar([]);
+    setImportado(null);
+    try {
+      const texto = await archivo.text();
+      const respaldo = JSON.parse(texto) as RespaldoCompleto;
+      const resultado = await backup.importarTodo(respaldo);
+      setImportado(resultado.filas);
+    } catch (e) {
+      setErroresImportar(mensajesError(e));
+    } finally {
+      setImportando(false);
+      if (inputImportarRef.current) inputImportarRef.current.value = "";
     }
   }
 
@@ -195,9 +216,34 @@ export function Configuracion() {
         <p style={{ color: c.gris, fontSize: 13 }}>
           Descarga toda la información del negocio (productos, ventas, compras, etc.) en un archivo JSON.
         </p>
-        <button style={s.botonSecundario} disabled={exportando} onClick={exportarRespaldo}>
-          {exportando ? "Exportando…" : "Exportar respaldo completo"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={s.botonSecundario} disabled={exportando} onClick={exportarRespaldo}>
+            {exportando ? "Exportando…" : "Exportar respaldo completo"}
+          </button>
+          <button style={s.botonSecundario} disabled={importando} onClick={() => inputImportarRef.current?.click()}>
+            {importando ? "Importando…" : "Importar respaldo"}
+          </button>
+          <input
+            ref={inputImportarRef}
+            type="file"
+            accept="application/json"
+            hidden
+            onChange={(e) => {
+              const archivo = e.target.files?.[0];
+              if (archivo) void importarRespaldo(archivo);
+            }}
+          />
+        </div>
+        {importado !== null && (
+          <p style={{ color: c.verde, fontSize: 13, marginBottom: 0 }}>
+            Respaldo importado: {importado} filas restauradas.
+          </p>
+        )}
+        {erroresImportar.map((e) => (
+          <p key={e} style={{ color: c.rojo, fontSize: 13, marginBottom: 0 }}>
+            {e}
+          </p>
+        ))}
       </div>
 
       <SeccionBitacora />
