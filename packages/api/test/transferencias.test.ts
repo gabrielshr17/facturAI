@@ -4,7 +4,7 @@ const m = vi.hoisted(() => ({
   gmailDisponible: vi.fn(),
   listarCorreosNoLeidos: vi.fn(),
   marcarComoProcesado: vi.fn(),
-  claudeDisponible: vi.fn(),
+  geminiDisponible: vi.fn(),
   extraerTransferencia: vi.fn(),
   obtenerClienteDb: vi.fn(),
 }));
@@ -15,8 +15,8 @@ vi.mock("../src/services/gmail.js", () => ({
   marcarComoProcesado: m.marcarComoProcesado,
 }));
 
-vi.mock("../src/services/claude.js", () => ({
-  claudeDisponible: m.claudeDisponible,
+vi.mock("../src/services/gemini.js", () => ({
+  geminiDisponible: m.geminiDisponible,
   extraerTransferencia: m.extraerTransferencia,
 }));
 
@@ -74,13 +74,19 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, "error").mockImplementation(() => {});
   m.gmailDisponible.mockReturnValue(true);
-  m.claudeDisponible.mockReturnValue(true);
+  m.geminiDisponible.mockReturnValue(true);
   m.listarCorreosNoLeidos.mockResolvedValue([]);
 });
 
 describe("sincronizarTransferencias", () => {
-  it("no hace nada si Gmail o Claude no están disponibles", async () => {
+  it("no hace nada si Gmail no está disponible", async () => {
     m.gmailDisponible.mockReturnValue(false);
+    expect(await sincronizarTransferencias()).toBe(0);
+    expect(m.listarCorreosNoLeidos).not.toHaveBeenCalled();
+  });
+
+  it("no hace nada si Gemini no está disponible", async () => {
+    m.geminiDisponible.mockReturnValue(false);
     expect(await sincronizarTransferencias()).toBe(0);
     expect(m.listarCorreosNoLeidos).not.toHaveBeenCalled();
   });
@@ -110,9 +116,9 @@ describe("sincronizarTransferencias", () => {
     expect(m.marcarComoProcesado).toHaveBeenCalledWith("gmail-1");
   });
 
-  it("si Claude no puede extraer, el correo queda sin marcar para reintentarlo en el próximo ciclo", async () => {
+  it("si Gemini no puede extraer, el correo queda sin marcar para reintentarlo en el próximo ciclo", async () => {
     m.listarCorreosNoLeidos.mockResolvedValue([{ id: "gmail-mal", asunto: "raro", cuerpoTexto: "texto incomprensible" }]);
-    m.extraerTransferencia.mockRejectedValue(new Error("Claude no devolvió los datos extraídos."));
+    m.extraerTransferencia.mockRejectedValue(new Error("Gemini no devolvió los datos extraídos."));
     const insert = dbQueInserta({ error: null });
 
     expect(await sincronizarTransferencias()).toBe(0);

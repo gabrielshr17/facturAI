@@ -36,14 +36,15 @@ negocio (`db/schema.sql`) siguen sin conectar**:
   (aplicada directo, no vía el resto de `schema.sql` que sigue desactualizado
   — ver más abajo). Las rutas `/transferencias/*` funcionan en cuanto
   `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` estén configuradas, sin
-  depender de Gmail/Claude.
+  depender de Gmail/Gemini.
 
 ## Últimas transferencias recibidas (correo del banco)
 
 Sin agregador bancario: el banco manda un correo de notificación por cada
 transferencia, y el backend sondea una casilla Gmail dedicada cada
 `TRANSFERENCIAS_POLL_INTERVALO_MS` (default 5 min) para leerlos con la
-Gmail API y pedirle a Claude que extraiga monto/fecha/banco/referencia.
+Gmail API y pedirle a Gemini (Google AI Studio, no Claude — es independiente
+del chatbot de comprobantes) que extraiga monto/fecha/banco/referencia.
 
 Pasos de configuración manual (una sola vez):
 
@@ -59,10 +60,12 @@ Pasos de configuración manual (una sola vez):
    una sola vez) y copiar client id/secret/refresh token a
    `GMAIL_OAUTH_CLIENT_ID`/`GMAIL_OAUTH_CLIENT_SECRET`/`GMAIL_OAUTH_REFRESH_TOKEN`
    en `.env`.
+5. Sacar una API key de Gemini en [Google AI Studio](https://aistudio.google.com/apikey)
+   y copiarla a `GEMINI_API_KEY` en `.env`.
 
-Sin esas tres variables (o sin `ANTHROPIC_API_KEY`), el poller simplemente
-no arranca (log de advertencia al iniciar) — `GET /transferencias/recientes`
-sigue respondiendo con lo que ya haya en la tabla.
+Sin esas cuatro variables, el poller simplemente no arranca (log de
+advertencia al iniciar) — `GET /transferencias/recientes` sigue respondiendo
+con lo que ya haya en la tabla.
 
 Este paquete no corre 24/7 en ningún hosting todavía — el poller solo lee
 correo mientras el proceso está vivo. Un plan gratuito de Render/Railway/

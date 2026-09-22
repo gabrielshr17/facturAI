@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { obtenerClienteDb } from "./db.js";
 import { gmailDisponible, listarCorreosNoLeidos, marcarComoProcesado } from "./gmail.js";
-import { claudeDisponible, extraerTransferencia } from "./claude.js";
+import { geminiDisponible, extraerTransferencia } from "./gemini.js";
 
 export type EstadoConfirmacion = "pendiente" | "confirmada" | "descartada";
 
@@ -18,16 +18,16 @@ export interface NotificacionTransferencia {
   createdAt: string;
 }
 
-/** false si falta Gmail o Claude: el poller y `GET /transferencias/recientes` lo usan para
+/** false si falta Gmail o Gemini: el poller y `GET /transferencias/recientes` lo usan para
  *  degradar con un mensaje explícito en vez de fallar sin explicación. */
 export function transferenciasDisponible(): boolean {
-  return gmailDisponible() && claudeDisponible();
+  return gmailDisponible() && geminiDisponible();
 }
 
 const LARGO_SNIPPET = 500;
 
 /**
- * Un ciclo de sondeo: lee los correos no leídos de la casilla dedicada, le pide a Claude que
+ * Un ciclo de sondeo: lee los correos no leídos de la casilla dedicada, le pide a Gemini que
  * extraiga los datos de cada uno, guarda una fila `pendiente` por correo, y recién entonces lo
  * marca como leído — si `extraerTransferencia` o el insert fallan, el correo queda sin marcar y
  * se reintenta en el próximo ciclo en vez de perderse.
