@@ -197,6 +197,11 @@ describe("XML e-CF 34 (nota de crédito)", () => {
     expect(fuera).not.toContain("RazonModificacion");
   });
 
+  it("sin comprador omite el bloque Comprador (opcional en E34); en E32 va vacío porque es obligatorio", () => {
+    expect(construirXmlEcf(notaCreditoPrueba(), FIRMA)).not.toContain("<Comprador>");
+    expect(construirXmlEcf(consumoPrueba(), FIRMA)).toContain("<Comprador></Comprador>");
+  });
+
   it("se niega a construir una nota de crédito sin referencia", () => {
     expect(() => construirXmlEcf(notaCreditoPrueba({ referencia: null }), FIRMA)).toThrow(/referencia/i);
   });

@@ -111,12 +111,18 @@ function emisor(doc: ComprobanteATransmitir): Nodo {
   ];
 }
 
+/** En E33, E34 y E47 el bloque Comprador es opcional en el XSD: sin datos se omite (la DGII rechaza tags vacíos). */
+const COMPRADOR_OPCIONAL: ReadonlySet<string> = new Set(["33", "34", "47"]);
+
 function comprador(doc: ComprobanteATransmitir): Nodo {
+  const rnc = texto(doc.receptorDocumentoNumero);
+  const nombre = texto(doc.receptorNombre, 150);
+  if (!rnc && !nombre && COMPRADOR_OPCIONAL.has(doc.tipoEcf)) return ["Comprador", null];
   return [
     "Comprador",
     [
-      ["RNCComprador", texto(doc.receptorDocumentoNumero)],
-      ["RazonSocialComprador", texto(doc.receptorNombre, 150)],
+      ["RNCComprador", rnc],
+      ["RazonSocialComprador", nombre],
     ],
   ];
 }
