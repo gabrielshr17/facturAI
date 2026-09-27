@@ -111,16 +111,36 @@ export function crearServicioRecibidos(opciones: OpcionesServicioRecibidos): Ser
       );
       const nombreArchivo = `${opciones.rncPropio}${fila.encf}.xml`;
 
-      const respuestaDgii = await dgii.enviarAprobacionComercial(xml, nombreArchivo);
+      if (!(await almacen.reservarRespuesta(id))) {
+        throw new DocumentoFiscalInvalidoError(
+          "Este e-CF ya se está respondiendo desde otra caja o ya fue respondido.",
+        );
+      }
+      let respuestaDgii: RespuestaAnulacion;
+      try {
+        respuestaDgii = await dgii.enviarAprobacionComercial(xml, nombreArchivo);
+      } catch (error) {
+        await almacen.liberarRespuesta(id);
+        throw error;
+      }
       if (!respuestaDgii.aceptada) {
+        await almacen.liberarRespuesta(id);
         return { dgii: respuestaDgii, emisor: { entregada: false, detalle: "No se envió: la DGII no la validó." } };
       }
-      await almacen.registrarAprobacionEmitida(id, {
-        aprobado: respuesta.aprobado,
-        motivo: respuesta.motivo?.trim() || null,
-        xml,
-        enviadaAt: momento.toISOString(),
-      });
+      try {
+        await almacen.registrarAprobacionEmitida(id, {
+          aprobado: respuesta.aprobado,
+          motivo: respuesta.motivo?.trim() || null,
+          xml,
+          enviadaAt: momento.toISOString(),
+        });
+      } catch (error) {
+        throw new Error(
+          `La DGII ya recibió la respuesta comercial de ${fila.encf}, pero no se pudo guardar: no la vuelvas a enviar. ` +
+            `Detalle: ${error instanceof Error ? error.message : String(error)}`,
+          { cause: error },
+        );
+      }
 
       let emisor: ResultadoRespuestaComercial["emisor"];
       try {

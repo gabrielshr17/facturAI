@@ -44,6 +44,16 @@ export function crearAlmacenMemoria() {
       const fila = ecfs.find((e) => e.id === id);
       return fila ? publica(fila) : null;
     },
+    async reservarRespuesta(id) {
+      const fila = ecfs.find((e) => e.id === id);
+      if (!fila || fila.estadoAprobacion !== "pendiente") return false;
+      fila.estadoAprobacion = "enviando";
+      return true;
+    },
+    async liberarRespuesta(id) {
+      const fila = ecfs.find((e) => e.id === id);
+      if (fila?.estadoAprobacion === "enviando") fila.estadoAprobacion = "pendiente";
+    },
     async registrarAprobacionEmitida(id, aprobacion) {
       const fila = ecfs.find((e) => e.id === id);
       if (!fila) return;

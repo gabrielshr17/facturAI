@@ -24,9 +24,15 @@ async function preparar(
     directorio?: DirectorioContribuyente | null;
     dgiiAcepta?: boolean;
     estadoEnDgii?: { estado: "aceptado" | "rechazado" | "no_encontrado"; montoTotal: number | null };
+    fallaAlGuardar?: boolean;
   } = {},
 ) {
   const { almacen, ecfs } = crearAlmacenMemoria();
+  if (opciones.fallaAlGuardar) {
+    almacen.registrarAprobacionEmitida = async () => {
+      throw new Error("Postgres no disponible");
+    };
+  }
   await almacen.guardarEcf({
     tipoEcf: "31",
     encf: "E310000000007",
@@ -127,6 +133,27 @@ describe("servicio de e-CF recibidos", () => {
   it("un e-CF cuyo monto no coincide con el de la DGII se trata como no confiable", async () => {
     const { servicio } = await preparar({ estadoEnDgii: { estado: "aceptado", montoTotal: 10 } });
     await expect(servicio.detalle("r-1")).rejects.toBeInstanceOf(DocumentoFiscalInvalidoError);
+  });
+
+  it("dos respuestas simultáneas envían una sola a la DGII", async () => {
+    const { servicio, enviadosDgii } = await preparar();
+    const resultados = await Promise.allSettled([
+      servicio.responder("r-1", { aprobado: true }),
+      servicio.responder("r-1", { aprobado: true }),
+    ]);
+    expect(resultados.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(resultados.find((r) => r.status === "rejected")).toMatchObject({
+      reason: expect.any(DocumentoFiscalInvalidoError),
+    });
+    expect(enviadosDgii).toHaveLength(1);
+  });
+
+  it("si la DGII aceptó pero no se pudo guardar, queda 'enviando' y no se puede reenviar", async () => {
+    const { servicio, ecfs, enviadosDgii } = await preparar({ fallaAlGuardar: true });
+    await expect(servicio.responder("r-1", { aprobado: true })).rejects.toThrow(/no la vuelvas a enviar/);
+    expect(ecfs[0]?.estadoAprobacion).toBe("enviando");
+    await expect(servicio.responder("r-1", { aprobado: true })).rejects.toBeInstanceOf(DocumentoFiscalInvalidoError);
+    expect(enviadosDgii).toHaveLength(1);
   });
 
   it("un rechazo comercial exige motivo", async () => {

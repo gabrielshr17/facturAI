@@ -71,7 +71,7 @@ export interface EcfRecibidoResumen {
   fechaEmision: string;
   montoTotal: number;
   totalItbis: number;
-  estadoAprobacion: "pendiente" | "aprobado" | "rechazado";
+  estadoAprobacion: "pendiente" | "enviando" | "aprobado" | "rechazado";
   motivoAprobacion: string | null;
   importadoAt: string | null;
   recibidoAt: string;

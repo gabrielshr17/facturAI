@@ -23,6 +23,7 @@ const ETIQUETA_APROBACION: Record<
   { texto: string; color: string; fondo: string }
 > = {
   pendiente: { texto: "Por aprobar", color: c.amarillo, fondo: c.amarilloFondo },
+  enviando: { texto: "Enviando a la DGII", color: c.amarillo, fondo: c.amarilloFondo },
   aprobado: { texto: "Aprobado", color: c.verde, fondo: c.verdeFondo },
   rechazado: { texto: "Rechazado", color: c.rojo, fondo: c.rojoFondo },
 };

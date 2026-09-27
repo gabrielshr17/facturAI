@@ -6,7 +6,8 @@ export interface EcfRecibidoGuardado extends EcfRecibido {
   acuseXml: string;
 }
 
-export type EstadoAprobacion = "pendiente" | "aprobado" | "rechazado";
+/** `enviando`: una caja reservó la respuesta y la está enviando a la DGII (evita envíos dobles). */
+export type EstadoAprobacion = "pendiente" | "enviando" | "aprobado" | "rechazado";
 
 export interface FilaEcfRecibido extends EcfRecibido {
   id: string;
@@ -40,6 +41,10 @@ export interface AlmacenRecepcion {
   listarEcfRecibidos(): Promise<FilaEcfRecibido[]>;
   obtenerEcfRecibido(id: string): Promise<FilaEcfRecibido | null>;
   obtenerXmlEcfRecibido(id: string): Promise<string | null>;
+  /** Pasa de `pendiente` a `enviando` de forma atómica; false si otra caja ya la reservó. */
+  reservarRespuesta(id: string): Promise<boolean>;
+  /** Devuelve a `pendiente` una respuesta reservada que no llegó a la DGII. */
+  liberarRespuesta(id: string): Promise<void>;
   registrarAprobacionEmitida(id: string, aprobacion: AprobacionEmitida): Promise<void>;
   marcarImportado(id: string, fecha: string): Promise<void>;
 }
@@ -149,6 +154,26 @@ export function crearAlmacenSupabase(db: SupabaseClient): AlmacenRecepcion {
         .overrideTypes<{ xml: string } | null, { merge: false }>();
       if (error) throw new Error(`No se pudo leer el XML del e-CF recibido: ${error.message}`);
       return data?.xml ?? null;
+    },
+
+    async reservarRespuesta(id) {
+      const { data, error } = await db
+        .from("ecf_recibido")
+        .update({ estado_aprobacion: "enviando" })
+        .eq("id", id)
+        .eq("estado_aprobacion", "pendiente")
+        .select("id");
+      if (error) throw new Error(`No se pudo reservar la respuesta comercial: ${error.message}`);
+      return (data ?? []).length === 1;
+    },
+
+    async liberarRespuesta(id) {
+      const { error } = await db
+        .from("ecf_recibido")
+        .update({ estado_aprobacion: "pendiente" })
+        .eq("id", id)
+        .eq("estado_aprobacion", "enviando");
+      if (error) throw new Error(`No se pudo liberar la respuesta comercial: ${error.message}`);
     },
 
     async registrarAprobacionEmitida(id, aprobacion) {

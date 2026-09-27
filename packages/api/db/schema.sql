@@ -502,7 +502,7 @@ CREATE TABLE ecf_recibido (
   total_itbis           NUMERIC(14,2) NOT NULL DEFAULT 0,
   xml                   TEXT NOT NULL, -- XML firmado íntegro: se conserva tal cual (valor legal)
   acuse_xml             TEXT NOT NULL, -- ARECF firmado que respondimos
-  estado_aprobacion     TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|aprobado|rechazado
+  estado_aprobacion     TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|enviando|aprobado|rechazado
   motivo_aprobacion     TEXT,
   aprobacion_xml        TEXT, -- ACECF firmado que emitimos
   aprobacion_enviada_at TIMESTAMPTZ,
