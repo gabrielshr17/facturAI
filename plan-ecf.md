@@ -88,3 +88,6 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 - 2026-09-27 (noche): Fase A completa (auth por llave de caja + lista de correos, RNC fijo + validación
   SN del certificado, sección "Facturación electrónica" en Configuración). Falta crear la tabla
   `caja_api_key` en Postgres (va en F1). **Siguiente: B1.**
+- 2026-09-27 (día): Fases B, F (F1–F2), D, C, E y G completas. Solo queda F3 (aplicar el esquema a
+  Supabase, requiere OK). Hallazgos: dos XSD oficiales con errores de sintaxis (.NET) parchados en
+  `packages/api/xsd/`; `Comprador` vacío en E34 corregido; el chatbot no enviaba credenciales.
