@@ -10,6 +10,8 @@ Solo se usan en pruebas para validar el XML generado.
 | `ecf-34.xsd` | `e-CF 34 v.1.0.xsd` |
 | `rfce-32.xsd` | `RFCE 32 v.1.0.xsd` |
 | `anecf.xsd` | `ANECF v.1.0.xsd` |
+| `acecf.xsd` | `ACECF v.1.0.xsd` |
+| `arecf.xsd` | `ARECF v1.0.xsd` |
 
 Cambios locales respecto al original:
 
@@ -18,5 +20,5 @@ Cambios locales respecto al original:
   inicial), lo que rompe el esquema en cualquier validador estricto. Se eliminó el espacio.
 
 Al actualizar a una versión nueva de la DGII, repetir estos ajustes si siguen aplicando.
-- `rfce-32.xsd`: varios `pattern` usan grupos no capturantes `(?:...)` (sintaxis .NET), inválidos en XSD. Se
+- `rfce-32.xsd` y `acecf.xsd`: varios `pattern` usan grupos no capturantes `(?:...)` (sintaxis .NET), inválidos en XSD. Se
   reemplazaron por grupos normales `(...)`, que validan lo mismo.
