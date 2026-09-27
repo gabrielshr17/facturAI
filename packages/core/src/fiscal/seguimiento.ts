@@ -130,6 +130,12 @@ export async function anularNcfPendientes(deps: AnularDeps): Promise<{ anulados:
   return resultado;
 }
 
+/**
+ * Acuse "no recibido" por envío duplicado (código DGII 3): el comprador ya tiene el e-CF, p. ej. porque
+ * una entrega anterior llegó pero su respuesta se perdió por tiempo de espera.
+ */
+const MOTIVO_ENVIO_DUPLICADO = 3;
+
 export interface DatosEntrega {
   encf: string;
   rncComprador: string;
@@ -168,6 +174,14 @@ export async function entregarComprobantesAReceptores(deps: EntregaDeps): Promis
         resumen.noElectronicos += 1;
       } else if (resultado.recibido) {
         await deps.comprobanteRepo.registrarEntrega(c.id, "entregado", null, resultado.acuseXml);
+        resumen.entregados += 1;
+      } else if (resultado.motivo === MOTIVO_ENVIO_DUPLICADO) {
+        await deps.comprobanteRepo.registrarEntrega(
+          c.id,
+          "entregado",
+          "El comprador ya lo tenía (envío duplicado).",
+          resultado.acuseXml,
+        );
         resumen.entregados += 1;
       } else {
         await deps.comprobanteRepo.registrarEntrega(

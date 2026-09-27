@@ -118,4 +118,20 @@ describe("entrega de e-CF a compradores electrónicos", () => {
     });
     expect((await repo.obtener(caido.id))?.entrega_estado).toBe("pendiente");
   });
+
+  it("si el comprador responde 'envío duplicado' (motivo 3) ya lo tiene: cuenta como entregado", async () => {
+    const repo = crearComprobanteFiscalRepo(db);
+    const c = await comprobante({ tipoEcf: "31", ncf: "E310000000001", estadoDgii: "aceptado" });
+
+    const resumen = await entregarComprobantesAReceptores({
+      comprobanteRepo: repo,
+      entregar: async () => ({ electronico: true, recibido: false, motivo: 3, acuseXml: "<ARECF>dup</ARECF>" }),
+    });
+
+    expect(resumen).toEqual({ entregados: 1, noElectronicos: 0, rechazados: [], errores: 0 });
+    expect(await repo.obtener(c.id)).toMatchObject({
+      entrega_estado: "entregado",
+      entrega_detalle: "El comprador ya lo tenía (envío duplicado).",
+    });
+  });
 });
