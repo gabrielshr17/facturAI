@@ -45,6 +45,14 @@ export function crearNcfAnulacionRepo(db: SqlDriver) {
       }
     },
 
+    /** El usuario ya revisó un e-NCF que la DGII reporta como utilizado. */
+    async marcarRevisado(id: string): Promise<void> {
+      await db.run("UPDATE ncf_anulacion SET estado='revisado', updated_at=? WHERE id=? AND estado='utilizado'", [
+        now(),
+        id,
+      ]);
+    },
+
     async marcarAnulados(ids: string[], mensaje: string | null): Promise<void> {
       const ts = now();
       for (const id of ids) {

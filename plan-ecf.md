@@ -44,7 +44,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 
 - [x] D1. Antes de anular, consultar `consultatrackids` (RNC + e-NCF): si la DGII tiene trackId, no se
       anula — se reconcilia (el e-CF sí llegó).
-- [ ] D2. Pantalla Configuración → Facturación electrónica: estado del servicio, vencimiento del
+- [x] D2. Pantalla Configuración → Facturación electrónica: estado del servicio, vencimiento del
       certificado (aviso a 30 días), pendientes, cola de anulación (reintentar), utilizados
       (marcar revisado), rechazados con motivo.
 - [ ] D3. Reintentar/reimprimir comprobantes desde Consultar facturas.

@@ -202,7 +202,7 @@ export interface ComprobanteFiscal extends Auditoria {
 /** Entrega del e-CF aceptado al comprador cuando este es emisor electrónico. */
 export type EstadoEntrega = "no_aplica" | "pendiente" | "entregado" | "rechazado" | "no_electronico";
 
-export type EstadoNcfAnulacion = "pendiente" | "anulado" | "utilizado";
+export type EstadoNcfAnulacion = "pendiente" | "anulado" | "utilizado" | "revisado";
 
 export interface NcfAnulacion extends Auditoria {
   id: string;

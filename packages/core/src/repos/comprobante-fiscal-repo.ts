@@ -126,6 +126,15 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
       );
     },
 
+    /** Lo que requiere atención: en validación, rechazados por la DGII o entrega al comprador fallida. */
+    async listarParaRevision(): Promise<ComprobanteFiscal[]> {
+      return db.all<ComprobanteFiscal>(
+        `SELECT ${COLS} FROM comprobante_fiscal
+          WHERE (estado_dgii IN ('pendiente','rechazado') OR entrega_estado='rechazado') AND deleted_at IS NULL
+          ORDER BY fecha_emision DESC LIMIT 200`,
+      );
+    },
+
     /** Aceptados por la DGII cuya entrega al comprador electrónico sigue pendiente. */
     async listarPorEntregar(): Promise<ComprobanteFiscal[]> {
       return db.all<ComprobanteFiscal>(

@@ -463,7 +463,7 @@ CREATE TABLE ncf_anulacion (
   tipo_ecf            TEXT NOT NULL,
   ncf                 TEXT NOT NULL,
   motivo              TEXT,
-  estado              TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|anulado|utilizado
+  estado              TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|anulado|utilizado|revisado
   ultimo_mensaje_dgii TEXT,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),

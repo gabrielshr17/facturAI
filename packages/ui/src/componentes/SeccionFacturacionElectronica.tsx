@@ -5,6 +5,7 @@ import { useRepos } from "../data/contexto.js";
 import { guardarLlaveCaja, obtenerLlaveCaja } from "../data/llaveCaja.js";
 import { obtenerEstadoServicioFiscal, type EstadoServicioFiscal } from "../data/fiscalCliente.js";
 import { mensajeError } from "../utilidades/errores.js";
+import { SeccionRevisionFiscal } from "./SeccionRevisionFiscal.js";
 
 const ETIQUETA_AMBIENTE: Record<EstadoServicioFiscal["ambiente"], string> = {
   testecf: "Pre-certificación (pruebas)",
@@ -133,6 +134,8 @@ export function SeccionFacturacionElectronica() {
           )}
         </dl>
       )}
+
+      <SeccionRevisionFiscal />
     </div>
   );
 }

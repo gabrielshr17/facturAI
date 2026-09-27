@@ -22,22 +22,12 @@ import {
   crearPromocionRepo,
   crearBackupRepo,
   crearCotizacionRepo,
-  reconciliarComprobantesPendientes,
-  anularNcfPendientes,
-  entregarComprobantesAReceptores,
 } from "@sfr/core";
 import { useAuth } from "../contexto/Auth.js";
 import { crearApiClient, type ApiClient } from "./apiClient.js";
 import { obtenerLlaveCaja } from "./llaveCaja.js";
-import {
-  MODO_FISCAL,
-  anularRangosNcf,
-  consultarEstadoComprobante,
-  consultarTrackIdsEcf,
-  entregarAComprador,
-  crearProveedorFiscalHttp,
-  type ModoFiscal,
-} from "./fiscalCliente.js";
+import { MODO_FISCAL, crearProveedorFiscalHttp, type ModoFiscal } from "./fiscalCliente.js";
+import { ejecutarCicloFiscal } from "./seguimientoFiscal.js";
 
 const INTERVALO_SEGUIMIENTO_FISCAL_MS = 5 * 60 * 1000;
 
@@ -81,47 +71,21 @@ const ReposContext = createContext<Repos | null>(null);
 function useSeguimientoFiscal(repos: Repos, activo: boolean): void {
   useEffect(() => {
     if (!activo) return;
-    let enCurso = false;
-
-    async function ciclo() {
-      if (enCurso) return;
-      enCurso = true;
+    async function correr() {
       try {
-        const resumen = await reconciliarComprobantesPendientes({
-          comprobanteRepo: repos.comprobanteFiscal,
-          consultarEstado: (trackId) => consultarEstadoComprobante(repos.api, trackId),
-        });
-        if (resumen.rechazados.length > 0) {
-          console.warn("La DGII rechazó comprobantes que estaban en proceso:", resumen.rechazados);
-        }
-        const entregas = await entregarComprobantesAReceptores({
-          comprobanteRepo: repos.comprobanteFiscal,
-          entregar: (datos) => entregarAComprador(repos.api, datos),
-        });
-        if (entregas.rechazados.length > 0) {
-          console.warn("Compradores electrónicos rechazaron la entrega de:", entregas.rechazados);
-        }
-        const negocio = await repos.negocio.obtener();
-        if (negocio?.rnc) {
-          const { utilizados } = await anularNcfPendientes({
-            anulacionRepo: repos.ncfAnulacion,
-            rncEmisor: negocio.rnc,
-            anular: (rnc, rangos) => anularRangosNcf(repos.api, rnc, rangos),
-            consultarTrackIds: (encf) => consultarTrackIdsEcf(repos.api, encf),
-          });
-          if (utilizados.length > 0) {
-            console.warn("La DGII reporta como utilizados e-NCF que no tienen venta local; revisar:", utilizados);
-          }
+        const resumen = await ejecutarCicloFiscal(repos);
+        if (resumen.rechazados.length || resumen.entregasRechazadas.length || resumen.utilizados.length) {
+          console.warn(
+            "Hay comprobantes fiscales que requieren revisión (Configuración → Facturación electrónica).",
+            resumen,
+          );
         }
       } catch (error) {
         console.warn("Falló un ciclo de seguimiento fiscal; se reintentará en el próximo intervalo.", error);
-      } finally {
-        enCurso = false;
       }
     }
-
-    void ciclo();
-    const temporizador = setInterval(() => void ciclo(), INTERVALO_SEGUIMIENTO_FISCAL_MS);
+    void correr();
+    const temporizador = setInterval(() => void correr(), INTERVALO_SEGUIMIENTO_FISCAL_MS);
     return () => clearInterval(temporizador);
   }, [repos, activo]);
 }

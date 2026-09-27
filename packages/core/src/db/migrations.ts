@@ -516,7 +516,7 @@ export const migrations: Migration[] = [
         tipo_ecf            TEXT NOT NULL,
         ncf                 TEXT NOT NULL,
         motivo              TEXT,
-        estado              TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|anulado|utilizado
+        estado              TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|anulado|utilizado|revisado
         ultimo_mensaje_dgii TEXT,
         created_at          TEXT NOT NULL,
         updated_at          TEXT NOT NULL,
