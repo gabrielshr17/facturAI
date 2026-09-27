@@ -1,5 +1,6 @@
 import type {
   DatosEntrega,
+  ImpuestoTipo,
   EstadoTransmision,
   ProveedorFiscal,
   RangoNcf,
@@ -59,4 +60,56 @@ export async function consultarTrackIdsEcf(
     `/fiscal/trackids/${encodeURIComponent(encf)}`,
   );
   return trackIds;
+}
+
+export interface EcfRecibidoResumen {
+  id: string;
+  tipoEcf: string;
+  encf: string;
+  rncEmisor: string;
+  razonSocialEmisor: string;
+  fechaEmision: string;
+  montoTotal: number;
+  totalItbis: number;
+  estadoAprobacion: "pendiente" | "aprobado" | "rechazado";
+  motivoAprobacion: string | null;
+  importadoAt: string | null;
+  recibidoAt: string;
+}
+
+export interface ItemEcfRecibido {
+  descripcion: string;
+  cantidad: number;
+  costoUnitario: number;
+  impuestoTipo: ImpuestoTipo;
+  tasaImpuesto: number;
+}
+
+export interface ResultadoRespuestaComercial {
+  dgii: { aceptada: boolean; mensajes: string[] };
+  emisor: { entregada: true } | { entregada: false; detalle: string };
+}
+
+export async function listarEcfRecibidos(api: ApiClient): Promise<EcfRecibidoResumen[]> {
+  const { recibidos } = await api.get<{ recibidos: EcfRecibidoResumen[] }>("/fiscal/recibidos");
+  return recibidos;
+}
+
+export function detalleEcfRecibido(
+  api: ApiClient,
+  id: string,
+): Promise<{ recibido: EcfRecibidoResumen; items: ItemEcfRecibido[] }> {
+  return api.get(`/fiscal/recibidos/${encodeURIComponent(id)}`);
+}
+
+export function responderEcfRecibido(
+  api: ApiClient,
+  id: string,
+  respuesta: { aprobado: boolean; motivo?: string },
+): Promise<ResultadoRespuestaComercial> {
+  return api.post(`/fiscal/recibidos/${encodeURIComponent(id)}/respuesta`, respuesta);
+}
+
+export async function marcarEcfRecibidoImportado(api: ApiClient, id: string): Promise<void> {
+  await api.post(`/fiscal/recibidos/${encodeURIComponent(id)}/importado`, {});
 }

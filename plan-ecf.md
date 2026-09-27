@@ -31,7 +31,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
       Código en `fiscal/recepcion/almacen.ts`; tablas en `schema.sql`.
 - [x] B5. API protegida para la app: listar recibidos, emitir aprobación/rechazo comercial
       (firma ACECF y envía a DGII + al emisor).
-- [ ] B6. UI en Compras: "Comprobantes de proveedores" — ver, importar como compra, aprobar/rechazar.
+- [x] B6. UI en Compras: "Comprobantes de proveedores" — ver, importar como compra, aprobar/rechazar.
 
 ## F — Esquema Postgres
 

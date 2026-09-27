@@ -14,6 +14,8 @@ import { analizarComprobante, type DatosExtraidosComprobante } from "../data/cha
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { filtrarNumero } from "../utilidades/numero.js";
 import { mensajeError } from "../utilidades/errores.js";
+import { ComprobantesProveedores, type EcfParaCompra } from "../componentes/ComprobantesProveedores.js";
+import { marcarEcfRecibidoImportado } from "../data/fiscalCliente.js";
 
 interface LineaLocal {
   producto_id: string | null;
@@ -42,7 +44,16 @@ function leerArchivoComoBase64(file: File): Promise<string> {
 
 /** Compras (§ Compras e inventario, con archivado): registrar una compra y consultar el historial. */
 export function Compras() {
-  const { compra: repo, proveedor: proveedores, producto: productos, comprobanteArchivo: archivos } = useRepos();
+  const {
+    compra: repo,
+    proveedor: proveedores,
+    producto: productos,
+    comprobanteArchivo: archivos,
+    api,
+    modoFiscal,
+  } = useRepos();
+  const [ecfOrigenId, setEcfOrigenId] = useState<string | null>(null);
+  const [recargarRecibidos, setRecargarRecibidos] = useState(0);
 
   // --- Formulario de nueva compra --------------------------------------
   const [fecha, setFecha] = useState(hoyIso());
@@ -216,7 +227,35 @@ export function Compras() {
     }
   }
 
+  /** Pasa al formulario un e-CF recibido de un proveedor: el usuario revisa y guarda como cualquier compra. */
+  async function usarEcfEnCompra(ecf: EcfParaCompra) {
+    setError(null);
+    setMensaje(null);
+    try {
+      const { recibido, items } = ecf;
+      const conocido = (await proveedores.listar()).find((p) => p.rnc === recibido.rncEmisor);
+      const proveedor =
+        conocido ??
+        (await proveedores.crear({
+          nombre: recibido.razonSocialEmisor || `RNC ${recibido.rncEmisor}`,
+          rnc: recibido.rncEmisor,
+        }));
+      const [dia, mes, anio] = recibido.fechaEmision.split("-");
+      if (dia && mes && anio) setFecha(`${anio}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`);
+      setProveedorSel(proveedor);
+      setNcfProveedor(recibido.encf);
+      setTieneComprobanteFiscal(true);
+      setNotas(`e-CF ${recibido.encf} recibido de ${recibido.razonSocialEmisor || recibido.rncEmisor}`);
+      setLineas(items.map((i) => ({ producto_id: null, ...i })));
+      setEcfOrigenId(ecf.id);
+      setMensaje("Revisa los artículos (puedes enlazarlos a productos del catálogo) y guarda la compra.");
+    } catch (e) {
+      setError(mensajeError(e));
+    }
+  }
+
   function limpiarFormulario() {
+    setEcfOrigenId(null);
     setFecha(hoyIso());
     setProveedorSel(null);
     setNcfProveedor("");
@@ -268,6 +307,14 @@ export function Compras() {
         });
       }
 
+      if (ecfOrigenId) {
+        try {
+          await marcarEcfRecibidoImportado(api, ecfOrigenId);
+        } catch (e) {
+          console.warn("La compra se guardó, pero no se pudo marcar el e-CF como registrado", e);
+        }
+        setRecargarRecibidos((n) => n + 1);
+      }
       setMensaje("Compra registrada.");
       limpiarFormulario();
       await cargarHistorial();
@@ -282,6 +329,12 @@ export function Compras() {
 
   return (
     <div>
+      {modoFiscal === "dgii" && (
+        <ComprobantesProveedores
+          onUsarEnCompra={(ecf) => void usarEcfEnCompra(ecf)}
+          recargarSeñal={recargarRecibidos}
+        />
+      )}
       <div style={{ ...s.tarjeta, marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <Truck size={18} /> Nueva compra
