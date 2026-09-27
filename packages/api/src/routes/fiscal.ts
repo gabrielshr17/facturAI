@@ -38,11 +38,20 @@ export function rutaFiscal(modulo: ModuloFiscal): FastifyPluginAsync {
 
     app.get("/fiscal/estado", async () => {
       if (!modulo.disponible) return { disponible: false, ambiente: modulo.ambiente, motivo: modulo.motivo };
-      return { disponible: true, ambiente: modulo.ambiente, certificadoVence: modulo.certificadoVence.toISOString() };
+      return {
+        disponible: true,
+        ambiente: modulo.ambiente,
+        rncEmisor: modulo.rncEmisor,
+        certificadoVence: modulo.certificadoVence.toISOString(),
+      };
     });
 
     app.post<{ Body: ComprobanteATransmitir }>("/fiscal/comprobantes", async (request, reply) => {
       if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
+      if (request.body?.emisor?.rnc !== modulo.rncEmisor) {
+        await reply.code(403).send({ error: `Este servidor solo firma comprobantes del RNC ${modulo.rncEmisor}.` });
+        return;
+      }
       try {
         return await modulo.servicio.emitir(request.body);
       } catch (error) {
@@ -63,6 +72,10 @@ export function rutaFiscal(modulo: ModuloFiscal): FastifyPluginAsync {
       "/fiscal/anulaciones",
       async (request, reply) => {
         if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
+        if (request.body?.rncEmisor !== modulo.rncEmisor) {
+          await reply.code(403).send({ error: `Este servidor solo anula secuencias del RNC ${modulo.rncEmisor}.` });
+          return;
+        }
         try {
           return await modulo.servicio.anular(request.body.rncEmisor, request.body.rangos);
         } catch (error) {

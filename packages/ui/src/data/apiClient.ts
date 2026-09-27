@@ -29,6 +29,7 @@ export interface ApiClient {
 export interface OpcionesApiClient {
   baseUrl?: string;
   obtenerToken: () => string | null;
+  obtenerLlaveCaja?: () => string | null;
 }
 
 async function mensajeDeError(respuesta: Response): Promise<string> {
@@ -41,11 +42,17 @@ async function mensajeDeError(respuesta: Response): Promise<string> {
   return `El servidor respondió con un error (${respuesta.status}).`;
 }
 
-export function crearApiClient({ baseUrl = API_BASE_URL, obtenerToken }: OpcionesApiClient): ApiClient {
+export function crearApiClient({
+  baseUrl = API_BASE_URL,
+  obtenerToken,
+  obtenerLlaveCaja = () => null,
+}: OpcionesApiClient): ApiClient {
   async function solicitar<T>(metodo: "GET" | "POST", ruta: string, cuerpo?: unknown): Promise<T> {
     const token = obtenerToken();
     const cabeceras: Record<string, string> = {};
-    if (token) cabeceras.Authorization = `Bearer ${token}`;
+    const llaveCaja = obtenerLlaveCaja();
+    if (llaveCaja) cabeceras["X-Caja-Key"] = llaveCaja;
+    else if (token) cabeceras.Authorization = `Bearer ${token}`;
     if (cuerpo !== undefined) cabeceras["Content-Type"] = "application/json";
 
     let respuesta: Response;

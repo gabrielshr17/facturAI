@@ -6,11 +6,21 @@ import { crearClienteDgii } from "./dgii-cliente.js";
 import { crearServicioEmision, type ServicioEmision } from "./servicio-emision.js";
 
 export type ModuloFiscal =
-  | { disponible: true; ambiente: AmbienteDgii; certificadoVence: Date; servicio: ServicioEmision }
+  | {
+      disponible: true;
+      ambiente: AmbienteDgii;
+      rncEmisor: string;
+      certificadoVence: Date;
+      servicio: ServicioEmision;
+    }
   | { disponible: false; ambiente: AmbienteDgii; motivo: string };
 
 export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
   const ambiente = config.dgiiAmbiente;
+  const rncEmisor = config.dgiiRncEmisor;
+  if (!rncEmisor) {
+    return { disponible: false, ambiente, motivo: "Falta configurar DGII_RNC_EMISOR (RNC de la empresa)." };
+  }
   if (!config.dgiiP12Ruta || !config.dgiiP12Clave) {
     return { disponible: false, ambiente, motivo: "Falta configurar DGII_P12_PATH y DGII_P12_PASSWORD." };
   }
@@ -23,10 +33,19 @@ export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
         motivo: `El certificado digital venció el ${certificado.venceEl.toISOString()}.`,
       };
     }
+    const digitosSn = (certificado.serialSujeto ?? "").replace(/\D/g, "");
+    if (!digitosSn.includes(rncEmisor)) {
+      return {
+        disponible: false,
+        ambiente,
+        motivo: `El campo SN del certificado (${certificado.serialSujeto ?? "vacío"}) no corresponde al RNC ${rncEmisor}.`,
+      };
+    }
     const cliente = crearClienteDgii({ ambiente, certificado });
     return {
       disponible: true,
       ambiente,
+      rncEmisor,
       certificadoVence: certificado.venceEl,
       servicio: crearServicioEmision({ ambiente, certificado, cliente }),
     };

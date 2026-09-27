@@ -34,6 +34,10 @@ export interface ConfigApi {
   dgiiP12Clave: string | null;
   /** true si hay certificado y contraseña para firmar. */
   dgiiConfigurado: boolean;
+  /** RNC de la empresa: el API se niega a firmar comprobantes de cualquier otro emisor. */
+  dgiiRncEmisor: string | null;
+  /** Correos de Google con permiso para emitir comprobantes (además de las llaves de caja). */
+  correosPermitidos: string[];
 }
 
 function ambienteDgii(valor: string | undefined): AmbienteDgii {
@@ -68,5 +72,10 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
     dgiiP12Ruta,
     dgiiP12Clave,
     dgiiConfigurado: Boolean(dgiiP12Ruta && dgiiP12Clave),
+    dgiiRncEmisor: env.DGII_RNC_EMISOR?.trim() || null,
+    correosPermitidos: (env.API_CORREOS_PERMITIDOS ?? "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean),
   };
 }

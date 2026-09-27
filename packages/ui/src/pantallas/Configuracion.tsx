@@ -4,6 +4,7 @@ import { Store, Printer, Save } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c } from "../estilos.js";
 import { SeccionSecuenciasNcf } from "../componentes/SeccionSecuenciasNcf.js";
+import { SeccionFacturacionElectronica } from "../componentes/SeccionFacturacionElectronica.js";
 import { SeccionBitacora } from "../componentes/SeccionBitacora.js";
 import { SeccionImpresoraTermica } from "../componentes/SeccionImpresoraTermica.js";
 import { SeccionCuentaGoogle } from "../componentes/SeccionCuentaGoogle.js";
@@ -207,6 +208,8 @@ export function Configuracion() {
       </div>
 
       <SeccionImpresoraTermica />
+
+      <SeccionFacturacionElectronica />
 
       <SeccionSecuenciasNcf />
 

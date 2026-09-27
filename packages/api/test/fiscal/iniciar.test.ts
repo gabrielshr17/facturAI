@@ -1,0 +1,47 @@
+import { describe, expect, it } from "vitest";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { cargarConfig } from "../../src/config.js";
+import { iniciarModuloFiscal } from "../../src/fiscal/iniciar.js";
+import { certificadoPrueba, CLAVE_P12_PRUEBA } from "./certificado-prueba.js";
+
+function configCon(serialSujeto: string | undefined, env: Record<string, string> = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "p12-"));
+  const ruta = join(dir, "empresa.p12");
+  writeFileSync(ruta, certificadoPrueba(serialSujeto).p12);
+  return cargarConfig({
+    DGII_P12_PATH: ruta,
+    DGII_P12_PASSWORD: CLAVE_P12_PRUEBA,
+    DGII_RNC_EMISOR: "131880738",
+    ...env,
+  });
+}
+
+describe("iniciarModuloFiscal", () => {
+  it("queda disponible si el SN del certificado corresponde al RNC configurado", () => {
+    const modulo = iniciarModuloFiscal(configCon("RNC131880738"));
+    expect(modulo).toMatchObject({ disponible: true, rncEmisor: "131880738" });
+  });
+
+  it("no queda disponible si el SN del certificado es de otro RNC", () => {
+    const modulo = iniciarModuloFiscal(configCon("RNC101010101"));
+    expect(modulo.disponible).toBe(false);
+    if (!modulo.disponible) expect(modulo.motivo).toMatch(/SN/);
+  });
+
+  it("no queda disponible si el certificado no trae SN", () => {
+    const modulo = iniciarModuloFiscal(configCon(undefined));
+    expect(modulo.disponible).toBe(false);
+  });
+
+  it("exige DGII_RNC_EMISOR", () => {
+    const modulo = iniciarModuloFiscal(configCon("RNC131880738", { DGII_RNC_EMISOR: "" }));
+    expect(modulo.disponible).toBe(false);
+    if (!modulo.disponible) expect(modulo.motivo).toMatch(/DGII_RNC_EMISOR/);
+  });
+
+  it("sin certificado no queda disponible", () => {
+    expect(iniciarModuloFiscal(cargarConfig({})).disponible).toBe(false);
+  });
+});

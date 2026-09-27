@@ -4,6 +4,7 @@ import { SignedXml } from "xml-crypto";
 const RSA_SHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
 const C14N = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315";
 const SHA256 = "http://www.w3.org/2001/04/xmlenc#sha256";
+const OID_SERIAL_SUJETO = "2.5.4.5";
 const FIRMA_ENVUELTA = "http://www.w3.org/2000/09/xmldsig#enveloped-signature";
 
 export class CertificadoInvalidoError extends Error {
@@ -17,6 +18,8 @@ export interface CertificadoFirma {
   clavePrivadaPem: string;
   certificadoPem: string;
   venceEl: Date;
+  /** Atributo SN (serialNumber) del sujeto: la DGII exige que corresponda al RNC/cédula del dueño. */
+  serialSujeto: string | null;
 }
 
 export function cargarCertificado(p12: Buffer, clave: string): CertificadoFirma {
@@ -42,6 +45,8 @@ export function cargarCertificado(p12: Buffer, clave: string): CertificadoFirma 
     clavePrivadaPem: forge.pki.privateKeyToPem(bolsaClave.key),
     certificadoPem: forge.pki.certificateToPem(bolsaCert.cert),
     venceEl: bolsaCert.cert.validity.notAfter,
+    serialSujeto:
+      String(bolsaCert.cert.subject.attributes.find((a) => a.type === OID_SERIAL_SUJETO)?.value ?? "") || null,
   };
 }
 

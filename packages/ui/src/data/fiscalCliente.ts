@@ -11,6 +11,7 @@ export interface EstadoServicioFiscal {
   disponible: boolean;
   ambiente: "testecf" | "certecf" | "ecf";
   motivo?: string;
+  rncEmisor?: string;
   certificadoVence?: string;
 }
 

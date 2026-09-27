@@ -27,6 +27,7 @@ import {
 } from "@sfr/core";
 import { useAuth } from "../contexto/Auth.js";
 import { crearApiClient, type ApiClient } from "./apiClient.js";
+import { obtenerLlaveCaja } from "./llaveCaja.js";
 import {
   MODO_FISCAL,
   anularRangosNcf,
@@ -121,7 +122,7 @@ function useSeguimientoFiscal(repos: Repos, activo: boolean): void {
 export function ProveedorDatos({ db, children }: { db: SqlDriver; children: ReactNode }) {
   const { sesion } = useAuth();
   const accessToken = sesion?.accessToken ?? null;
-  const api = useMemo(() => crearApiClient({ obtenerToken: () => accessToken }), [accessToken]);
+  const api = useMemo(() => crearApiClient({ obtenerToken: () => accessToken, obtenerLlaveCaja }), [accessToken]);
 
   const repos = useMemo<Repos>(() => {
     return {

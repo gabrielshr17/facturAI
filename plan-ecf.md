@@ -11,12 +11,12 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 
 ## A — Cerrar el acceso al API
 
-- [ ] A1. Llave por caja (`X-Caja-Key`): tabla `caja_api_key` (hash SHA-256) en Postgres; plugin de auth
+- [x] A1. Llave por caja (`X-Caja-Key`): tabla `caja_api_key` (hash SHA-256) en Postgres; plugin de auth
       acepta llave válida **o** JWT de Google cuyo correo esté en `API_CORREOS_PERMITIDOS`.
-- [ ] A2. Script para emitir/revocar llaves de caja (`pnpm --filter @sfr/api caja-key`).
-- [ ] A3. `DGII_RNC_EMISOR`: el API se niega a firmar para otro RNC (403) y al arrancar valida que el
+- [x] A2. Script para emitir/revocar llaves de caja (`pnpm --filter @sfr/api caja-key`).
+- [x] A3. `DGII_RNC_EMISOR`: el API se niega a firmar para otro RNC (403) y al arrancar valida que el
       campo SN del certificado corresponda al RNC (si no, `disponible: false` con el motivo).
-- [ ] A4. UI: campo en Configuración para pegar la llave de la caja; `apiClient` la envía.
+- [x] A4. UI: campo en Configuración para pegar la llave de la caja; `apiClient` la envía.
 
 ## B — Servicios de recepción (obligatorios para postular)
 
@@ -74,4 +74,6 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 
 ## Bitácora
 
-- (se agrega una línea por sesión de trabajo)
+- 2026-09-27 (noche): Fase A completa (auth por llave de caja + lista de correos, RNC fijo + validación
+  SN del certificado, sección "Facturación electrónica" en Configuración). Falta crear la tabla
+  `caja_api_key` en Postgres (va en F1). **Siguiente: B1.**

@@ -7,10 +7,11 @@ export interface CertificadoPrueba {
   certificadoPem: string;
 }
 
-let cache: CertificadoPrueba | undefined;
+const cache = new Map<string, CertificadoPrueba>();
 
-export function certificadoPrueba(): CertificadoPrueba {
-  if (cache) return cache;
+export function certificadoPrueba(serialSujeto?: string): CertificadoPrueba {
+  const guardado = cache.get(serialSujeto ?? "");
+  if (guardado) return guardado;
   const llaves = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
   const cert = forge.pki.createCertificate();
   cert.publicKey = llaves.publicKey;
@@ -20,6 +21,7 @@ export function certificadoPrueba(): CertificadoPrueba {
   const sujeto = [
     { name: "commonName", value: "SUPLIDORA DE PRUEBA SRL" },
     { name: "countryName", value: "DO" },
+    ...(serialSujeto ? [{ type: "2.5.4.5", value: serialSujeto }] : []),
   ];
   cert.setSubject(sujeto);
   cert.setIssuer(sujeto);
@@ -27,6 +29,7 @@ export function certificadoPrueba(): CertificadoPrueba {
 
   const asn1 = forge.pkcs12.toPkcs12Asn1(llaves.privateKey, [cert], CLAVE_P12_PRUEBA, { algorithm: "3des" });
   const der = forge.asn1.toDer(asn1).getBytes();
-  cache = { p12: Buffer.from(der, "binary"), certificadoPem: forge.pki.certificateToPem(cert) };
-  return cache;
+  const creado = { p12: Buffer.from(der, "binary"), certificadoPem: forge.pki.certificateToPem(cert) };
+  cache.set(serialSujeto ?? "", creado);
+  return creado;
 }

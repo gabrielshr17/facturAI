@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { cargarConfig } from "./config.js";
-import { registrarAuth } from "./plugins/auth.js";
+import { registrarAuth, dependenciasAuthDesdeConfig, exigirPermisoFiscal } from "./plugins/auth.js";
 import { rutaSalud } from "./routes/health.js";
 import { rutaFiscal } from "./routes/fiscal.js";
 import { rutaChatbot } from "./routes/chatbot.js";
@@ -29,8 +29,11 @@ await app.register(cors, { origin: true });
 // `rutaSalud`, registrada como hermana sobre `app` y no como su hija, queda afuera.
 await app.register(rutaSalud);
 await app.register(async (protegido) => {
-  registrarAuth(protegido);
-  await protegido.register(rutaFiscal(moduloFiscal));
+  registrarAuth(protegido, dependenciasAuthDesdeConfig(config));
+  await protegido.register(async (fiscal) => {
+    fiscal.addHook("onRequest", exigirPermisoFiscal);
+    await fiscal.register(rutaFiscal(moduloFiscal));
+  });
   await protegido.register(rutaChatbot);
   await protegido.register(rutaTransferencias);
 });
