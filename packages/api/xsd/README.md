@@ -1,7 +1,8 @@
 # XSD oficiales DGII (e-CF v1.0)
 
 Descargados de dgii.gov.do → Facturación Electrónica → Documentación sobre e-CF → Documentación Técnica (XSD).
-Solo se usan en pruebas para validar el XML generado.
+Se usan en pruebas para validar el XML generado, y en tiempo de ejecución por el generador del set de
+pruebas (`src/fiscal/certificacion/`) para ordenar los campos como exige la DGII.
 
 | Archivo | Original |
 |---|---|
@@ -9,6 +10,7 @@ Solo se usan en pruebas para validar el XML generado.
 | `ecf-32.xsd` | `e-CF 32 v.1.0.xsd` |
 | `ecf-34.xsd` | `e-CF 34 v.1.0.xsd` |
 | `rfce-32.xsd` | `RFCE 32 v.1.0.xsd` |
+| `ecf-33.xsd`, `ecf-41.xsd`, `ecf-43.xsd` … `ecf-47.xsd` | `e-CF NN v.1.0.xsd` |
 | `anecf.xsd` | `ANECF v.1.0.xsd` |
 | `acecf.xsd` | `ACECF v.1.0.xsd` |
 | `arecf.xsd` | `ARECF v1.0.xsd` |

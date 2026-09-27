@@ -59,7 +59,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 
 ## E — Herramientas de certificación
 
-- [ ] E1. Generador genérico fila → XML ordenado por XSD (sin tags vacíos), validado contra XSD.
+- [x] E1. Generador genérico fila → XML ordenado por XSD (sin tags vacíos), validado contra XSD.
 - [ ] E2. Script `set-pruebas <archivo.xlsx>` (e-CF y aprobaciones). **Ajustar columnas al tener el Excel real.**
 - [ ] E3. Auditoría de la representación impresa (Informe Técnico §18) + generador de PDFs de prueba.
 
