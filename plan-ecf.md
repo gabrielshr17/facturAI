@@ -72,7 +72,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 ## G — Preparar despliegue
 
 - [x] G1. `DGII_P12_BASE64` como alternativa al archivo.
-- [ ] G2. Dockerfile + guía de despliegue (Render/Fly/Railway) para exponer los servicios de recepción con SSL.
+- [x] G2. `packages/api/Dockerfile` (probado: build + arranque local) y `packages/api/DESPLIEGUE.md`.
 - [ ] G3. Unificar clientes HTTP de chatbot/transferencias sobre `apiClient`.
 
 ## Necesita al usuario (no se avanza sin él)
