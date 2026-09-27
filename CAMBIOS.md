@@ -1,5 +1,23 @@
 # Cambios sin publicar todavía
 
+## Facturación electrónica real con la DGII (lista para conectar el certificado)
+
+Las facturas con comprobante fiscal ya se pueden **firmar y enviar de verdad a la DGII**. Mientras
+no esté configurado el certificado digital de la empresa, todo sigue funcionando como antes con el
+simulador; al configurarlo (ver `packages/api/README.md`), las ventas fiscales pasan por la DGII.
+
+- **Consumo (E32) menor a RD$250,000**: se envía el resumen y la respuesta es inmediata.
+- **Crédito fiscal (E31) y consumo de RD$250,000 o más**: la DGII puede tardar en validar. La venta
+  se cobra igual y el comprobante queda "en proceso de validación"; la app consulta su estado sola
+  cada pocos minutos y lo muestra en Consultar facturas.
+- **Nuevo campo en Cobrar**: la **razón social del comprador**, obligatoria para crédito fiscal.
+- **Consumo de RD$250,000 o más** ahora exige RNC o cédula del comprador, como pide la DGII.
+- **El recibo trae el código QR** de la DGII, el código de seguridad y la fecha de firma digital
+  (impresora térmica, PDF e impresión normal).
+- **Números de comprobante que se pierden** (sin conexión o rechazo de la DGII) se anulan
+  automáticamente ante la DGII, en vez de quedar como huecos en la secuencia.
+- Antes de emitir se exige que el negocio tenga **RNC, razón social y dirección** en Configuración.
+
 ## Ganancia: el % ahora es lo que uno espera
 
 **Costo 100 con 20% de ganancia = precio 120.** Antes daba **141.60**: el sistema sacaba
