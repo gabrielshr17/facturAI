@@ -4,6 +4,7 @@ import type { ClienteContribuyente } from "./entrega.js";
 import { DocumentoFiscalInvalidoError } from "./errores.js";
 import { construirXmlAcecf } from "./xml/acecf.js";
 import { leerItemsEcf, type ItemEcf } from "./verificacion.js";
+import { codigoSeguridad } from "./codigo-seguridad.js";
 
 export interface RespuestaComercial {
   aprobado: boolean;
@@ -31,7 +32,7 @@ export interface OpcionesServicioRecibidos {
   rncPropio: string;
   almacen: AlmacenRecepcion;
   firmar: (xml: string) => string;
-  dgii: Pick<ClienteDgii, "enviarAprobacionComercial" | "consultarDirectorio">;
+  dgii: Pick<ClienteDgii, "enviarAprobacionComercial" | "consultarDirectorio" | "consultarEstadoEcf">;
   contribuyente: ClienteContribuyente;
   reloj?: () => Date;
 }
@@ -50,13 +51,41 @@ export function crearServicioRecibidos(opciones: OpcionesServicioRecibidos): Ser
     return fila;
   }
 
+  /**
+   * Cualquiera puede enviar a nuestro servicio de recepción un XML firmado con un certificado
+   * autofirmado. Antes de aprobarlo o registrarlo como compra se confirma con la DGII que ese e-CF
+   * existe, es válido y lleva ese mismo código de seguridad (derivado de la firma) y ese monto.
+   */
+  async function confirmarAnteDgii(fila: FilaEcfRecibido): Promise<string> {
+    const xml = await almacen.obtenerXmlEcfRecibido(fila.id);
+    if (!xml) throw new Error(`El e-CF recibido ${fila.id} no existe.`);
+    let codigo: string;
+    try {
+      codigo = codigoSeguridad(xml);
+    } catch {
+      throw new DocumentoFiscalInvalidoError("El e-CF recibido no tiene firma digital.");
+    }
+    const enDgii = await dgii.consultarEstadoEcf(fila.rncEmisor, fila.encf, opciones.rncPropio, codigo);
+    if (enDgii.estado !== "aceptado" && enDgii.estado !== "aceptado_condicional") {
+      throw new DocumentoFiscalInvalidoError(
+        `La DGII no reconoce este e-CF como válido (estado: ${enDgii.estado}). No lo apruebes ni lo registres como compra.`,
+      );
+    }
+    if (enDgii.montoTotal !== null && Math.abs(enDgii.montoTotal - fila.montoTotal) > 0.01) {
+      throw new DocumentoFiscalInvalidoError(
+        `El monto del e-CF (RD$ ${fila.montoTotal}) no coincide con el registrado en la DGII (RD$ ${enDgii.montoTotal}).`,
+      );
+    }
+    return xml;
+  }
+
   return {
     listar: () => almacen.listarEcfRecibidos(),
 
     async detalle(id) {
       const recibido = await obtener(id);
-      const xml = await almacen.obtenerXmlEcfRecibido(id);
-      return { recibido, items: xml ? leerItemsEcf(xml) : [] };
+      const xml = await confirmarAnteDgii(recibido);
+      return { recibido, items: leerItemsEcf(xml) };
     },
 
     async responder(id, respuesta) {
@@ -64,6 +93,7 @@ export function crearServicioRecibidos(opciones: OpcionesServicioRecibidos): Ser
       if (fila.estadoAprobacion !== "pendiente") {
         throw new DocumentoFiscalInvalidoError(`Este e-CF ya fue ${fila.estadoAprobacion} comercialmente.`);
       }
+      await confirmarAnteDgii(fila);
       const momento = reloj();
       const xml = opciones.firmar(
         construirXmlAcecf(

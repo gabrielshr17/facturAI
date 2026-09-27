@@ -23,7 +23,8 @@ export interface AutenticadorReceptor {
  */
 export function crearAutenticadorReceptor({
   reloj = () => new Date(),
-}: { reloj?: () => Date } = {}): AutenticadorReceptor {
+  raices,
+}: { reloj?: () => Date; raices?: string[] } = {}): AutenticadorReceptor {
   const semillas = new Map<string, number>();
   const tokens = new Map<string, number>();
 
@@ -49,7 +50,7 @@ export function crearAutenticadorReceptor({
       limpiar(ahora);
       const valor = valorEtiqueta(xmlFirmado, "valor");
       if (!valor || !semillas.has(valor)) return null;
-      if (!verificarDocumentoFirmado(xmlFirmado, null).valido) return null;
+      if (!verificarDocumentoFirmado(xmlFirmado, null, { raices }).valido) return null;
       semillas.delete(valor);
       const token = randomBytes(32).toString("base64url");
       const expira = ahora + VIGENCIA_TOKEN_MS;

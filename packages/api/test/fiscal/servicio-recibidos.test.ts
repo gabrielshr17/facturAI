@@ -17,7 +17,15 @@ const DIRECTORIO: DirectorioContribuyente = {
   urlAutenticacion: null,
 };
 
-async function preparar(opciones: { directorio?: DirectorioContribuyente | null; dgiiAcepta?: boolean } = {}) {
+const certProveedor = () => cargarCertificado(certificadoPrueba(`RNC${PROVEEDOR}`).p12, CLAVE_P12_PRUEBA);
+
+async function preparar(
+  opciones: {
+    directorio?: DirectorioContribuyente | null;
+    dgiiAcepta?: boolean;
+    estadoEnDgii?: { estado: "aceptado" | "rechazado" | "no_encontrado"; montoTotal: number | null };
+  } = {},
+) {
   const { almacen, ecfs } = crearAlmacenMemoria();
   await almacen.guardarEcf({
     tipoEcf: "31",
@@ -28,13 +36,16 @@ async function preparar(opciones: { directorio?: DirectorioContribuyente | null;
     fechaEmision: "25-09-2026",
     montoTotal: 1180,
     totalItbis: 180,
-    xml:
+    xml: firmarXml(
       "<ECF><Encabezado><IdDoc><IndicadorMontoGravado>1</IndicadorMontoGravado></IdDoc></Encabezado><DetallesItems>" +
-      "<Item><IndicadorFacturacion>1</IndicadorFacturacion><NombreItem>Cemento</NombreItem>" +
-      "<CantidadItem>10</CantidadItem><MontoItem>1180.00</MontoItem></Item></DetallesItems></ECF>",
+        "<Item><IndicadorFacturacion>1</IndicadorFacturacion><NombreItem>Cemento</NombreItem>" +
+        "<CantidadItem>10</CantidadItem><MontoItem>1180.00</MontoItem></Item></DetallesItems></ECF>",
+      certProveedor(),
+    ),
     acuseXml: "<ARECF/>",
   });
   const enviadosDgii: string[] = [];
+  const consultasEstado: string[] = [];
   const entregados: { directorio: DirectorioContribuyente; xml: string; nombre: string }[] = [];
   const contribuyente: ClienteContribuyente = {
     entregarEcf: async () => {
@@ -57,11 +68,15 @@ async function preparar(opciones: { directorio?: DirectorioContribuyente | null;
           : { aceptada: true, mensajes: ["OK"] };
       },
       consultarDirectorio: async () => (opciones.directorio === undefined ? DIRECTORIO : opciones.directorio),
+      consultarEstadoEcf: async (rncEmisor, encf, rncComprador, codigo) => {
+        consultasEstado.push(`${rncEmisor}/${encf}/${rncComprador}/${codigo}`);
+        return opciones.estadoEnDgii ?? { estado: "aceptado", montoTotal: 1180 };
+      },
     },
     contribuyente,
     reloj: () => AHORA,
   });
-  return { servicio, ecfs, enviadosDgii, entregados };
+  return { servicio, ecfs, enviadosDgii, entregados, consultasEstado };
 }
 
 describe("servicio de e-CF recibidos", () => {
@@ -93,6 +108,25 @@ describe("servicio de e-CF recibidos", () => {
     expect(verificarDocumentoFirmado(acecf!, NOSOTROS)).toEqual({ valido: true });
     expect(entregados).toEqual([{ directorio: DIRECTORIO, xml: acecf, nombre: "131880738E310000000007.xml" }]);
     expect(ecfs[0]).toMatchObject({ estadoAprobacion: "aprobado", aprobacionXml: acecf });
+  });
+
+  it("antes de aprobar confirma con la DGII que el e-CF existe con ese código de seguridad", async () => {
+    const { servicio, consultasEstado, ecfs } = await preparar();
+    await servicio.responder("r-1", { aprobado: true });
+    const codigo = /<SignatureValue>([^<]{6})/.exec(ecfs[0]!.xml)?.[1];
+    expect(consultasEstado).toEqual([`${PROVEEDOR}/E310000000007/${NOSOTROS}/${codigo}`]);
+  });
+
+  it("un e-CF que la DGII no reconoce no se aprueba ni se registra como compra", async () => {
+    const { servicio, enviadosDgii } = await preparar({ estadoEnDgii: { estado: "no_encontrado", montoTotal: null } });
+    await expect(servicio.responder("r-1", { aprobado: true })).rejects.toThrow(/DGII no reconoce/);
+    await expect(servicio.detalle("r-1")).rejects.toThrow(/DGII no reconoce/);
+    expect(enviadosDgii).toEqual([]);
+  });
+
+  it("un e-CF cuyo monto no coincide con el de la DGII se trata como no confiable", async () => {
+    const { servicio } = await preparar({ estadoEnDgii: { estado: "aceptado", montoTotal: 10 } });
+    await expect(servicio.detalle("r-1")).rejects.toBeInstanceOf(DocumentoFiscalInvalidoError);
   });
 
   it("un rechazo comercial exige motivo", async () => {

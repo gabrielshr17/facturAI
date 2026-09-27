@@ -38,7 +38,29 @@ function serialSujeto(certificadoPem: string): string {
  * documento entero (`Reference URI=""`) y el certificado incluido debe pertenecer al RNC que
  * dice emitirlo (campo SN). Sin lo segundo, cualquiera podría firmar a nombre de otro.
  */
-export function verificarDocumentoFirmado(xml: string, rncFirmante: string | null): ResultadoVerificacion {
+export interface OpcionesVerificacion {
+  /**
+   * Certificados (PEM) de las autoridades certificadoras aceptadas. Si se indican, el certificado
+   * del firmante debe estar emitido por una de ellas; sin esto un certificado autofirmado con el SN
+   * adecuado pasaría la verificación.
+   */
+  raices?: string[];
+}
+
+function emitidoPorRaizConfiable(certificadoPem: string, raices: string[]): boolean {
+  try {
+    const almacen = forge.pki.createCaStore(raices);
+    return forge.pki.verifyCertificateChain(almacen, [forge.pki.certificateFromPem(certificadoPem)]);
+  } catch {
+    return false;
+  }
+}
+
+export function verificarDocumentoFirmado(
+  xml: string,
+  rncFirmante: string | null,
+  opciones: OpcionesVerificacion = {},
+): ResultadoVerificacion {
   const doc = parsear(xml);
   if (!doc) return { valido: false, motivo: "especificacion", detalle: "El archivo no es un XML válido." };
 
@@ -70,6 +92,9 @@ export function verificarDocumentoFirmado(xml: string, rncFirmante: string | nul
   }
   if (!integra) return { valido: false, motivo: "firma", detalle: "El documento fue alterado después de firmado." };
 
+  if (opciones.raices?.length && !emitidoPorRaizConfiable(certificadoPem, opciones.raices)) {
+    return { valido: false, motivo: "firma", detalle: "El certificado no fue emitido por una autoridad de confianza." };
+  }
   if (rncFirmante !== null && !serialSujeto(certificadoPem).replace(/\D/g, "").includes(rncFirmante)) {
     return { valido: false, motivo: "firma", detalle: `El certificado no pertenece al RNC ${rncFirmante}.` };
   }

@@ -23,6 +23,13 @@ export interface ClienteDgii {
   enviarAprobacionComercial(xmlFirmado: string, nombreArchivo: string): Promise<RespuestaAnulacion>;
   consultarDirectorio(rnc: string): Promise<DirectorioContribuyente | null>;
   consultarTrackIds(rncEmisor: string, encf: string): Promise<TrackIdRegistrado[]>;
+  /** Validez de un e-CF ante la DGII (rol receptor): confirma que el documento con ese código de seguridad existe. */
+  consultarEstadoEcf(
+    rncEmisor: string,
+    encf: string,
+    rncComprador: string,
+    codigoSeguridad: string,
+  ): Promise<{ estado: EstadoDgiiRespuesta; montoTotal: number | null }>;
 }
 
 export interface DirectorioContribuyente {
@@ -240,6 +247,19 @@ export function crearClienteDgii(opciones: OpcionesClienteDgii): ClienteDgii {
         urlAceptacion: entrada.urlAceptacion,
         urlAutenticacion: entrada.urlOpcional || null,
       };
+    },
+
+    async consultarEstadoEcf(rncEmisor, encf, rncComprador, codigo) {
+      const url = urls.consultaEstadoEcf(rncEmisor, encf, rncComprador, codigo);
+      const respuesta = await conToken(url, () => ({ method: "GET" }));
+      const cuerpo = (await respuesta.json()) as {
+        codigo?: number | string;
+        estado?: string;
+        montoTotal?: number | string;
+      };
+      const estado = traducirEstado({ codigo: cuerpo.codigo, estado: cuerpo.estado }).estado;
+      const monto = cuerpo.montoTotal === undefined || cuerpo.montoTotal === null ? NaN : Number(cuerpo.montoTotal);
+      return { estado, montoTotal: estado === "no_encontrado" || Number.isNaN(monto) ? null : monto };
     },
 
     async consultarTrackIds(rncEmisor, encf) {

@@ -18,6 +18,7 @@ export interface UrlsDgii {
   aprobacionComercial: string;
   directorioPorRnc: (rnc: string) => string;
   consultaTrackIds: (rncEmisor: string, encf: string) => string;
+  consultaEstadoEcf: (rncEmisor: string, encf: string, rncComprador: string, codigoSeguridad: string) => string;
 }
 
 export function urlsDgii(ambiente: AmbienteDgii): UrlsDgii {
@@ -36,6 +37,10 @@ export function urlsDgii(ambiente: AmbienteDgii): UrlsDgii {
     aprobacionComercial: `${ecf}/aprobacioncomercial/api/aprobacioncomercial`,
     directorioPorRnc: (rnc) =>
       `${ecf}/consultadirectorio/api/consultas/obtenerdirectorioporrnc?rnc=${encodeURIComponent(rnc)}`,
+    consultaEstadoEcf: (rncEmisor, encf, rncComprador, codigoSeguridad) =>
+      `${ecf}/consultaestado/api/consultas/estado?rncemisor=${encodeURIComponent(rncEmisor)}` +
+      `&ncfelectronico=${encodeURIComponent(encf)}&rnccomprador=${encodeURIComponent(rncComprador)}` +
+      `&codigoseguridad=${encodeURIComponent(codigoSeguridad)}`,
     consultaTrackIds: (rncEmisor, encf) =>
       `${ecf}/consultatrackids/api/trackids/consulta?rncemisor=${encodeURIComponent(rncEmisor)}&encf=${encodeURIComponent(encf)}`,
   };

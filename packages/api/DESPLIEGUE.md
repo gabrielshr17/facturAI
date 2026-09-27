@@ -50,6 +50,7 @@ Verificado localmente: la imagen arranca en modo producción, carga el certifica
 | `DGII_P12_PASSWORD` | contraseña del `.p12` |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | proyecto Supabase (guarda e-CF recibidos y llaves de caja) |
 | `API_CORREOS_PERMITIDOS` | correos de Google con permiso fiscal (opcional si se usan llaves de caja) |
+| `DGII_CA_RAICES_PATH` | bundle PEM de las autoridades certificadoras aceptadas (el portal de certificación ofrece "Descargar certificado raíz"). Recomendado: sin esto, un documento recibido se verifica por integridad y SN, pero no contra la autoridad emisora |
 
 Todo como **secreto** del hosting; nunca en el repositorio.
 
@@ -69,6 +70,16 @@ poder entregar comprobantes en cualquier momento).
 
 Fly.io (`fly launch --dockerfile packages/api/Dockerfile`) o Railway funcionan igual: imagen Docker,
 variables como secretos, dominio propio con SSL automático.
+
+## Seguridad de lo que se recibe
+
+Cualquiera puede enviar un XML a `/fe/recepcion/api/ecf`. Por eso:
+
+1. La firma se verifica (integridad, que cubra todo el documento, SN del certificado = RNC emisor) y,
+   con `DGII_CA_RAICES_PATH`, que el certificado lo haya emitido una autoridad aceptada.
+2. **Antes de aprobar un e-CF o registrarlo como compra**, el backend confirma con la DGII
+   (servicio Consulta Estado) que ese e-CF existe, es válido y tiene el mismo código de seguridad y
+   monto. Un documento falsificado nunca llega a Compras.
 
 ## Antes de postular
 

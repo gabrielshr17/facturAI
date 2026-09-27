@@ -14,6 +14,7 @@ import { crearServicioRecibidos } from "./fiscal/servicio-recibidos.js";
 import { crearClienteContribuyente } from "./fiscal/entrega.js";
 import { crearAlmacenSupabase } from "./fiscal/recepcion/almacen.js";
 import { crearAutenticadorReceptor } from "./fiscal/recepcion/autenticacion.js";
+import { cargarRaices } from "./fiscal/recepcion/raices.js";
 import { dbDisponible, obtenerClienteDb } from "./services/db.js";
 
 /**
@@ -24,6 +25,7 @@ import { dbDisponible, obtenerClienteDb } from "./services/db.js";
  */
 const config = cargarConfig();
 const moduloFiscal = iniciarModuloFiscal(config);
+const raices = cargarRaices(config.dgiiCaRaicesRuta);
 // 10 MB: el límite por defecto de Fastify (1 MB) rechaza las fotos de
 // comprobantes en base64 que envía el chatbot con visión.
 const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024, routerOptions: { caseSensitive: false } });
@@ -39,7 +41,8 @@ await app.register(
   rutasRecepcion({
     receptor: moduloFiscal.disponible ? { rncPropio: moduloFiscal.rncEmisor, firmar: moduloFiscal.firmar } : null,
     almacen: dbDisponible() ? crearAlmacenSupabase(obtenerClienteDb()) : null,
-    autenticador: crearAutenticadorReceptor(),
+    autenticador: crearAutenticadorReceptor({ raices }),
+    raices,
   }),
 );
 await app.register(async (protegido) => {
@@ -68,6 +71,13 @@ await app.register(async (protegido) => {
 await app.listen({ port: config.puerto, host: "0.0.0.0" });
 
 iniciarPollerTransferencias(app, config.transferenciasPollIntervaloMs);
+
+if (raices.length === 0) {
+  app.log.warn(
+    "DGII_CA_RAICES_PATH no configurado: los documentos recibidos se verifican por integridad y SN, pero no " +
+      "contra autoridades certificadoras. Las aprobaciones y compras igual se confirman con la DGII.",
+  );
+}
 
 if (moduloFiscal.disponible) {
   app.log.info(`Facturación electrónica activa (DGII ${moduloFiscal.ambiente}).`);

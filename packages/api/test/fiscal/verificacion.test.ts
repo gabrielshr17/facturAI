@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import forge from "node-forge";
 import { verificarDocumentoFirmado, leerEcfRecibido, leerItemsEcf } from "../../src/fiscal/verificacion.js";
 import { construirXmlEcf } from "../../src/fiscal/xml/ecf.js";
 import { cargarCertificado, firmarXml } from "../../src/fiscal/firma.js";
@@ -84,5 +85,57 @@ describe("líneas de un e-CF recibido (para importarlo como compra)", () => {
 
   it("un XML ilegible no tiene líneas", () => {
     expect(leerItemsEcf("no es xml")).toEqual([]);
+  });
+});
+
+describe("verificación contra autoridades certificadoras de confianza", () => {
+  function autoridadYCertificado(rnc: string) {
+    const clavesCa = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
+    const ca = forge.pki.createCertificate();
+    ca.publicKey = clavesCa.publicKey;
+    ca.serialNumber = "0A";
+    ca.validity.notBefore = new Date(Date.now() - 86_400_000);
+    ca.validity.notAfter = new Date(Date.now() + 86_400_000 * 365);
+    const sujetoCa = [{ name: "commonName", value: "CA DE PRUEBA" }];
+    ca.setSubject(sujetoCa);
+    ca.setIssuer(sujetoCa);
+    ca.setExtensions([{ name: "basicConstraints", cA: true }]);
+    ca.sign(clavesCa.privateKey, forge.md.sha256.create());
+
+    const claves = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
+    const hoja = forge.pki.createCertificate();
+    hoja.publicKey = claves.publicKey;
+    hoja.serialNumber = "0B";
+    hoja.validity.notBefore = ca.validity.notBefore;
+    hoja.validity.notAfter = ca.validity.notAfter;
+    hoja.setSubject([
+      { name: "commonName", value: "EMISOR DE PRUEBA" },
+      { type: "2.5.4.5", value: `RNC${rnc}` },
+    ]);
+    hoja.setIssuer(sujetoCa);
+    hoja.sign(clavesCa.privateKey, forge.md.sha256.create());
+    return {
+      caPem: forge.pki.certificateToPem(ca),
+      firma: {
+        clavePrivadaPem: forge.pki.privateKeyToPem(claves.privateKey),
+        certificadoPem: forge.pki.certificateToPem(hoja),
+        venceEl: hoja.validity.notAfter,
+        serialSujeto: `RNC${rnc}`,
+      },
+    };
+  }
+
+  it("con raíces configuradas acepta un certificado emitido por ellas", () => {
+    const { caPem, firma } = autoridadYCertificado("131880738");
+    const xml = firmarXml(construirXmlEcf(creditoFiscalPrueba(), FIRMA), firma);
+    expect(verificarDocumentoFirmado(xml, "131880738", { raices: [caPem] })).toEqual({ valido: true });
+  });
+
+  it("con raíces configuradas rechaza un certificado autofirmado aunque el SN diga el RNC correcto", () => {
+    const { caPem } = autoridadYCertificado("131880738");
+    expect(verificarDocumentoFirmado(ecfFirmadoPor("RNC131880738"), "131880738", { raices: [caPem] })).toMatchObject({
+      valido: false,
+      motivo: "firma",
+    });
   });
 });

@@ -84,3 +84,32 @@ describe("cliente DGII — aprobación comercial, directorio y trackIds", () => 
     expect(await cliente(dgii).consultarTrackIds("131880738", "E310000000001")).toEqual([]);
   });
 });
+
+describe("cliente DGII — consulta de estado de un e-CF (rol receptor)", () => {
+  it("consulta por RNC emisor, e-NCF, RNC comprador y código de seguridad", async () => {
+    const dgii = crearDgiiFalsa({
+      "consultaestado/api/consultas/estado": () =>
+        json({
+          codigo: 1,
+          estado: "Aceptado",
+          rncEmisor: "101010101",
+          ncfElectronico: "E310000000007",
+          montoTotal: 1180,
+        }),
+    });
+    const r = await cliente(dgii).consultarEstadoEcf("101010101", "E310000000007", "131880738", "AbC+12");
+    expect(dgii.solicitudes.at(-1)?.url).toBe(
+      "https://ecf.dgii.gov.do/testecf/consultaestado/api/consultas/estado?rncemisor=101010101" +
+        "&ncfelectronico=E310000000007&rnccomprador=131880738&codigoseguridad=AbC%2B12",
+    );
+    expect(r).toEqual({ estado: "aceptado", montoTotal: 1180 });
+  });
+
+  it("un e-CF desconocido para la DGII es no_encontrado", async () => {
+    const dgii = crearDgiiFalsa({ consultaestado: () => json({ codigo: 0, estado: "No encontrado" }) });
+    expect(await cliente(dgii).consultarEstadoEcf("1", "E310000000007", "2", "x")).toEqual({
+      estado: "no_encontrado",
+      montoTotal: null,
+    });
+  });
+});

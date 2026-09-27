@@ -16,6 +16,8 @@ export interface DependenciasRecepcion {
   /** null sin Postgres configurado: no hay dónde guardar lo recibido. */
   almacen: AlmacenRecepcion | null;
   autenticador: AutenticadorReceptor;
+  /** Autoridades certificadoras aceptadas (PEM). Sin ellas solo se verifica integridad y SN. */
+  raices?: string[];
   reloj?: () => Date;
 }
 
@@ -92,7 +94,7 @@ export function rutasRecepcion(deps: DependenciasRecepcion): FastifyPluginAsync 
       }
 
       let motivo: MotivoNoRecibido | undefined;
-      const verificacion = verificarDocumentoFirmado(xml, ecf.rncEmisor);
+      const verificacion = verificarDocumentoFirmado(xml, ecf.rncEmisor, { raices: deps.raices });
       if (!verificacion.valido) motivo = verificacion.motivo === "especificacion" ? 1 : 2;
       else if (ecf.rncComprador !== receptor.rncPropio) motivo = 4;
 
@@ -146,7 +148,7 @@ export function rutasRecepcion(deps: DependenciasRecepcion): FastifyPluginAsync 
         await reply.code(400).send({ error: "La aprobación corresponde a un e-CF de otro emisor." });
         return;
       }
-      const verificacion = verificarDocumentoFirmado(xml, aprobacion.rncComprador);
+      const verificacion = verificarDocumentoFirmado(xml, aprobacion.rncComprador, { raices: deps.raices });
       if (!verificacion.valido) {
         await reply.code(400).send({ error: verificacion.detalle });
         return;

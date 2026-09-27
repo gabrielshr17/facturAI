@@ -224,3 +224,22 @@ describe("autenticación del receptor (/fe/autenticacion/api/*)", () => {
     expect(repetida.statusCode).toBe(400);
   });
 });
+
+describe("recepción con autoridades certificadoras configuradas", () => {
+  it("acusa firma inválida (motivo 2) a un e-CF firmado con certificado autofirmado", async () => {
+    const { almacen, ecfs } = crearAlmacenMemoria();
+    const app = Fastify({ routerOptions: { caseSensitive: false } });
+    await app.register(
+      rutasRecepcion({
+        receptor: { rncPropio: NOSOTROS, firmar: (xml) => firmarXml(xml, certNuestro()) },
+        almacen,
+        autenticador: crearAutenticadorReceptor({ reloj: () => AHORA }),
+        raices: [certificadoPrueba("RAIZ-DE-CONFIANZA").certificadoPem],
+        reloj: () => AHORA,
+      }),
+    );
+    const res = await app.inject({ method: "POST", url: "/fe/recepcion/api/ecf", ...multipart(ecfDelProveedor()) });
+    expect(valor(res.body, "CodigoMotivoNoRecibido")).toBe("2");
+    expect(ecfs).toHaveLength(0);
+  });
+});
