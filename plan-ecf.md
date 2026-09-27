@@ -91,3 +91,8 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 - 2026-09-27 (día): Fases B, F (F1–F2), D, C, E y G completas. Solo queda F3 (aplicar el esquema a
   Supabase, requiere OK). Hallazgos: dos XSD oficiales con errores de sintaxis (.NET) parchados en
   `packages/api/xsd/`; `Comprador` vacío en E34 corregido; el chatbot no enviaba credenciales.
+- 2026-09-27 (tarde): revisión de código de todo lo anterior; 5 hallazgos corregidos: documentos
+  recibidos falsificables (ahora se confirman con la DGII antes de aprobar/registrar + raíces CA
+  opcionales `DGII_CA_RAICES_PATH`), respuesta comercial duplicable (reserva atómica), "envío
+  duplicado" mostrado como no recibido, llave de caja revocada bloqueaba la sesión de Google, y
+  argumentos de `set-pruebas`.
