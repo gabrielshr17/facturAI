@@ -27,16 +27,16 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
       `/fe/recepcion/api/ecf` (responde ARECF firmado), `/fe/aprobacioncomercial/api/ecf` (200/400).
       Hecho: verificación de firma + SN del emisor, motivos 1-4 del ARECF, token opcional, rutas
       insensibles a mayúsculas. Sin Postgres o sin certificado responden 503.
-- [~] B4. Persistencia en Postgres: `ecf_recibido`, `aprobacion_comercial_recibida` (XML como texto).
-      Código listo (`fiscal/recepcion/almacen.ts`); faltan las tablas en `schema.sql` (F1).
+- [x] B4. Persistencia en Postgres: `ecf_recibido`, `aprobacion_comercial_recibida` (XML como texto).
+      Código en `fiscal/recepcion/almacen.ts`; tablas en `schema.sql`.
 - [ ] B5. API protegida para la app: listar recibidos, emitir aprobación/rechazo comercial
       (firma ACECF y envía a DGII + al emisor).
 - [ ] B6. UI en Compras: "Comprobantes de proveedores" — ver, importar como compra, aprobar/rechazar.
 
 ## F — Esquema Postgres
 
-- [ ] F1. `db/schema.sql` al día con todas las migraciones SQLite + tablas de A/B.
-- [ ] F2. Test de deriva: falla si una migración SQLite agrega tabla/columna ausente en `schema.sql`;
+- [x] F1. `db/schema.sql` al día con todas las migraciones SQLite + tablas de A/B.
+- [x] F2. Test de deriva: falla si una migración SQLite agrega tabla/columna ausente en `schema.sql`;
       ejecuta `schema.sql` en Postgres real (PGlite) para detectar errores de sintaxis.
 - [ ] F3. **(Necesita OK del usuario)** Aplicar a Supabase.
 

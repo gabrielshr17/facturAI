@@ -187,18 +187,22 @@ CREATE TABLE comprobante_fiscal (
   monto_exento              NUMERIC(12,2) NOT NULL DEFAULT 0,
   monto_itbis               NUMERIC(12,2) NOT NULL DEFAULT 0,
   total                     NUMERIC(12,2) NOT NULL DEFAULT 0,
-  estado_dgii               TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|aceptado|rechazado|contingencia
+  estado_dgii               TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|aceptado|aceptado_condicional|rechazado|contingencia
   track_id_dgii             TEXT,
   codigo_seguridad          TEXT,
   xml_firmado_ruta          TEXT,
   qr_url                    TEXT,
   fecha_transmision         TIMESTAMPTZ,
+  fecha_firma               TEXT, -- formato DGII dd-MM-AAAA HH:mm:ss, tal como va en el XML/QR
+  xml_firmado               TEXT,
+  motivo_rechazo            TEXT,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at                TIMESTAMPTZ
 );
 CREATE UNIQUE INDEX ux_comprobante_fiscal_ncf ON comprobante_fiscal(ncf);
 CREATE INDEX ix_comprobante_fiscal_factura ON comprobante_fiscal(factura_id);
+CREATE INDEX ix_comprobante_fiscal_estado ON comprobante_fiscal(estado_dgii);
 
 ALTER TABLE factura ADD CONSTRAINT fk_factura_comprobante
   FOREIGN KEY (comprobante_id) REFERENCES comprobante_fiscal(id);
@@ -350,3 +354,170 @@ CREATE TABLE bitacora_accion (
   timestamp   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX ix_bitacora_accion_entidad ON bitacora_accion(entidad, entidad_id);
+
+
+-- Favoritos (migración 9) ----------------------------------------------------
+ALTER TABLE producto ADD COLUMN favorito BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX ix_producto_favorito ON producto(favorito);
+
+-- Devoluciones (migración 7) -------------------------------------------------
+CREATE TABLE devolucion (
+  id              TEXT PRIMARY KEY,
+  factura_id      TEXT NOT NULL REFERENCES factura(id),
+  fecha           TIMESTAMPTZ NOT NULL,
+  motivo          TEXT,
+  subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0,
+  itbis           NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total           NUMERIC(12,2) NOT NULL DEFAULT 0,
+  comprobante_id  TEXT REFERENCES comprobante_fiscal(id), -- NC E34, NULL si la venta no fue fiscal
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at      TIMESTAMPTZ
+);
+CREATE INDEX ix_devolucion_factura ON devolucion(factura_id);
+
+CREATE TABLE devolucion_linea (
+  id                TEXT PRIMARY KEY,
+  devolucion_id     TEXT NOT NULL REFERENCES devolucion(id),
+  factura_linea_id  TEXT NOT NULL REFERENCES factura_linea(id),
+  producto_id       TEXT REFERENCES producto(id),
+  descripcion       TEXT NOT NULL,
+  cantidad          NUMERIC(14,4) NOT NULL,
+  precio_unitario   NUMERIC(12,2) NOT NULL,
+  impuesto_tipo     TEXT NOT NULL,
+  tasa_impuesto     NUMERIC(5,4) NOT NULL,
+  monto_itbis       NUMERIC(12,2) NOT NULL,
+  subtotal          NUMERIC(12,2) NOT NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at        TIMESTAMPTZ
+);
+CREATE INDEX ix_devolucion_linea_devolucion ON devolucion_linea(devolucion_id);
+CREATE INDEX ix_devolucion_linea_factura_linea ON devolucion_linea(factura_linea_id);
+
+-- Promociones (migración 8) --------------------------------------------------
+CREATE TABLE promocion (
+  id               TEXT PRIMARY KEY,
+  nombre           TEXT NOT NULL,
+  tipo             TEXT NOT NULL, -- porcentaje|monto_fijo
+  valor            NUMERIC(12,2) NOT NULL,
+  aplica_a         TEXT NOT NULL DEFAULT 'producto', -- producto|departamento|todo
+  producto_id      TEXT REFERENCES producto(id),
+  departamento_id  TEXT REFERENCES departamento(id),
+  fecha_inicio     DATE NOT NULL,
+  fecha_fin        DATE NOT NULL,
+  activa           BOOLEAN NOT NULL DEFAULT true,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at       TIMESTAMPTZ
+);
+CREATE INDEX ix_promocion_producto ON promocion(producto_id);
+CREATE INDEX ix_promocion_departamento ON promocion(departamento_id);
+CREATE INDEX ix_promocion_vigencia ON promocion(fecha_inicio, fecha_fin);
+
+-- Cotizaciones (migración 10) ------------------------------------------------
+CREATE TABLE cotizacion (
+  id                TEXT PRIMARY KEY,
+  numero_interno    INTEGER,
+  fecha_hora        TIMESTAMPTZ NOT NULL,
+  fecha_vencimiento DATE NOT NULL,
+  cliente_id        TEXT REFERENCES cliente(id),
+  usuario_id        TEXT REFERENCES usuario(id),
+  subtotal_gravado  NUMERIC(12,2) NOT NULL DEFAULT 0,
+  subtotal_exento   NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_itbis       NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total             NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notas             TEXT,
+  estado            TEXT NOT NULL DEFAULT 'vigente', -- vigente|convertida|anulada
+  factura_id        TEXT REFERENCES factura(id),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at        TIMESTAMPTZ
+);
+CREATE INDEX ix_cotizacion_fecha ON cotizacion(fecha_hora);
+
+CREATE TABLE cotizacion_linea (
+  id              TEXT PRIMARY KEY,
+  cotizacion_id   TEXT NOT NULL REFERENCES cotizacion(id),
+  producto_id     TEXT REFERENCES producto(id),
+  descripcion     TEXT NOT NULL,
+  cantidad        NUMERIC(14,4) NOT NULL DEFAULT 1,
+  precio_unitario NUMERIC(12,2) NOT NULL DEFAULT 0,
+  impuesto_tipo   TEXT NOT NULL DEFAULT 'itbis18',
+  tasa_impuesto   NUMERIC(5,4) NOT NULL DEFAULT 0.18,
+  monto_itbis     NUMERIC(12,2) NOT NULL DEFAULT 0,
+  subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at      TIMESTAMPTZ
+);
+CREATE INDEX ix_cotizacion_linea_cotizacion ON cotizacion_linea(cotizacion_id);
+
+-- e-NCF por anular ante la DGII (migración 11) -------------------------------
+CREATE TABLE ncf_anulacion (
+  id                  TEXT PRIMARY KEY,
+  tipo_ecf            TEXT NOT NULL,
+  ncf                 TEXT NOT NULL,
+  motivo              TEXT,
+  estado              TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|anulado|utilizado
+  ultimo_mensaje_dgii TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at          TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX ux_ncf_anulacion_ncf ON ncf_anulacion(ncf);
+CREATE INDEX ix_ncf_anulacion_estado ON ncf_anulacion(estado);
+
+-- =============================================================================
+-- Tablas SOLO del servidor (no existen en el SQLite del cliente). RLS activado
+-- sin políticas: solo la service role del backend puede leerlas o escribirlas,
+-- nunca la anon key que viaja en la app.
+-- =============================================================================
+
+-- Llaves por caja para firmar e-CF (packages/api/scripts/caja-key.ts) ---------
+CREATE TABLE caja_api_key (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre      TEXT NOT NULL,
+  llave_hash  TEXT NOT NULL UNIQUE, -- SHA-256 hex; la llave en claro nunca se guarda
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  revocada_at TIMESTAMPTZ
+);
+ALTER TABLE caja_api_key ENABLE ROW LEVEL SECURITY;
+
+-- e-CF que otros contribuyentes nos emiten (servicio /fe/recepcion) ------------
+CREATE TABLE ecf_recibido (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tipo_ecf              TEXT NOT NULL,
+  encf                  TEXT NOT NULL,
+  rnc_emisor            TEXT NOT NULL,
+  razon_social_emisor   TEXT NOT NULL DEFAULT '',
+  rnc_comprador         TEXT,
+  fecha_emision         TEXT NOT NULL, -- dd-MM-AAAA tal como viene en el XML
+  monto_total           NUMERIC(14,2) NOT NULL,
+  total_itbis           NUMERIC(14,2) NOT NULL DEFAULT 0,
+  xml                   TEXT NOT NULL, -- XML firmado íntegro: se conserva tal cual (valor legal)
+  acuse_xml             TEXT NOT NULL, -- ARECF firmado que respondimos
+  estado_aprobacion     TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|aprobado|rechazado
+  motivo_aprobacion     TEXT,
+  aprobacion_xml        TEXT, -- ACECF firmado que emitimos
+  aprobacion_enviada_at TIMESTAMPTZ,
+  importado_at          TIMESTAMPTZ, -- cuándo se registró como compra en la app
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX ux_ecf_recibido_emisor_encf ON ecf_recibido(rnc_emisor, encf);
+CREATE INDEX ix_ecf_recibido_estado ON ecf_recibido(estado_aprobacion);
+ALTER TABLE ecf_recibido ENABLE ROW LEVEL SECURITY;
+
+-- Aprobaciones/rechazos comerciales de e-CF que emitimos (servicio /fe/aprobacioncomercial)
+CREATE TABLE aprobacion_comercial_recibida (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rnc_emisor    TEXT NOT NULL,
+  rnc_comprador TEXT NOT NULL,
+  encf          TEXT NOT NULL,
+  aprobado      BOOLEAN NOT NULL,
+  motivo        TEXT,
+  xml           TEXT NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX ix_aprobacion_comercial_encf ON aprobacion_comercial_recibida(encf);
+ALTER TABLE aprobacion_comercial_recibida ENABLE ROW LEVEL SECURITY;

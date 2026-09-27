@@ -25,10 +25,11 @@ negocio (`db/schema.sql`) siguen sin conectar**:
   SQLite del cliente). Sin `DGII_P12_PATH`/`DGII_P12_PASSWORD` responde `503`.
   Ver "Facturación electrónica (e-CF)" más abajo.
 - `db/schema.sql`: traducción a Postgres de las migraciones SQLite de
-  `@sfr/core` — **desactualizada**, le faltan tablas agregadas después
-  (cotización, devolución, promoción, favoritos). No se ha corrido contra el
-  Postgres del proyecto: hace falta ponerla al día con
-  `packages/core/src/db/migrations.ts` antes de ejecutarla.
+  `@sfr/core` más las tablas propias del servidor (`caja_api_key`,
+  `ecf_recibido`, `aprobacion_comercial_recibida`, con RLS activado).
+  `test/esquema.test.ts` la ejecuta en Postgres real (PGlite) y falla si una
+  migración SQLite agrega una tabla o columna que aquí falte. **Todavía no se
+  ha aplicado al Postgres del proyecto** (requiere OK explícito).
 - `sync-rules.yaml`: reglas de PowerSync de referencia (bucket único,
   asumiendo negocio single-tenant); se sube al dashboard de PowerSync cuando
   haya un proyecto.
@@ -124,8 +125,9 @@ comercial) en una URL pública — hoy no están implementados.
 
 ## Qué falta para el resto de Fase 2
 
-1. Poner `db/schema.sql` al día con las migraciones SQLite actuales y
-   correrlo contra el Postgres del proyecto Supabase.
+1. Aplicar `db/schema.sql` al Postgres del proyecto Supabase (ya está al
+   día y probado; las tablas ya existentes como `notificacion_transferencia`
+   hay que omitirlas o aplicar solo lo nuevo).
 2. Crear un proyecto de **PowerSync**, apuntarlo a ese Postgres, subir
    `sync-rules.yaml`, y copiar `POWERSYNC_URL` a `.env`.
 
