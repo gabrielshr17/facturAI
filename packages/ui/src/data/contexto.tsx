@@ -24,6 +24,7 @@ import {
   crearCotizacionRepo,
   reconciliarComprobantesPendientes,
   anularNcfPendientes,
+  entregarComprobantesAReceptores,
 } from "@sfr/core";
 import { useAuth } from "../contexto/Auth.js";
 import { crearApiClient, type ApiClient } from "./apiClient.js";
@@ -32,6 +33,8 @@ import {
   MODO_FISCAL,
   anularRangosNcf,
   consultarEstadoComprobante,
+  consultarTrackIdsEcf,
+  entregarAComprador,
   crearProveedorFiscalHttp,
   type ModoFiscal,
 } from "./fiscalCliente.js";
@@ -91,12 +94,20 @@ function useSeguimientoFiscal(repos: Repos, activo: boolean): void {
         if (resumen.rechazados.length > 0) {
           console.warn("La DGII rechazó comprobantes que estaban en proceso:", resumen.rechazados);
         }
+        const entregas = await entregarComprobantesAReceptores({
+          comprobanteRepo: repos.comprobanteFiscal,
+          entregar: (datos) => entregarAComprador(repos.api, datos),
+        });
+        if (entregas.rechazados.length > 0) {
+          console.warn("Compradores electrónicos rechazaron la entrega de:", entregas.rechazados);
+        }
         const negocio = await repos.negocio.obtener();
         if (negocio?.rnc) {
           const { utilizados } = await anularNcfPendientes({
             anulacionRepo: repos.ncfAnulacion,
             rncEmisor: negocio.rnc,
             anular: (rnc, rangos) => anularRangosNcf(repos.api, rnc, rangos),
+            consultarTrackIds: (encf) => consultarTrackIdsEcf(repos.api, encf),
           });
           if (utilizados.length > 0) {
             console.warn("La DGII reporta como utilizados e-NCF que no tienen venta local; revisar:", utilizados);

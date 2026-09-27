@@ -44,6 +44,11 @@ export interface AnularDeps {
   anulacionRepo: NcfAnulacionRepo;
   rncEmisor: string;
   anular: (rncEmisor: string, rangos: RangoNcf[]) => Promise<{ aceptada: boolean; mensajes: string[] }>;
+  /**
+   * Consulta si la DGII tiene trackId para un e-NCF. Si lo tiene, el e-CF sí llegó (p. ej. se
+   * perdió la respuesta por tiempo de espera) y no debe anularse.
+   */
+  consultarTrackIds?: (encf: string) => Promise<{ trackId: string; estado: string }[]>;
 }
 
 function secuencial(ncf: string): number {
@@ -84,8 +89,27 @@ function enRango(ncf: string, rango: RangoNcf): boolean {
  * revisarlo a mano: existe un e-CF en la DGII sin venta local.
  */
 export async function anularNcfPendientes(deps: AnularDeps): Promise<{ anulados: number; utilizados: string[] }> {
-  const pendientes = await deps.anulacionRepo.listarPendientes();
   const resultado = { anulados: 0, utilizados: [] as string[] };
+  const pendientes: NcfAnulacion[] = [];
+  for (const p of await deps.anulacionRepo.listarPendientes()) {
+    if (!deps.consultarTrackIds) {
+      pendientes.push(p);
+      continue;
+    }
+    let trackIds: { trackId: string; estado: string }[];
+    try {
+      trackIds = await deps.consultarTrackIds(p.ncf);
+    } catch {
+      continue;
+    }
+    if (trackIds.length === 0) {
+      pendientes.push(p);
+      continue;
+    }
+    const detalle = trackIds.map((t) => `${t.trackId} (${t.estado})`).join(", ");
+    await deps.anulacionRepo.marcarUtilizados([p.id], `La DGII sí recibió este e-NCF: trackId ${detalle}.`);
+    resultado.utilizados.push(p.ncf);
+  }
 
   for (const rango of agruparEnRangos(pendientes)) {
     const delRango = pendientes.filter((p) => enRango(p.ncf, rango));

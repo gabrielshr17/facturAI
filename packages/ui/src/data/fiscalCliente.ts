@@ -1,4 +1,11 @@
-import type { EstadoTransmision, ProveedorFiscal, RangoNcf, ResultadoTransmision } from "@sfr/core";
+import type {
+  DatosEntrega,
+  EstadoTransmision,
+  ProveedorFiscal,
+  RangoNcf,
+  ResultadoEntrega,
+  ResultadoTransmision,
+} from "@sfr/core";
 import type { ApiClient } from "./apiClient.js";
 
 const variables = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
@@ -38,4 +45,18 @@ export function anularRangosNcf(
 
 export function obtenerEstadoServicioFiscal(api: ApiClient): Promise<EstadoServicioFiscal> {
   return api.get("/fiscal/estado");
+}
+
+export function entregarAComprador(api: ApiClient, datos: DatosEntrega): Promise<ResultadoEntrega> {
+  return api.post("/fiscal/entregas", datos);
+}
+
+export async function consultarTrackIdsEcf(
+  api: ApiClient,
+  encf: string,
+): Promise<{ trackId: string; estado: string }[]> {
+  const { trackIds } = await api.get<{ trackIds: { trackId: string; estado: string }[] }>(
+    `/fiscal/trackids/${encodeURIComponent(encf)}`,
+  );
+  return trackIds;
 }

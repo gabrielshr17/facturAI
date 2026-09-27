@@ -518,3 +518,55 @@ describe("anularNcfPendientes", () => {
     expect(resultado).toEqual({ anulados: 0, utilizados: [] });
   });
 });
+
+describe("anularNcfPendientes — verificación previa en la DGII", () => {
+  let db: SqlDriver;
+
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
+
+  it("no anula un número que la DGII sí recibió: lo marca utilizado con su trackId", async () => {
+    const repo = crearNcfAnulacionRepo(db);
+    await repo.registrar({ tipoEcf: "31", ncf: "E310000000004", motivo: "tiempo de espera agotado" });
+    await repo.registrar({ tipoEcf: "31", ncf: "E310000000005", motivo: "sin conexión" });
+
+    const anulados: string[] = [];
+    const resultado = await anularNcfPendientes({
+      anulacionRepo: repo,
+      rncEmisor: EMISOR.rnc,
+      consultarTrackIds: async (encf) => (encf === "E310000000004" ? [{ trackId: "t-77", estado: "aceptado" }] : []),
+      anular: async (_rnc, rangos) => {
+        anulados.push(...rangos.map((r) => `${r.desde}-${r.hasta}`));
+        return { aceptada: true, mensajes: [] };
+      },
+    });
+
+    expect(anulados).toEqual(["E310000000005-E310000000005"]);
+    expect(resultado).toEqual({ anulados: 1, utilizados: ["E310000000004"] });
+    const [utilizado] = await repo.listarUtilizados();
+    expect(utilizado?.ultimo_mensaje_dgii).toContain("t-77");
+  });
+
+  it("si la consulta de trackIds falla, no anula ese número y lo reintenta después", async () => {
+    const repo = crearNcfAnulacionRepo(db);
+    await repo.registrar({ tipoEcf: "31", ncf: "E310000000004", motivo: "sin conexión" });
+
+    let llamadas = 0;
+    const resultado = await anularNcfPendientes({
+      anulacionRepo: repo,
+      rncEmisor: EMISOR.rnc,
+      consultarTrackIds: async () => {
+        throw new Error("DGII caída");
+      },
+      anular: async () => {
+        llamadas += 1;
+        return { aceptada: true, mensajes: [] };
+      },
+    });
+
+    expect(llamadas).toBe(0);
+    expect(resultado.anulados).toBe(0);
+    expect((await repo.listarPendientes()).map((p) => p.ncf)).toEqual(["E310000000004"]);
+  });
+});

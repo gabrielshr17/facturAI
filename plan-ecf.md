@@ -42,7 +42,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 
 ## D — Números "utilizados" y panel de administración
 
-- [ ] D1. Antes de anular, consultar `consultatrackids` (RNC + e-NCF): si la DGII tiene trackId, no se
+- [x] D1. Antes de anular, consultar `consultatrackids` (RNC + e-NCF): si la DGII tiene trackId, no se
       anula — se reconcilia (el e-CF sí llegó).
 - [ ] D2. Pantalla Configuración → Facturación electrónica: estado del servicio, vencimiento del
       certificado (aviso a 30 días), pendientes, cola de anulación (reintentar), utilizados
@@ -52,7 +52,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 ## C — Entrega al comprador (rol emisor)
 
 - [x] C1. `consultarDirectorio(rnc)` en el cliente DGII.
-- [ ] C2. Tras aceptación de E31/E34 a un comprador electrónico: enviar el e-CF a su URL de recepción,
+- [x] C2. Tras aceptación de E31/E34 a un comprador electrónico: enviar el e-CF a su URL de recepción,
       guardar el ARECF; reintentos en el ciclo de seguimiento.
 
 ## E — Herramientas de certificación
