@@ -110,6 +110,10 @@ export function crearSecuenciaNcfRepo(db: SqlDriver) {
       return actualizadas;
     },
 
+    async obtener(id: string): Promise<SecuenciaNcf | undefined> {
+      return db.get<SecuenciaNcf>(`SELECT ${COLS} FROM secuencia_ncf WHERE id=?`, [id]);
+    },
+
     /** Secuencia disponible para un tipo (no vencida, no agotada), o undefined si no hay. */
     async obtenerVigente(tipoEcf: TipoEcf): Promise<SecuenciaNcf | undefined> {
       const candidatas = await db.all<SecuenciaNcf>(

@@ -11,6 +11,7 @@ export interface CrearComprobanteInput {
   rncEmisor: string | null;
   receptorDocumentoTipo: "rnc" | "cedula" | null;
   receptorDocumentoNumero: string | null;
+  receptorNombre?: string | null;
   montoGravado: number;
   montoExento: number;
   montoItbis: number;
@@ -25,7 +26,7 @@ export interface CrearComprobanteInput {
 }
 
 const COLS = `id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
-  receptor_documento_numero, fecha_emision, monto_gravado, monto_exento, monto_itbis, total,
+  receptor_documento_numero, receptor_nombre, fecha_emision, monto_gravado, monto_exento, monto_itbis, total,
   estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url, fecha_transmision,
   fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle, acuse_recibo_xml,
   created_at, updated_at, deleted_at`;
@@ -51,6 +52,7 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
         rnc_emisor: input.rncEmisor,
         receptor_documento_tipo: input.receptorDocumentoTipo,
         receptor_documento_numero: input.receptorDocumentoNumero,
+        receptor_nombre: input.receptorNombre ?? null,
         fecha_emision: ts,
         monto_gravado: input.montoGravado,
         monto_exento: input.montoExento,
@@ -73,7 +75,7 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
         deleted_at: null,
       };
 
-      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(28).fill("?").join(",")})`, [
+      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(29).fill("?").join(",")})`, [
         c.id,
         c.factura_id,
         c.tipo_ecf,
@@ -82,6 +84,7 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
         c.rnc_emisor,
         c.receptor_documento_tipo,
         c.receptor_documento_numero,
+        c.receptor_nombre,
         c.fecha_emision,
         c.monto_gravado,
         c.monto_exento,

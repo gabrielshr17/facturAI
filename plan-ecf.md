@@ -64,7 +64,10 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
       certificado autofirmado si aún no hay .p12). **Al descargar el Excel real:** correr el simulacro y revisar
       "columnas sin usar" en la salida; si aparecen, ajustar la convención de nombres en
       `src/fiscal/certificacion/generador.ts`.
-- [ ] E3. Auditoría de la representación impresa (Informe Técnico §18) + generador de PDFs de prueba.
+- [x] E3. Representación impresa según Informe Técnico §18 en los 4 formatos (nombre oficial del tipo,
+      e-NCF, válido hasta, razón social emisor/comprador, "E" en exentos, ITBIS por línea, QR ≥ 2 cm del
+      borde). Los PDF del paso 5 salen de Consultar facturas → PDF. **Falta:** Municipio/Provincia del
+      emisor (el negocio no tiene esos campos) y la RI de notas de crédito (las devoluciones no imprimen).
 
 ## G — Preparar despliegue
 

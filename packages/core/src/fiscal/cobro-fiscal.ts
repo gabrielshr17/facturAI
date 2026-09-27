@@ -174,6 +174,7 @@ export async function cobrarConFiscal(
     rncEmisor: emisor.rnc,
     receptorDocumentoTipo: input.receptorDocumentoTipo ?? null,
     receptorDocumentoNumero: input.receptorDocumentoNumero ?? null,
+    receptorNombre,
     montoGravado: facturaCobrada.subtotal_gravado,
     montoExento: facturaCobrada.subtotal_exento,
     montoItbis: facturaCobrada.total_itbis,

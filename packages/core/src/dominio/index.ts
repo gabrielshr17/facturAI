@@ -19,7 +19,15 @@ export {
   calcularTotales,
   procesarCobro,
 } from "./factura.js";
-export { type TipoEcf, formatearNcf, tipoEcfSugerido, ETIQUETA_TIPO_ECF } from "./ecf.js";
+export {
+  type TipoEcf,
+  formatearNcf,
+  tipoEcfSugerido,
+  ETIQUETA_TIPO_ECF,
+  NOMBRE_TIPO_ECF,
+  DESCRIPCION_CODIGO_MODIFICACION,
+  requiereVencimientoEnRepresentacion,
+} from "./ecf.js";
 export { type CorteCajaInput, type CorteCajaResultado, calcularCorteCaja } from "./caja.js";
 export {
   type PoliticaSinExistencia,

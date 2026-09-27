@@ -537,4 +537,13 @@ export const migrations: Migration[] = [
       CREATE INDEX ix_comprobante_fiscal_entrega ON comprobante_fiscal(entrega_estado);
     `,
   },
+  {
+    id: 13,
+    nombre: "comprobante_receptor_nombre",
+    sql: /* sql */ `
+      -- Razón social del comprador: la representación impresa la exige (E31) y el comprador puede
+      -- no estar en el catálogo de clientes.
+      ALTER TABLE comprobante_fiscal ADD COLUMN receptor_nombre TEXT;
+    `,
+  },
 ];

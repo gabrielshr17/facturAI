@@ -19,6 +19,7 @@ import { ModalCotizacion, type SalidaCotizacion } from "../componentes/ModalCoti
 import { FormularioProducto, diferenciasProducto, type CambioProducto } from "../componentes/FormularioProducto.js";
 import { ModalConfirmarCambios } from "../componentes/ModalConfirmarCambios.js";
 import { imprimirRecibo, type ComprobanteRecibo } from "../impresion/recibo.js";
+import { comprobanteParaRecibo } from "../impresion/representacion.js";
 import { imprimirCotizacion } from "../impresion/cotizacion.js";
 import { generarPdfRecibo, generarPdfCotizacion, guardarPdf } from "../impresion/pdf.js";
 import { abrirGavetaTermica } from "../impresion/termica.js";
@@ -1070,13 +1071,7 @@ export function Ventas() {
         },
       );
       factura = resultado.factura;
-      comprobanteRecibo = {
-        ncf: resultado.comprobante.ncf,
-        tipoEcfEtiqueta: fiscal.tipoEcf === "31" ? "Crédito Fiscal (E31)" : "Consumo (E32)",
-        codigoSeguridad: resultado.comprobante.codigo_seguridad,
-        fechaFirma: resultado.comprobante.fecha_firma,
-        qrUrl: resultado.comprobante.qr_url,
-      };
+      comprobanteRecibo = await comprobanteParaRecibo(resultado.comprobante, secuenciaNcf);
     } else {
       const resultado = await repo.cobrar(activoId, { pagos, notas });
       factura = resultado.factura;

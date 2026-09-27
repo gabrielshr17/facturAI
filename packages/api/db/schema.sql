@@ -182,6 +182,7 @@ CREATE TABLE comprobante_fiscal (
   rnc_emisor                TEXT,
   receptor_documento_tipo   TEXT,
   receptor_documento_numero TEXT,
+  receptor_nombre           TEXT,
   fecha_emision             TIMESTAMPTZ NOT NULL,
   monto_gravado             NUMERIC(12,2) NOT NULL DEFAULT 0,
   monto_exento              NUMERIC(12,2) NOT NULL DEFAULT 0,

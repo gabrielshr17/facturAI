@@ -180,6 +180,7 @@ export interface ComprobanteFiscal extends Auditoria {
   rnc_emisor: string | null;
   receptor_documento_tipo: "rnc" | "cedula" | null;
   receptor_documento_numero: string | null;
+  receptor_nombre: string | null;
   fecha_emision: string;
   monto_gravado: number;
   monto_exento: number;

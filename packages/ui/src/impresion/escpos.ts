@@ -1,5 +1,6 @@
 import type { ReciboDatos } from "./recibo.js";
 import type { CotizacionImpresionDatos } from "./cotizacion.js";
+import { datosComprador, descripcionLinea, encabezadoFiscal } from "./representacion.js";
 
 /**
  * Generador de comandos ESC/POS crudos para impresoras térmicas (§ hardware,
@@ -146,6 +147,9 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
   // El nombre del negocio va a tamaño real doble (alto Y ancho) — es una sola línea corta, así que
   // se lo puede permitir sin arriesgar el conteo de caracteres de las columnas de más abajo.
   b.alinear("centro").tamano("grande").negrita(true).linea(negocio.nombre_comercial).negrita(false).tamano("alto");
+  if (comprobante && negocio.razon_social && negocio.razon_social !== negocio.nombre_comercial) {
+    b.linea(negocio.razon_social);
+  }
   if (negocio.rnc) b.linea(`RNC: ${negocio.rnc}`);
   if (negocio.direccion) b.linea(negocio.direccion);
   if (negocio.telefono) b.linea(`Tel: ${negocio.telefono}`);
@@ -159,15 +163,18 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
   if (cliente) b.linea(`Cliente: ${cliente.nombre} ${cliente.apellidos ?? ""}`.trim());
 
   if (comprobante) {
-    b.alinear("centro").negrita(true).linea(comprobante.tipoEcfEtiqueta).negrita(false);
-    b.linea(`NCF: ${comprobante.ncf}`);
+    const [tipo, ...resto] = encabezadoFiscal(comprobante);
+    b.alinear("centro").negrita(true).linea(tipo).negrita(false);
+    for (const l of resto) b.linea(l);
     b.alinear("izq");
+    for (const l of datosComprador(comprobante)) b.linea(l);
   }
 
   b.separador(ancho);
   for (const l of lineas) {
-    b.linea(l.descripcion);
+    b.linea(descripcionLinea(l, !!comprobante));
     b.columnas(`${cantidad(l.cantidad)} x ${money(l.precio_unitario)}`, money(l.subtotal), ancho);
+    if (comprobante && l.monto_itbis > 0) b.columnas("", `ITBIS ${money(l.monto_itbis)}`, ancho);
   }
   b.separador(ancho);
 

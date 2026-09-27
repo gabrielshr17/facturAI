@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { ReciboDatos } from "./recibo.js";
+import type { ComprobanteRecibo, ReciboDatos } from "./recibo.js";
+import { datosComprador, descripcionLinea, encabezadoFiscal } from "./representacion.js";
 import { modulosQr } from "./qr.js";
 
 /**
@@ -32,6 +33,7 @@ function formatearFechaIso(fechaIso: string): string {
 
 interface NegocioPdf {
   nombre_comercial: string;
+  razon_social?: string | null;
   rnc: string | null;
   direccion: string | null;
   telefono: string | null;
@@ -43,18 +45,19 @@ interface DocumentoPdfDatos {
   fecha: string;
   negocio: NegocioPdf;
   cliente?: { nombre: string; apellidos: string | null } | null;
-  lineas: { descripcion: string; cantidad: number; precio_unitario: number; subtotal: number }[];
+  lineas: {
+    descripcion: string;
+    cantidad: number;
+    precio_unitario: number;
+    subtotal: number;
+    tasa_impuesto?: number;
+    monto_itbis?: number;
+  }[];
   subtotalGravado: number;
   subtotalExento: number;
   totalItbis: number;
   total: number;
-  comprobante?: {
-    ncf: string;
-    tipoEcfEtiqueta: string;
-    codigoSeguridad?: string | null;
-    fechaFirma?: string | null;
-    qrUrl?: string | null;
-  } | null;
+  comprobante?: ComprobanteRecibo | null;
   pagos?: { metodo: string; monto: number }[];
   montoPagado?: number;
   cambio?: number;
@@ -84,6 +87,9 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
   doc.setFontSize(9);
   doc.setTextColor(90);
   const lineasNegocio = [
+    datos.comprobante && datos.negocio.razon_social && datos.negocio.razon_social !== datos.negocio.nombre_comercial
+      ? datos.negocio.razon_social
+      : null,
     datos.negocio.rnc ? `RNC: ${datos.negocio.rnc}` : null,
     datos.negocio.direccion,
     datos.negocio.telefono ? `Tel: ${datos.negocio.telefono}` : null,
@@ -100,10 +106,24 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   const fecha = new Date(datos.fecha);
-  doc.text(`No. ${datos.numero}`, derecha, 27, { align: "right" });
-  doc.text(fecha.toLocaleDateString("es-DO"), derecha, 32, { align: "right" });
+  const lineasDerecha = [
+    ...(datos.comprobante ? encabezadoFiscal(datos.comprobante).slice(1) : []),
+    `No. ${datos.numero}`,
+    `Fecha de emisión: ${fecha.toLocaleDateString("es-DO")}`,
+  ];
+  lineasDerecha.forEach((l, i) => doc.text(l, derecha, 27 + i * 5, { align: "right" }));
 
-  y = Math.max(y, 32) + 8;
+  y = Math.max(y, 27 + (lineasDerecha.length - 1) * 5) + 8;
+
+  if (datos.comprobante) {
+    const comprador = datosComprador(datos.comprobante);
+    if (comprador.length > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      comprador.forEach((l, i) => doc.text(l, margen, y + i * 5));
+      y += comprador.length * 5 + 4;
+    }
+  }
 
   if (datos.cliente) {
     doc.setFont("helvetica", "bold");
@@ -114,23 +134,24 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
     y += 12;
   }
 
-  if (datos.comprobante) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(`${datos.comprobante.tipoEcfEtiqueta} — NCF: ${datos.comprobante.ncf}`, margen, y);
-    y += 8;
-  }
-
   autoTable(doc, {
     startY: y,
     margin: { left: margen, right: margen },
-    head: [["Descripción", "Cant.", "Precio unit.", "Subtotal"]],
-    body: datos.lineas.map((l) => [
-      l.descripcion,
-      cantidad(l.cantidad),
-      `RD$ ${money(l.precio_unitario)}`,
-      `RD$ ${money(l.subtotal)}`,
-    ]),
+    head: [
+      datos.comprobante
+        ? ["Descripción", "Cant.", "Precio unit.", "ITBIS", "Valor"]
+        : ["Descripción", "Cant.", "Precio unit.", "Subtotal"],
+    ],
+    body: datos.lineas.map((l) => {
+      const descripcion = descripcionLinea(
+        { descripcion: l.descripcion, tasa_impuesto: l.tasa_impuesto ?? 0.18 },
+        !!datos.comprobante,
+      );
+      const base = [descripcion, cantidad(l.cantidad), `RD$ ${money(l.precio_unitario)}`];
+      return datos.comprobante
+        ? [...base, l.monto_itbis ? `RD$ ${money(l.monto_itbis)}` : "", `RD$ ${money(l.subtotal)}`]
+        : [...base, `RD$ ${money(l.subtotal)}`];
+    }),
     styles: { font: "helvetica", fontSize: 9, cellPadding: 2.5 },
     headStyles: { fillColor: [30, 30, 30], textColor: 255 },
     columnStyles: {
@@ -171,7 +192,7 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
   }
 
   if (datos.comprobante?.qrUrl) {
-    y = dibujarTimbre(doc, datos.comprobante, margen, y + 6);
+    y = dibujarTimbre(doc, datos.comprobante, Math.max(margen, DISTANCIA_MINIMA_QR_BORDE_MM), y + 6);
   }
 
   if (datos.piePagina) {
@@ -185,6 +206,8 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
 }
 
 const LADO_QR_MM = 30;
+/** Informe Técnico e-CF §18.2.3: el QR empieza a 2 cm o más del borde, lado inferior izquierdo. */
+const DISTANCIA_MINIMA_QR_BORDE_MM = 20;
 
 function dibujarTimbre(
   doc: jsPDF,

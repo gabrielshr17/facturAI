@@ -15,6 +15,7 @@ import { Receipt, ClipboardList } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { ejecutarCicloFiscal } from "../data/seguimientoFiscal.js";
+import { comprobanteParaRecibo } from "../impresion/representacion.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
 import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
 import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
@@ -46,7 +47,7 @@ const TIPOS: { valor: "" | "normal" | "fiscal"; etiqueta: string }[] = [
 /** Consulta de facturas ya cobradas: filtrar, ver detalle y reimprimir. */
 function FacturasCobradas() {
   const repos = useRepos();
-  const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo, modoFiscal } = repos;
+  const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo, secuenciaNcf, modoFiscal } = repos;
   const [consultandoDgii, setConsultandoDgii] = useState(false);
   const [avisoDgii, setAvisoDgii] = useState<string | null>(null);
 
@@ -174,15 +175,7 @@ function FacturasCobradas() {
       lineas: lineasSel,
       pagos: pagosSel,
       cliente: fila.cliente,
-      comprobante: fila.comprobante
-        ? {
-            ncf: fila.comprobante.ncf,
-            tipoEcfEtiqueta: ETIQUETA_TIPO_ECF[fila.comprobante.tipo_ecf],
-            codigoSeguridad: fila.comprobante.codigo_seguridad,
-            fechaFirma: fila.comprobante.fecha_firma,
-            qrUrl: fila.comprobante.qr_url,
-          }
-        : null,
+      comprobante: fila.comprobante ? await comprobanteParaRecibo(fila.comprobante, secuenciaNcf) : null,
     };
     if (salida === "imprimir") {
       imprimirRecibo(datosRecibo);
