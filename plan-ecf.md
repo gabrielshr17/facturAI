@@ -29,7 +29,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
       insensibles a mayúsculas. Sin Postgres o sin certificado responden 503.
 - [x] B4. Persistencia en Postgres: `ecf_recibido`, `aprobacion_comercial_recibida` (XML como texto).
       Código en `fiscal/recepcion/almacen.ts`; tablas en `schema.sql`.
-- [ ] B5. API protegida para la app: listar recibidos, emitir aprobación/rechazo comercial
+- [x] B5. API protegida para la app: listar recibidos, emitir aprobación/rechazo comercial
       (firma ACECF y envía a DGII + al emisor).
 - [ ] B6. UI en Compras: "Comprobantes de proveedores" — ver, importar como compra, aprobar/rechazar.
 

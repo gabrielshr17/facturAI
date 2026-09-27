@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import type { ConfigApi } from "../config.js";
 import type { AmbienteDgii } from "./ambiente.js";
 import { cargarCertificado, firmarXml } from "./firma.js";
-import { crearClienteDgii } from "./dgii-cliente.js";
+import { crearClienteDgii, type ClienteDgii } from "./dgii-cliente.js";
 import { crearServicioEmision, type ServicioEmision } from "./servicio-emision.js";
 
 export type ModuloFiscal =
@@ -13,6 +13,7 @@ export type ModuloFiscal =
       certificadoVence: Date;
       servicio: ServicioEmision;
       firmar: (xml: string) => string;
+      dgii: ClienteDgii;
     }
   | { disponible: false; ambiente: AmbienteDgii; motivo: string };
 
@@ -50,6 +51,7 @@ export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
       certificadoVence: certificado.venceEl,
       servicio: crearServicioEmision({ ambiente, certificado, cliente }),
       firmar: (xml) => firmarXml(xml, certificado),
+      dgii: cliente,
     };
   } catch (error) {
     return {

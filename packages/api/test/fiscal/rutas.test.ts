@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import Fastify from "fastify";
 import { rutaFiscal } from "../../src/routes/fiscal.js";
 import type { ModuloFiscal } from "../../src/fiscal/iniciar.js";
+
+type ModuloFiscalDisponible = Extract<ModuloFiscal, { disponible: true }>;
 import type { ServicioEmision } from "../../src/fiscal/servicio-emision.js";
 import { DgiiNoDisponibleError, DocumentoFiscalInvalidoError } from "../../src/fiscal/errores.js";
 import { consumoPrueba } from "./datos-prueba.js";
@@ -13,6 +15,7 @@ function modulo(servicio: Partial<ServicioEmision>): ModuloFiscal {
     rncEmisor: "131880738",
     certificadoVence: new Date("2027-01-01T00:00:00Z"),
     firmar: (xml) => xml,
+    dgii: {} as ModuloFiscalDisponible["dgii"],
     servicio: {
       emitir: async () => ({ estado: "aceptado" }),
       consultar: async () => ({ estado: "aceptado" }),

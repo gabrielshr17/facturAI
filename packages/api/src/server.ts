@@ -9,6 +9,9 @@ import { rutaTransferencias } from "./routes/transferencias.js";
 import { iniciarPollerTransferencias } from "./jobs/poller-transferencias.js";
 import { iniciarModuloFiscal } from "./fiscal/iniciar.js";
 import { rutasRecepcion } from "./routes/recepcion.js";
+import { rutaRecibidos } from "./routes/recibidos.js";
+import { crearServicioRecibidos } from "./fiscal/servicio-recibidos.js";
+import { crearClienteContribuyente } from "./fiscal/entrega.js";
 import { crearAlmacenSupabase } from "./fiscal/recepcion/almacen.js";
 import { crearAutenticadorReceptor } from "./fiscal/recepcion/autenticacion.js";
 import { dbDisponible, obtenerClienteDb } from "./services/db.js";
@@ -44,6 +47,19 @@ await app.register(async (protegido) => {
   await protegido.register(async (fiscal) => {
     fiscal.addHook("onRequest", exigirPermisoFiscal);
     await fiscal.register(rutaFiscal(moduloFiscal));
+    await fiscal.register(
+      rutaRecibidos(
+        moduloFiscal.disponible && dbDisponible()
+          ? crearServicioRecibidos({
+              rncPropio: moduloFiscal.rncEmisor,
+              almacen: crearAlmacenSupabase(obtenerClienteDb()),
+              firmar: moduloFiscal.firmar,
+              dgii: moduloFiscal.dgii,
+              contribuyente: crearClienteContribuyente({ firmar: moduloFiscal.firmar }),
+            })
+          : null,
+      ),
+    );
   });
   await protegido.register(rutaChatbot);
   await protegido.register(rutaTransferencias);
