@@ -1,7 +1,7 @@
 import type { SqlDriver } from "../db/driver.js";
 import { newId, now } from "../ids.js";
 import type { TipoEcf } from "../dominio/ecf.js";
-import type { ComprobanteFiscal, EstadoDgii } from "./tipos.js";
+import type { ComprobanteFiscal, EstadoDgii, EstadoEntrega } from "./tipos.js";
 
 export interface CrearComprobanteInput {
   facturaId: string;
@@ -27,7 +27,14 @@ export interface CrearComprobanteInput {
 const COLS = `id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
   receptor_documento_numero, fecha_emision, monto_gravado, monto_exento, monto_itbis, total,
   estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url, fecha_transmision,
-  fecha_firma, xml_firmado, motivo_rechazo, created_at, updated_at, deleted_at`;
+  fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle, acuse_recibo_xml,
+  created_at, updated_at, deleted_at`;
+
+const TIPOS_CON_ENTREGA: ReadonlySet<TipoEcf> = new Set(["31", "33", "34"]);
+
+function entregaInicial(tipoEcf: TipoEcf, receptorTipo: "rnc" | "cedula" | null): EstadoEntrega {
+  return TIPOS_CON_ENTREGA.has(tipoEcf) && receptorTipo === "rnc" ? "pendiente" : "no_aplica";
+}
 
 const TRANSMITIDO: ReadonlySet<EstadoDgii> = new Set(["aceptado", "aceptado_condicional", "pendiente", "rechazado"]);
 
@@ -58,12 +65,15 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
         fecha_firma: input.fechaFirma ?? null,
         xml_firmado: input.xmlFirmado ?? null,
         motivo_rechazo: input.motivoRechazo ?? null,
+        entrega_estado: entregaInicial(input.tipoEcf, input.receptorDocumentoTipo),
+        entrega_detalle: null,
+        acuse_recibo_xml: null,
         created_at: ts,
         updated_at: ts,
         deleted_at: null,
       };
 
-      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(25).fill("?").join(",")})`, [
+      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(28).fill("?").join(",")})`, [
         c.id,
         c.factura_id,
         c.tipo_ecf,
@@ -86,6 +96,9 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
         c.fecha_firma,
         c.xml_firmado,
         c.motivo_rechazo,
+        c.entrega_estado,
+        c.entrega_detalle,
+        c.acuse_recibo_xml,
         c.created_at,
         c.updated_at,
         c.deleted_at,
@@ -110,6 +123,27 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
       return db.all<ComprobanteFiscal>(
         `SELECT ${COLS} FROM comprobante_fiscal
           WHERE estado_dgii='pendiente' AND deleted_at IS NULL ORDER BY fecha_emision`,
+      );
+    },
+
+    /** Aceptados por la DGII cuya entrega al comprador electrónico sigue pendiente. */
+    async listarPorEntregar(): Promise<ComprobanteFiscal[]> {
+      return db.all<ComprobanteFiscal>(
+        `SELECT ${COLS} FROM comprobante_fiscal
+          WHERE entrega_estado='pendiente' AND estado_dgii IN ('aceptado','aceptado_condicional')
+            AND deleted_at IS NULL ORDER BY fecha_emision`,
+      );
+    },
+
+    async registrarEntrega(
+      id: string,
+      estado: EstadoEntrega,
+      detalle: string | null,
+      acuseXml: string | null,
+    ): Promise<void> {
+      await db.run(
+        "UPDATE comprobante_fiscal SET entrega_estado=?, entrega_detalle=?, acuse_recibo_xml=?, updated_at=? WHERE id=?",
+        [estado, detalle, acuseXml, now(), id],
       );
     },
 

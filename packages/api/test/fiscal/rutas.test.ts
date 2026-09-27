@@ -15,7 +15,10 @@ function modulo(servicio: Partial<ServicioEmision>): ModuloFiscal {
     rncEmisor: "131880738",
     certificadoVence: new Date("2027-01-01T00:00:00Z"),
     firmar: (xml) => xml,
-    dgii: {} as ModuloFiscalDisponible["dgii"],
+    dgii: {
+      consultarTrackIds: async () => [{ trackId: "t-9", estado: "aceptado" }],
+    } as unknown as ModuloFiscalDisponible["dgii"],
+    entrega: { entregar: async () => ({ electronico: false }) },
     servicio: {
       emitir: async () => ({ estado: "aceptado" }),
       consultar: async () => ({ estado: "aceptado" }),
@@ -74,5 +77,17 @@ describe("rutas /fiscal", () => {
     ).inject({ method: "POST", url: "/fiscal/comprobantes", payload: consumoPrueba() });
     expect(res.statusCode).toBe(503);
     expect(res.json().error).toContain("Falta el certificado.");
+  });
+
+  it("entrega al comprador y consulta trackIds de un e-NCF propio", async () => {
+    const a = await app(modulo({}));
+    const entrega = await a.inject({
+      method: "POST",
+      url: "/fiscal/entregas",
+      payload: { encf: "E310000000001", rncComprador: "101010101", xmlFirmado: "<ECF/>" },
+    });
+    expect(entrega.json()).toEqual({ electronico: false });
+    const trackIds = await a.inject({ url: "/fiscal/trackids/E310000000001" });
+    expect(trackIds.json()).toEqual({ trackIds: [{ trackId: "t-9", estado: "aceptado" }] });
   });
 });

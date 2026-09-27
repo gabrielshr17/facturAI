@@ -196,6 +196,9 @@ CREATE TABLE comprobante_fiscal (
   fecha_firma               TEXT, -- formato DGII dd-MM-AAAA HH:mm:ss, tal como va en el XML/QR
   xml_firmado               TEXT,
   motivo_rechazo            TEXT,
+  entrega_estado            TEXT NOT NULL DEFAULT 'no_aplica', -- no_aplica|pendiente|entregado|rechazado|no_electronico
+  entrega_detalle           TEXT,
+  acuse_recibo_xml          TEXT,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at                TIMESTAMPTZ
@@ -203,6 +206,7 @@ CREATE TABLE comprobante_fiscal (
 CREATE UNIQUE INDEX ux_comprobante_fiscal_ncf ON comprobante_fiscal(ncf);
 CREATE INDEX ix_comprobante_fiscal_factura ON comprobante_fiscal(factura_id);
 CREATE INDEX ix_comprobante_fiscal_estado ON comprobante_fiscal(estado_dgii);
+CREATE INDEX ix_comprobante_fiscal_entrega ON comprobante_fiscal(entrega_estado);
 
 ALTER TABLE factura ADD CONSTRAINT fk_factura_comprobante
   FOREIGN KEY (comprobante_id) REFERENCES comprobante_fiscal(id);

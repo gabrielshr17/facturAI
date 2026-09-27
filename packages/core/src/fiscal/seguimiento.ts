@@ -105,3 +105,58 @@ export async function anularNcfPendientes(deps: AnularDeps): Promise<{ anulados:
   }
   return resultado;
 }
+
+export interface DatosEntrega {
+  encf: string;
+  rncComprador: string;
+  xmlFirmado: string;
+}
+
+export type ResultadoEntrega =
+  { electronico: false } | { electronico: true; recibido: boolean; motivo?: number; acuseXml: string };
+
+export interface EntregaDeps {
+  comprobanteRepo: ComprobanteFiscalRepo;
+  entregar: (datos: DatosEntrega) => Promise<ResultadoEntrega>;
+}
+
+/**
+ * Tras la aceptación de la DGII, el e-CF (E31/E33/E34 a un RNC) se entrega al comprador si este
+ * es emisor electrónico. Una falla de red deja la entrega pendiente para el próximo ciclo.
+ */
+export async function entregarComprobantesAReceptores(deps: EntregaDeps): Promise<{
+  entregados: number;
+  noElectronicos: number;
+  rechazados: string[];
+  errores: number;
+}> {
+  const resumen = { entregados: 0, noElectronicos: 0, rechazados: [] as string[], errores: 0 };
+  for (const c of await deps.comprobanteRepo.listarPorEntregar()) {
+    if (!c.receptor_documento_numero || !c.xml_firmado) continue;
+    try {
+      const resultado = await deps.entregar({
+        encf: c.ncf,
+        rncComprador: c.receptor_documento_numero,
+        xmlFirmado: c.xml_firmado,
+      });
+      if (!resultado.electronico) {
+        await deps.comprobanteRepo.registrarEntrega(c.id, "no_electronico", null, null);
+        resumen.noElectronicos += 1;
+      } else if (resultado.recibido) {
+        await deps.comprobanteRepo.registrarEntrega(c.id, "entregado", null, resultado.acuseXml);
+        resumen.entregados += 1;
+      } else {
+        await deps.comprobanteRepo.registrarEntrega(
+          c.id,
+          "rechazado",
+          `El comprador no lo recibió (motivo ${resultado.motivo ?? "sin código"}).`,
+          resultado.acuseXml,
+        );
+        resumen.rechazados.push(c.ncf);
+      }
+    } catch {
+      resumen.errores += 1;
+    }
+  }
+  return resumen;
+}

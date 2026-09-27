@@ -526,4 +526,15 @@ export const migrations: Migration[] = [
       CREATE INDEX ix_ncf_anulacion_estado ON ncf_anulacion(estado);
     `,
   },
+  {
+    id: 12,
+    nombre: "ecf_entrega_receptor",
+    sql: /* sql */ `
+      -- Entrega del e-CF aceptado al comprador electrónico (estándar emisor-receptor DGII).
+      ALTER TABLE comprobante_fiscal ADD COLUMN entrega_estado TEXT NOT NULL DEFAULT 'no_aplica'; -- no_aplica|pendiente|entregado|rechazado|no_electronico
+      ALTER TABLE comprobante_fiscal ADD COLUMN entrega_detalle TEXT;
+      ALTER TABLE comprobante_fiscal ADD COLUMN acuse_recibo_xml TEXT;
+      CREATE INDEX ix_comprobante_fiscal_entrega ON comprobante_fiscal(entrega_estado);
+    `,
+  },
 ];

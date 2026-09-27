@@ -3,6 +3,8 @@ import type { ConfigApi } from "../config.js";
 import type { AmbienteDgii } from "./ambiente.js";
 import { cargarCertificado, firmarXml } from "./firma.js";
 import { crearClienteDgii, type ClienteDgii } from "./dgii-cliente.js";
+import { crearServicioEntrega, type ServicioEntrega } from "./servicio-entrega.js";
+import { crearClienteContribuyente } from "./entrega.js";
 import { crearServicioEmision, type ServicioEmision } from "./servicio-emision.js";
 
 export type ModuloFiscal =
@@ -14,6 +16,7 @@ export type ModuloFiscal =
       servicio: ServicioEmision;
       firmar: (xml: string) => string;
       dgii: ClienteDgii;
+      entrega: ServicioEntrega;
     }
   | { disponible: false; ambiente: AmbienteDgii; motivo: string };
 
@@ -52,6 +55,11 @@ export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
       servicio: crearServicioEmision({ ambiente, certificado, cliente }),
       firmar: (xml) => firmarXml(xml, certificado),
       dgii: cliente,
+      entrega: crearServicioEntrega({
+        rncPropio: rncEmisor,
+        dgii: cliente,
+        contribuyente: crearClienteContribuyente({ firmar: (xml) => firmarXml(xml, certificado) }),
+      }),
     };
   } catch (error) {
     return {

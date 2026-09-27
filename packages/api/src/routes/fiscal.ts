@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyBaseLogger } from "fastif
 import type { ComprobanteATransmitir } from "@sfr/core";
 import type { ModuloFiscal } from "../fiscal/iniciar.js";
 import type { RangoAnulacion } from "../fiscal/xml/anecf.js";
+import type { SolicitudEntrega } from "../fiscal/servicio-entrega.js";
 import { DgiiNoDisponibleError, DgiiRespuestaError, DocumentoFiscalInvalidoError } from "../fiscal/errores.js";
 
 async function responderError(error: unknown, reply: FastifyReply, log: FastifyBaseLogger): Promise<void> {
@@ -83,5 +84,23 @@ export function rutaFiscal(modulo: ModuloFiscal): FastifyPluginAsync {
         }
       },
     );
+
+    app.post<{ Body: SolicitudEntrega }>("/fiscal/entregas", async (request, reply) => {
+      if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
+      try {
+        return await modulo.entrega.entregar(request.body);
+      } catch (error) {
+        await responderError(error, reply, app.log);
+      }
+    });
+
+    app.get<{ Params: { encf: string } }>("/fiscal/trackids/:encf", async (request, reply) => {
+      if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
+      try {
+        return { trackIds: await modulo.dgii.consultarTrackIds(modulo.rncEmisor, request.params.encf) };
+      } catch (error) {
+        await responderError(error, reply, app.log);
+      }
+    });
   };
 }

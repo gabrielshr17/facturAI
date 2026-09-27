@@ -194,7 +194,13 @@ export interface ComprobanteFiscal extends Auditoria {
   fecha_firma: string | null;
   xml_firmado: string | null;
   motivo_rechazo: string | null;
+  entrega_estado: EstadoEntrega;
+  entrega_detalle: string | null;
+  acuse_recibo_xml: string | null;
 }
+
+/** Entrega del e-CF aceptado al comprador cuando este es emisor electrónico. */
+export type EstadoEntrega = "no_aplica" | "pendiente" | "entregado" | "rechazado" | "no_electronico";
 
 export type EstadoNcfAnulacion = "pendiente" | "anulado" | "utilizado";
 
