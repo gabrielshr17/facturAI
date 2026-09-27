@@ -60,7 +60,10 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 ## E — Herramientas de certificación
 
 - [x] E1. Generador genérico fila → XML ordenado por XSD (sin tags vacíos), validado contra XSD.
-- [ ] E2. Script `set-pruebas <archivo.xlsx>` (e-CF y aprobaciones). **Ajustar columnas al tener el Excel real.**
+- [x] E2. `pnpm --filter @sfr/api set-pruebas <archivo.xlsx> [--enviar]`. Simulacro por defecto (firma con
+      certificado autofirmado si aún no hay .p12). **Al descargar el Excel real:** correr el simulacro y revisar
+      "columnas sin usar" en la salida; si aparecen, ajustar la convención de nombres en
+      `src/fiscal/certificacion/generador.ts`.
 - [ ] E3. Auditoría de la representación impresa (Informe Técnico §18) + generador de PDFs de prueba.
 
 ## G — Preparar despliegue

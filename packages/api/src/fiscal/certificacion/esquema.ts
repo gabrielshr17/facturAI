@@ -5,7 +5,18 @@ import { DOMParser } from "@xmldom/xmldom";
 const XS = "http://www.w3.org/2001/XMLSchema";
 
 export type NombreEsquema =
-  "ecf-31" | "ecf-32" | "ecf-33" | "ecf-34" | "ecf-41" | "ecf-43" | "ecf-44" | "ecf-45" | "ecf-46" | "ecf-47" | "acecf";
+  | "ecf-31"
+  | "ecf-32"
+  | "ecf-33"
+  | "ecf-34"
+  | "ecf-41"
+  | "ecf-43"
+  | "ecf-44"
+  | "ecf-45"
+  | "ecf-46"
+  | "ecf-47"
+  | "rfce-32"
+  | "acecf";
 
 export interface NodoEsquema {
   nombre: string;
