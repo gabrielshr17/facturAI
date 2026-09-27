@@ -20,6 +20,20 @@ export interface ClienteDgii {
   enviarRfce(xmlFirmado: string, nombreArchivo: string): Promise<RespuestaEstado>;
   consultarResultado(trackId: string): Promise<RespuestaEstado>;
   anularRangos(xmlFirmado: string, nombreArchivo: string): Promise<RespuestaAnulacion>;
+  enviarAprobacionComercial(xmlFirmado: string, nombreArchivo: string): Promise<RespuestaAnulacion>;
+  consultarDirectorio(rnc: string): Promise<DirectorioContribuyente | null>;
+  consultarTrackIds(rncEmisor: string, encf: string): Promise<TrackIdRegistrado[]>;
+}
+
+export interface DirectorioContribuyente {
+  urlRecepcion: string;
+  urlAceptacion: string;
+  urlAutenticacion: string | null;
+}
+
+export interface TrackIdRegistrado {
+  trackId: string;
+  estado: EstadoDgiiRespuesta;
 }
 
 export interface OpcionesClienteDgii {
@@ -192,6 +206,50 @@ export function crearClienteDgii(opciones: OpcionesClienteDgii): ClienteDgii {
       const cuerpo = (await respuesta.json()) as { codigo?: string | number; nombre?: string; mensajes?: string[] };
       const aceptada = String(cuerpo.codigo) === "1" || (cuerpo.nombre ?? "").toLowerCase().includes("aceptad");
       return { aceptada, mensajes: cuerpo.mensajes ?? [] };
+    },
+
+    async enviarAprobacionComercial(xmlFirmado, nombreArchivo) {
+      const respuesta = await conToken(urls.aprobacionComercial, () => ({
+        method: "POST",
+        body: archivoXml(xmlFirmado, nombreArchivo),
+      }));
+      const cuerpo = (await respuesta.json()) as {
+        codigo?: string | number;
+        estado?: string;
+        mensaje?: string[] | string;
+      };
+      const mensajes = Array.isArray(cuerpo.mensaje) ? cuerpo.mensaje : cuerpo.mensaje ? [cuerpo.mensaje] : [];
+      return { aceptada: String(cuerpo.codigo) === "1", mensajes };
+    },
+
+    async consultarDirectorio(rnc) {
+      let respuesta: Response;
+      try {
+        respuesta = await conToken(urls.directorioPorRnc(rnc), () => ({ method: "GET" }));
+      } catch (error) {
+        if (error instanceof DgiiRespuestaError && error.status === 404) return null;
+        throw error;
+      }
+      const cuerpo = (await respuesta.json()) as
+        | { urlRecepcion?: string; urlAceptacion?: string; urlOpcional?: string }
+        | { urlRecepcion?: string; urlAceptacion?: string; urlOpcional?: string }[];
+      const entrada = Array.isArray(cuerpo) ? cuerpo[0] : cuerpo;
+      if (!entrada?.urlRecepcion || !entrada.urlAceptacion) return null;
+      return {
+        urlRecepcion: entrada.urlRecepcion,
+        urlAceptacion: entrada.urlAceptacion,
+        urlAutenticacion: entrada.urlOpcional || null,
+      };
+    },
+
+    async consultarTrackIds(rncEmisor, encf) {
+      const respuesta = await conToken(urls.consultaTrackIds(rncEmisor, encf), () => ({ method: "GET" }));
+      const cuerpo = (await respuesta.json()) as
+        { trackId?: string | null; estado?: string }[] | { trackId?: string | null; estado?: string };
+      const lista = Array.isArray(cuerpo) ? cuerpo : [cuerpo];
+      return lista
+        .filter((t): t is { trackId: string; estado?: string } => Boolean(t.trackId))
+        .map((t) => ({ trackId: t.trackId, estado: estadoDesdeTexto(t.estado) }));
     },
   };
 }

@@ -15,6 +15,9 @@ export interface UrlsDgii {
   anulacionRangos: string;
   consultaTimbre: string;
   consultaTimbreFc: string;
+  aprobacionComercial: string;
+  directorioPorRnc: (rnc: string) => string;
+  consultaTrackIds: (rncEmisor: string, encf: string) => string;
 }
 
 export function urlsDgii(ambiente: AmbienteDgii): UrlsDgii {
@@ -30,5 +33,10 @@ export function urlsDgii(ambiente: AmbienteDgii): UrlsDgii {
     anulacionRangos: `${ecf}/anulacionrangos/api/operaciones/anularrango`,
     consultaTimbre: `${ecf}/consultatimbre`,
     consultaTimbreFc: `${fc}/consultatimbrefc`,
+    aprobacionComercial: `${ecf}/aprobacioncomercial/api/aprobacioncomercial`,
+    directorioPorRnc: (rnc) =>
+      `${ecf}/consultadirectorio/api/consultas/obtenerdirectorioporrnc?rnc=${encodeURIComponent(rnc)}`,
+    consultaTrackIds: (rncEmisor, encf) =>
+      `${ecf}/consultatrackids/api/trackids/consulta?rncemisor=${encodeURIComponent(rncEmisor)}&encf=${encodeURIComponent(encf)}`,
   };
 }
