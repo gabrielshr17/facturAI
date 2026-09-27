@@ -31,6 +31,8 @@ export interface ConfigApi {
   dgiiAmbiente: AmbienteDgii;
   /** Ruta al certificado digital .p12 de la empresa y su contraseña (§ Módulo fiscal e-CF). */
   dgiiP12Ruta: string | null;
+  /** Alternativa a la ruta: el .p12 en base64, para hostings donde no se pueden subir archivos. */
+  dgiiP12Base64: string | null;
   dgiiP12Clave: string | null;
   /** true si hay certificado y contraseña para firmar. */
   dgiiConfigurado: boolean;
@@ -55,6 +57,7 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
   const gmailOAuthClientSecret = env.GMAIL_OAUTH_CLIENT_SECRET || null;
   const gmailOAuthRefreshToken = env.GMAIL_OAUTH_REFRESH_TOKEN || null;
   const dgiiP12Ruta = env.DGII_P12_PATH || null;
+  const dgiiP12Base64 = env.DGII_P12_BASE64?.replace(/\s+/g, "") || null;
   const dgiiP12Clave = env.DGII_P12_PASSWORD || null;
 
   return {
@@ -70,8 +73,9 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
     transferenciasPollIntervaloMs: Number(env.TRANSFERENCIAS_POLL_INTERVALO_MS) || 5 * 60 * 1000,
     dgiiAmbiente: ambienteDgii(env.DGII_AMBIENTE),
     dgiiP12Ruta,
+    dgiiP12Base64,
     dgiiP12Clave,
-    dgiiConfigurado: Boolean(dgiiP12Ruta && dgiiP12Clave),
+    dgiiConfigurado: Boolean((dgiiP12Ruta || dgiiP12Base64) && dgiiP12Clave),
     dgiiRncEmisor: env.DGII_RNC_EMISOR?.trim() || null,
     correosPermitidos: (env.API_CORREOS_PERMITIDOS ?? "")
       .split(",")

@@ -41,6 +41,17 @@ describe("iniciarModuloFiscal", () => {
     if (!modulo.disponible) expect(modulo.motivo).toMatch(/DGII_RNC_EMISOR/);
   });
 
+  it("acepta el certificado en base64 (DGII_P12_BASE64) para hostings sin archivos", () => {
+    const modulo = iniciarModuloFiscal(
+      cargarConfig({
+        DGII_P12_BASE64: certificadoPrueba("RNC131880738").p12.toString("base64"),
+        DGII_P12_PASSWORD: CLAVE_P12_PRUEBA,
+        DGII_RNC_EMISOR: "131880738",
+      }),
+    );
+    expect(modulo).toMatchObject({ disponible: true, rncEmisor: "131880738" });
+  });
+
   it("sin certificado no queda disponible", () => {
     expect(iniciarModuloFiscal(cargarConfig({})).disponible).toBe(false);
   });

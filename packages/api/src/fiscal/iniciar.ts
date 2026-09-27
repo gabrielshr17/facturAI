@@ -26,11 +26,18 @@ export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
   if (!rncEmisor) {
     return { disponible: false, ambiente, motivo: "Falta configurar DGII_RNC_EMISOR (RNC de la empresa)." };
   }
-  if (!config.dgiiP12Ruta || !config.dgiiP12Clave) {
-    return { disponible: false, ambiente, motivo: "Falta configurar DGII_P12_PATH y DGII_P12_PASSWORD." };
+  if ((!config.dgiiP12Ruta && !config.dgiiP12Base64) || !config.dgiiP12Clave) {
+    return {
+      disponible: false,
+      ambiente,
+      motivo: "Falta configurar DGII_P12_PATH (o DGII_P12_BASE64) y DGII_P12_PASSWORD.",
+    };
   }
   try {
-    const certificado = cargarCertificado(readFileSync(config.dgiiP12Ruta), config.dgiiP12Clave);
+    const p12 = config.dgiiP12Ruta
+      ? readFileSync(config.dgiiP12Ruta)
+      : Buffer.from(config.dgiiP12Base64 ?? "", "base64");
+    const certificado = cargarCertificado(p12, config.dgiiP12Clave);
     if (certificado.venceEl.getTime() < Date.now()) {
       return {
         disponible: false,
