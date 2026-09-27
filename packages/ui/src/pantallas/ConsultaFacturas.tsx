@@ -6,7 +6,9 @@ import {
   type Cliente,
   type ComprobanteFiscal,
   type Negocio,
+  type EstadoDgii,
   ETIQUETA_TIPO_ECF,
+  emisorDesdeNegocio,
   normalizar,
 } from "@sfr/core";
 import { Receipt, ClipboardList } from "lucide-react";
@@ -160,6 +162,8 @@ function FacturasCobradas() {
             ncf: fila.comprobante.ncf,
             tipoEcfEtiqueta: ETIQUETA_TIPO_ECF[fila.comprobante.tipo_ecf],
             codigoSeguridad: fila.comprobante.codigo_seguridad,
+            fechaFirma: fila.comprobante.fecha_firma,
+            qrUrl: fila.comprobante.qr_url,
           }
         : null,
     };
@@ -307,6 +311,11 @@ function FacturasCobradas() {
                 {ETIQUETA_TIPO_ECF[seleccionada.comprobante.tipo_ecf]}
                 <br />
                 NCF: {seleccionada.comprobante.ncf}
+                <br />
+                <span style={{ color: ESTADO_DGII[seleccionada.comprobante.estado_dgii].color }}>
+                  DGII: {ESTADO_DGII[seleccionada.comprobante.estado_dgii].etiqueta}
+                  {seleccionada.comprobante.motivo_rechazo ? ` — ${seleccionada.comprobante.motivo_rechazo}` : ""}
+                </span>
               </p>
             )}
 
@@ -366,7 +375,7 @@ function FacturasCobradas() {
         <ModalDevolucion
           factura={seleccionada.factura}
           lineas={lineasSel}
-          rncEmisor={negocio?.rnc ?? null}
+          emisor={emisorDesdeNegocio(negocio)}
           onCerrar={() => setMostrarDevolucion(false)}
           onCompletada={() => void recargarDespuesDeDevolucion()}
         />
@@ -378,6 +387,14 @@ function FacturasCobradas() {
 /** Envuelve facturas cobradas y cotizaciones (§ ConsultaCotizaciones) en una sola pantalla con
  *  pestañas — evita sumar un décimo ítem al menú lateral, que rompería el esquema de atajos
  *  Alt+1..9 (§ AppShell). */
+const ESTADO_DGII: Record<EstadoDgii, { etiqueta: string; color: string }> = {
+  pendiente: { etiqueta: "en proceso de validación", color: c.amarillo },
+  aceptado: { etiqueta: "aceptado", color: c.verde },
+  aceptado_condicional: { etiqueta: "aceptado condicional", color: c.verde },
+  rechazado: { etiqueta: "rechazado", color: c.rojo },
+  contingencia: { etiqueta: "contingencia", color: c.amarillo },
+};
+
 export function ConsultaFacturas() {
   const [tab, setTab] = useState<"facturas" | "cotizaciones">("facturas");
 

@@ -8,6 +8,7 @@ import {
   type Negocio,
   type MetodoPago,
   cobrarConFiscal,
+  emisorDesdeNegocio,
   aplicarDescuento,
   pctGananciaDesdePrecio,
 } from "@sfr/core";
@@ -17,7 +18,7 @@ import { ModalCobro, type FiscalInput, type SalidaCobro } from "../componentes/M
 import { ModalCotizacion, type SalidaCotizacion } from "../componentes/ModalCotizacion.js";
 import { FormularioProducto, diferenciasProducto, type CambioProducto } from "../componentes/FormularioProducto.js";
 import { ModalConfirmarCambios } from "../componentes/ModalConfirmarCambios.js";
-import { imprimirRecibo } from "../impresion/recibo.js";
+import { imprimirRecibo, type ComprobanteRecibo } from "../impresion/recibo.js";
 import { imprimirCotizacion } from "../impresion/cotizacion.js";
 import { generarPdfRecibo, generarPdfCotizacion, guardarPdf } from "../impresion/pdf.js";
 import { abrirGavetaTermica } from "../impresion/termica.js";
@@ -81,6 +82,7 @@ export function Ventas() {
     negocio: negocioRepo,
     secuenciaNcf,
     comprobanteFiscal,
+    ncfAnulacion,
     proveedorFiscal,
     promocion: promocionRepo,
     cotizacion: cotizacionRepo,
@@ -1045,11 +1047,17 @@ export function Ventas() {
     if (!activoId) return;
 
     let factura: Factura;
-    let comprobanteRecibo: { ncf: string; tipoEcfEtiqueta: string; codigoSeguridad?: string | null } | null = null;
+    let comprobanteRecibo: ComprobanteRecibo | null = null;
 
     if (fiscal) {
       const resultado = await cobrarConFiscal(
-        { facturaRepo: repo, secuenciaRepo: secuenciaNcf, comprobanteRepo: comprobanteFiscal, proveedorFiscal },
+        {
+          facturaRepo: repo,
+          secuenciaRepo: secuenciaNcf,
+          comprobanteRepo: comprobanteFiscal,
+          anulacionRepo: ncfAnulacion,
+          proveedorFiscal,
+        },
         activoId,
         {
           pagos,
@@ -1057,7 +1065,8 @@ export function Ventas() {
           tipoEcf: fiscal.tipoEcf,
           receptorDocumentoTipo: fiscal.receptorDocumentoTipo,
           receptorDocumentoNumero: fiscal.receptorDocumentoNumero,
-          rncEmisor: negocio?.rnc ?? null,
+          receptorNombre: fiscal.receptorNombre,
+          emisor: emisorDesdeNegocio(negocio),
         },
       );
       factura = resultado.factura;
@@ -1065,6 +1074,8 @@ export function Ventas() {
         ncf: resultado.comprobante.ncf,
         tipoEcfEtiqueta: fiscal.tipoEcf === "31" ? "Crédito Fiscal (E31)" : "Consumo (E32)",
         codigoSeguridad: resultado.comprobante.codigo_seguridad,
+        fechaFirma: resultado.comprobante.fecha_firma,
+        qrUrl: resultado.comprobante.qr_url,
       };
     } else {
       const resultado = await repo.cobrar(activoId, { pagos, notas });
@@ -2160,6 +2171,7 @@ export function Ventas() {
           notasIniciales={activo.notas ?? ""}
           clienteDocumentoTipo={clienteActivo?.documento_tipo ?? null}
           clienteDocumentoNumero={clienteActivo?.documento_numero ?? null}
+          clienteNombre={clienteActivo ? `${clienteActivo.nombre} ${clienteActivo.apellidos ?? ""}`.trim() : null}
           onCancelar={() => {
             setMostrarCobro(false);
             enfocarBusqueda();

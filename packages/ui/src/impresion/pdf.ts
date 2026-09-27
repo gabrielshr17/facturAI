@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { ReciboDatos } from "./recibo.js";
+import { modulosQr } from "./qr.js";
 
 /**
  * PDF real (no el diálogo "Guardar como PDF" del navegador — un archivo .pdf
@@ -47,7 +48,13 @@ interface DocumentoPdfDatos {
   subtotalExento: number;
   totalItbis: number;
   total: number;
-  comprobante?: { ncf: string; tipoEcfEtiqueta: string } | null;
+  comprobante?: {
+    ncf: string;
+    tipoEcfEtiqueta: string;
+    codigoSeguridad?: string | null;
+    fechaFirma?: string | null;
+    qrUrl?: string | null;
+  } | null;
   pagos?: { metodo: string; monto: number }[];
   montoPagado?: number;
   cambio?: number;
@@ -163,6 +170,10 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
     y += 8;
   }
 
+  if (datos.comprobante?.qrUrl) {
+    y = dibujarTimbre(doc, datos.comprobante, margen, y + 6);
+  }
+
   if (datos.piePagina) {
     doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
@@ -171,6 +182,36 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
   }
 
   return doc;
+}
+
+const LADO_QR_MM = 30;
+
+function dibujarTimbre(
+  doc: jsPDF,
+  comprobante: { codigoSeguridad?: string | null; fechaFirma?: string | null; qrUrl?: string | null },
+  x: number,
+  yInicial: number,
+): number {
+  const modulos = modulosQr(comprobante.qrUrl!);
+  const lado = LADO_QR_MM / modulos.length;
+  let y = yInicial;
+  if (y + LADO_QR_MM > doc.internal.pageSize.getHeight() - 20) {
+    doc.addPage();
+    y = 20;
+  }
+  doc.setFillColor(0, 0, 0);
+  modulos.forEach((fila, f) =>
+    fila.forEach((oscuro, c) => {
+      if (oscuro) doc.rect(x + c * lado, y + f * lado, lado, lado, "F");
+    }),
+  );
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(0);
+  const textoX = x + LADO_QR_MM + 5;
+  if (comprobante.codigoSeguridad) doc.text(`Código de seguridad: ${comprobante.codigoSeguridad}`, textoX, y + 10);
+  if (comprobante.fechaFirma) doc.text(`Fecha de firma digital: ${comprobante.fechaFirma}`, textoX, y + 16);
+  return y + LADO_QR_MM + 4;
 }
 
 /** PDF del recibo de una venta cobrada (§ Cobrar) — mismo shape de datos que `imprimirRecibo`. */

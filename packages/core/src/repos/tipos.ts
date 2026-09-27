@@ -157,7 +157,7 @@ export interface CotizacionLinea extends Auditoria {
 
 export type ModoSecuencia = "ecf" | "ncf_papel" | "contingencia";
 export type EstadoSecuencia = "disponible" | "agotada" | "vencida";
-export type EstadoDgii = "pendiente" | "aceptado" | "rechazado" | "contingencia";
+export type EstadoDgii = "pendiente" | "aceptado" | "aceptado_condicional" | "rechazado" | "contingencia";
 
 export interface SecuenciaNcf extends Auditoria {
   id: string;
@@ -191,6 +191,20 @@ export interface ComprobanteFiscal extends Auditoria {
   xml_firmado_ruta: string | null;
   qr_url: string | null;
   fecha_transmision: string | null;
+  fecha_firma: string | null;
+  xml_firmado: string | null;
+  motivo_rechazo: string | null;
+}
+
+export type EstadoNcfAnulacion = "pendiente" | "anulado" | "utilizado";
+
+export interface NcfAnulacion extends Auditoria {
+  id: string;
+  tipo_ecf: TipoEcf;
+  ncf: string;
+  motivo: string | null;
+  estado: EstadoNcfAnulacion;
+  ultimo_mensaje_dgii: string | null;
 }
 
 export type EstadoCorteCaja = "abierto" | "cerrado";

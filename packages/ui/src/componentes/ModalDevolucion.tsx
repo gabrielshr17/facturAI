@@ -1,5 +1,11 @@
 import { useState, type CSSProperties } from "react";
-import { type FacturaLinea, type Factura, calcularLinea, registrarDevolucionConFiscal } from "@sfr/core";
+import {
+  type FacturaLinea,
+  type Factura,
+  type EmisorFiscal,
+  calcularLinea,
+  registrarDevolucionConFiscal,
+} from "@sfr/core";
 import { Undo2 } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, sombra, money } from "../estilos.js";
@@ -9,18 +15,19 @@ import { mensajeError } from "../utilidades/errores.js";
 export interface ModalDevolucionProps {
   factura: Factura;
   lineas: FacturaLinea[];
-  rncEmisor: string | null;
+  emisor: EmisorFiscal | null;
   onCerrar: () => void;
   onCompletada: () => void;
 }
 
 /** Devolver artículos de una venta ya cobrada (§ Ventas). Si la venta es fiscal, exige emitir una Nota de Crédito (E34). */
-export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onCompletada }: ModalDevolucionProps) {
+export function ModalDevolucion({ factura, lineas, emisor, onCerrar, onCompletada }: ModalDevolucionProps) {
   const {
     devolucion: devolucionRepo,
     factura: facturaRepo,
     secuenciaNcf,
     comprobanteFiscal,
+    ncfAnulacion,
     proveedorFiscal,
   } = useRepos();
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
@@ -64,10 +71,11 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
             facturaRepo,
             secuenciaRepo: secuenciaNcf,
             comprobanteRepo: comprobanteFiscal,
+            anulacionRepo: ncfAnulacion,
             proveedorFiscal,
           },
           input,
-          rncEmisor,
+          emisor,
         );
       } else {
         await devolucionRepo.crear(input);

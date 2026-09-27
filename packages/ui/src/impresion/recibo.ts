@@ -1,5 +1,6 @@
 import type { Factura, FacturaLinea, Cliente, Negocio } from "@sfr/core";
 import { generarEscPos } from "./escpos.js";
+import { svgQr } from "./qr.js";
 import {
   hayImpresoraTermicaDisponible,
   obtenerImpresoraSeleccionada,
@@ -24,6 +25,15 @@ import {
  *    la venta.
  */
 
+export interface ComprobanteRecibo {
+  ncf: string;
+  tipoEcfEtiqueta: string;
+  codigoSeguridad?: string | null;
+  fechaFirma?: string | null;
+  /** URL de consulta del timbre en la DGII: se imprime como código QR. */
+  qrUrl?: string | null;
+}
+
 export interface ReciboDatos {
   negocio: Pick<Negocio, "nombre_comercial" | "rnc" | "direccion" | "telefono" | "ancho_impresora_default">;
   factura: Pick<
@@ -42,7 +52,7 @@ export interface ReciboDatos {
   pagos: { metodo: string; monto: number }[];
   cliente?: Pick<Cliente, "nombre" | "apellidos"> | null;
   /** Presente solo si la venta se emitió con comprobante fiscal (§6). */
-  comprobante?: { ncf: string; tipoEcfEtiqueta: string; codigoSeguridad?: string | null } | null;
+  comprobante?: ComprobanteRecibo | null;
 }
 
 const ETIQUETA_METODO: Record<string, string> = {
@@ -121,7 +131,6 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
       ? `
   <div class="centro" style="font-weight:bold; margin-top:4px;">${escapeHtml(comprobante.tipoEcfEtiqueta)}</div>
   <div class="centro">NCF: ${escapeHtml(comprobante.ncf)}</div>
-  ${comprobante.codigoSeguridad ? `<div class="centro">Cód. seguridad: ${escapeHtml(comprobante.codigoSeguridad)}</div>` : ""}
   `
       : ""
   }
@@ -137,10 +146,23 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
   <div class="linea"><span>Pagado</span><span>RD$ ${money(factura.monto_pagado)}</span></div>
   <div class="linea"><span>Cambio</span><span>RD$ ${money(factura.cambio)}</span></div>
   ${factura.notas ? `<hr/><div>Notas: ${escapeHtml(factura.notas)}</div>` : ""}
+  ${comprobante ? bloqueTimbreHtml(comprobante) : ""}
   <hr/>
   <div class="centro">¡Gracias por su compra!</div>
 </body>
 </html>`;
+}
+
+function bloqueTimbreHtml(comprobante: ComprobanteRecibo): string {
+  const partes: string[] = ["<hr/>"];
+  if (comprobante.qrUrl) partes.push(`<div class="centro">${svgQr(comprobante.qrUrl, 30)}</div>`);
+  if (comprobante.codigoSeguridad) {
+    partes.push(`<div class="centro">Código de seguridad: ${escapeHtml(comprobante.codigoSeguridad)}</div>`);
+  }
+  if (comprobante.fechaFirma) {
+    partes.push(`<div class="centro">Fecha de firma digital: ${escapeHtml(comprobante.fechaFirma)}</div>`);
+  }
+  return partes.join("\n  ");
 }
 
 function escapeHtml(s: string): string {
@@ -178,7 +200,6 @@ function generarTextoRecibo(datos: ReciboDatos): string[] {
   if (comprobante) {
     out.push(comprobante.tipoEcfEtiqueta);
     out.push(`NCF: ${comprobante.ncf}`);
-    if (comprobante.codigoSeguridad) out.push(`Cód. seguridad: ${comprobante.codigoSeguridad}`);
   }
 
   out.push(separador);
@@ -201,6 +222,11 @@ function generarTextoRecibo(datos: ReciboDatos): string[] {
   if (factura.notas) {
     out.push(separador);
     out.push(`Notas: ${factura.notas}`);
+  }
+  if (comprobante?.codigoSeguridad) {
+    out.push(separador);
+    out.push(`Código de seguridad: ${comprobante.codigoSeguridad}`);
+    if (comprobante.fechaFirma) out.push(`Fecha de firma digital: ${comprobante.fechaFirma}`);
   }
   out.push(separador);
   out.push("¡Gracias por su compra!");

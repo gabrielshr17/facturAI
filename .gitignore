@@ -24,3 +24,7 @@ productDatabase/
 
 # Salida local de herramientas de automatización de browser (screenshots, sesiones)
 .playwright-mcp/
+
+# Certificado digital e-CF (DGII): nunca versionar
+*.p12
+*.pfx

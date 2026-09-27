@@ -21,7 +21,14 @@ export {
   type ProveedorFiscal,
   type ComprobanteATransmitir,
   type ResultadoTransmision,
+  type EstadoTransmision,
+  type EmisorFiscal,
+  type LineaATransmitir,
+  type PagoATransmitir,
+  type ReferenciaComprobante,
+  type CodigoModificacion,
   crearProveedorFiscalSimulado,
+  tieneValidezFiscal,
 } from "./fiscal/proveedor.js";
 export {
   cobrarConFiscal,
@@ -29,6 +36,16 @@ export {
   type CobrarConFiscalDeps,
   type ResultadoCobroFiscal,
 } from "./fiscal/cobro-fiscal.js";
+export {
+  reconciliarComprobantesPendientes,
+  anularNcfPendientes,
+  agruparEnRangos,
+  type ReconciliarDeps,
+  type ResumenReconciliacion,
+  type AnularDeps,
+  type RangoNcf,
+} from "./fiscal/seguimiento.js";
+export { validarEmisor, emisorDesdeNegocio, UMBRAL_CONSUMO_CON_COMPRADOR } from "./fiscal/transmision.js";
 export {
   registrarDevolucionConFiscal,
   type DevolucionConFiscalDeps,

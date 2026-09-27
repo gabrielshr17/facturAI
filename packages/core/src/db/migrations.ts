@@ -499,4 +499,31 @@ export const migrations: Migration[] = [
       CREATE INDEX ix_cotizacion_linea_cotizacion ON cotizacion_linea(cotizacion_id);
     `,
   },
+  {
+    id: 11,
+    nombre: "ecf_dgii",
+    sql: /* sql */ `
+      -- Integración directa con la DGII: lo que devuelve la emisión real.
+      ALTER TABLE comprobante_fiscal ADD COLUMN fecha_firma TEXT;
+      ALTER TABLE comprobante_fiscal ADD COLUMN xml_firmado TEXT;
+      ALTER TABLE comprobante_fiscal ADD COLUMN motivo_rechazo TEXT;
+      CREATE INDEX ix_comprobante_fiscal_estado ON comprobante_fiscal(estado_dgii);
+
+      -- e-NCF consumidos que no llegaron a un comprobante válido (sin conexión
+      -- o rechazados): se anulan ante la DGII (ANECF) en lote.
+      CREATE TABLE ncf_anulacion (
+        id                  TEXT PRIMARY KEY,
+        tipo_ecf            TEXT NOT NULL,
+        ncf                 TEXT NOT NULL,
+        motivo              TEXT,
+        estado              TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|anulado|utilizado
+        ultimo_mensaje_dgii TEXT,
+        created_at          TEXT NOT NULL,
+        updated_at          TEXT NOT NULL,
+        deleted_at          TEXT
+      );
+      CREATE UNIQUE INDEX ux_ncf_anulacion_ncf ON ncf_anulacion(ncf);
+      CREATE INDEX ix_ncf_anulacion_estado ON ncf_anulacion(estado);
+    `,
+  },
 ];

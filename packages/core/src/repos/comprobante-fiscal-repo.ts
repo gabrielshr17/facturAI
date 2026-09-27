@@ -18,12 +18,18 @@ export interface CrearComprobanteInput {
   estadoDgii: EstadoDgii;
   trackIdDgii?: string | null;
   codigoSeguridad?: string | null;
+  qrUrl?: string | null;
+  fechaFirma?: string | null;
+  xmlFirmado?: string | null;
+  motivoRechazo?: string | null;
 }
 
 const COLS = `id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
   receptor_documento_numero, fecha_emision, monto_gravado, monto_exento, monto_itbis, total,
   estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url, fecha_transmision,
-  created_at, updated_at, deleted_at`;
+  fecha_firma, xml_firmado, motivo_rechazo, created_at, updated_at, deleted_at`;
+
+const TRANSMITIDO: ReadonlySet<EstadoDgii> = new Set(["aceptado", "aceptado_condicional", "pendiente", "rechazado"]);
 
 export function crearComprobanteFiscalRepo(db: SqlDriver) {
   return {
@@ -47,14 +53,17 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
         track_id_dgii: input.trackIdDgii ?? null,
         codigo_seguridad: input.codigoSeguridad ?? null,
         xml_firmado_ruta: null,
-        qr_url: null,
-        fecha_transmision: input.estadoDgii === "aceptado" ? ts : null,
+        qr_url: input.qrUrl ?? null,
+        fecha_transmision: TRANSMITIDO.has(input.estadoDgii) ? ts : null,
+        fecha_firma: input.fechaFirma ?? null,
+        xml_firmado: input.xmlFirmado ?? null,
+        motivo_rechazo: input.motivoRechazo ?? null,
         created_at: ts,
         updated_at: ts,
         deleted_at: null,
       };
 
-      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(22).fill("?").join(",")})`, [
+      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(25).fill("?").join(",")})`, [
         c.id,
         c.factura_id,
         c.tipo_ecf,
@@ -74,6 +83,9 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
         c.xml_firmado_ruta,
         c.qr_url,
         c.fecha_transmision,
+        c.fecha_firma,
+        c.xml_firmado,
+        c.motivo_rechazo,
         c.created_at,
         c.updated_at,
         c.deleted_at,
@@ -92,6 +104,22 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
         `SELECT ${COLS} FROM comprobante_fiscal WHERE factura_id=? AND deleted_at IS NULL`,
         [facturaId],
       );
+    },
+
+    async listarPendientes(): Promise<ComprobanteFiscal[]> {
+      return db.all<ComprobanteFiscal>(
+        `SELECT ${COLS} FROM comprobante_fiscal
+          WHERE estado_dgii='pendiente' AND deleted_at IS NULL ORDER BY fecha_emision`,
+      );
+    },
+
+    async actualizarEstado(id: string, estado: EstadoDgii, motivoRechazo: string | null = null): Promise<void> {
+      await db.run("UPDATE comprobante_fiscal SET estado_dgii=?, motivo_rechazo=?, updated_at=? WHERE id=?", [
+        estado,
+        motivoRechazo,
+        now(),
+        id,
+      ]);
     },
   };
 }

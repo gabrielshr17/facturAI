@@ -30,6 +30,7 @@ const TABLAS = [
   "promocion",
   "cotizacion",
   "cotizacion_linea",
+  "ncf_anulacion",
 ] as const;
 
 export interface RespaldoCompleto {

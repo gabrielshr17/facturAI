@@ -1,3 +1,5 @@
+import { esAmbienteDgii, type AmbienteDgii } from "./fiscal/ambiente.js";
+
 /**
  * Configuración del backend (§ Multi-caja/multiusuario). Ninguna de estas
  * variables está conectada todavía a un proyecto real: este paquete es un
@@ -25,6 +27,21 @@ export interface ConfigApi {
   gmailConfigurado: boolean;
   /** Cada cuánto se sondea la casilla dedicada en busca de correos nuevos. */
   transferenciasPollIntervaloMs: number;
+  /** Ambiente DGII (`testecf` pre-certificación, `certecf` certificación, `ecf` producción). */
+  dgiiAmbiente: AmbienteDgii;
+  /** Ruta al certificado digital .p12 de la empresa y su contraseña (§ Módulo fiscal e-CF). */
+  dgiiP12Ruta: string | null;
+  dgiiP12Clave: string | null;
+  /** true si hay certificado y contraseña para firmar. */
+  dgiiConfigurado: boolean;
+}
+
+function ambienteDgii(valor: string | undefined): AmbienteDgii {
+  if (!valor) return "testecf";
+  if (!esAmbienteDgii(valor)) {
+    throw new Error(`DGII_AMBIENTE inválido: "${valor}". Valores permitidos: testecf, certecf, ecf.`);
+  }
+  return valor;
 }
 
 export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
@@ -33,6 +50,8 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
   const gmailOAuthClientId = env.GMAIL_OAUTH_CLIENT_ID || null;
   const gmailOAuthClientSecret = env.GMAIL_OAUTH_CLIENT_SECRET || null;
   const gmailOAuthRefreshToken = env.GMAIL_OAUTH_REFRESH_TOKEN || null;
+  const dgiiP12Ruta = env.DGII_P12_PATH || null;
+  const dgiiP12Clave = env.DGII_P12_PASSWORD || null;
 
   return {
     puerto: Number(env.PORT) || 3001,
@@ -45,5 +64,9 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
     gmailOAuthRefreshToken,
     gmailConfigurado: Boolean(gmailOAuthClientId && gmailOAuthClientSecret && gmailOAuthRefreshToken),
     transferenciasPollIntervaloMs: Number(env.TRANSFERENCIAS_POLL_INTERVALO_MS) || 5 * 60 * 1000,
+    dgiiAmbiente: ambienteDgii(env.DGII_AMBIENTE),
+    dgiiP12Ruta,
+    dgiiP12Clave,
+    dgiiConfigurado: Boolean(dgiiP12Ruta && dgiiP12Clave),
   };
 }

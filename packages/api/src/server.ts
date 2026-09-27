@@ -7,6 +7,7 @@ import { rutaFiscal } from "./routes/fiscal.js";
 import { rutaChatbot } from "./routes/chatbot.js";
 import { rutaTransferencias } from "./routes/transferencias.js";
 import { iniciarPollerTransferencias } from "./jobs/poller-transferencias.js";
+import { iniciarModuloFiscal } from "./fiscal/iniciar.js";
 
 /**
  * Backend del modo multi-caja/multiusuario (§ Flujo de datos y modos).
@@ -15,6 +16,7 @@ import { iniciarPollerTransferencias } from "./jobs/poller-transferencias.js";
  * está conectado a Supabase/PowerSync todavía.
  */
 const config = cargarConfig();
+const moduloFiscal = iniciarModuloFiscal(config);
 // 10 MB: el límite por defecto de Fastify (1 MB) rechaza las fotos de
 // comprobantes en base64 que envía el chatbot con visión.
 const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
@@ -28,7 +30,7 @@ await app.register(cors, { origin: true });
 await app.register(rutaSalud);
 await app.register(async (protegido) => {
   registrarAuth(protegido);
-  await protegido.register(rutaFiscal);
+  await protegido.register(rutaFiscal(moduloFiscal));
   await protegido.register(rutaChatbot);
   await protegido.register(rutaTransferencias);
 });
@@ -36,6 +38,12 @@ await app.register(async (protegido) => {
 await app.listen({ port: config.puerto, host: "0.0.0.0" });
 
 iniciarPollerTransferencias(app, config.transferenciasPollIntervaloMs);
+
+if (moduloFiscal.disponible) {
+  app.log.info(`Facturación electrónica activa (DGII ${moduloFiscal.ambiente}).`);
+} else {
+  app.log.warn(`Facturación electrónica inactiva: ${moduloFiscal.motivo}`);
+}
 
 if (!config.supabaseConfigurado) {
   app.log.warn(

@@ -1,22 +1,74 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyBaseLogger } from "fastify";
 import type { ComprobanteATransmitir } from "@sfr/core";
+import type { ModuloFiscal } from "../fiscal/iniciar.js";
+import type { RangoAnulacion } from "../fiscal/xml/anecf.js";
+import { DgiiNoDisponibleError, DgiiRespuestaError, DocumentoFiscalInvalidoError } from "../fiscal/errores.js";
+
+async function responderError(error: unknown, reply: FastifyReply, log: FastifyBaseLogger): Promise<void> {
+  if (error instanceof DocumentoFiscalInvalidoError) {
+    await reply.code(400).send({ error: error.message });
+    return;
+  }
+  if (error instanceof DgiiNoDisponibleError) {
+    log.warn(error, "DGII no disponible");
+    await reply.code(503).send({ error: "La DGII no está disponible en este momento. Intenta de nuevo." });
+    return;
+  }
+  if (error instanceof DgiiRespuestaError) {
+    log.warn({ status: error.status, cuerpo: error.cuerpo }, "La DGII rechazó la solicitud");
+    await reply.code(502).send({ error: `La DGII rechazó la solicitud: ${error.cuerpo || error.message}` });
+    return;
+  }
+  log.error(error, "Error inesperado en el módulo fiscal");
+  await reply.code(500).send({ error: "Error interno al procesar el comprobante fiscal." });
+}
 
 /**
- * Endpoint de transmisión e-CF a la DGII (§ Módulo fiscal).
- *
- * *** SIN IMPLEMENTAR *** — sigue pendiente la decisión "PAC certificado vs.
- * integración directa al API de la DGII" (ver plan.md, "Decisiones aún
- * pendientes"). Responde 501 explícito en vez de simular una respuesta que
- * podría confundirse con una transmisión real; el cliente hoy usa
- * `crearProveedorFiscalSimulado()` de `@sfr/core` para desarrollo/pruebas.
- *
- * Cuando se implemente: recibir `ComprobanteATransmitir`, construir y firmar
- * el XML, transmitir (vía PAC o DGII directo), y devolver `ResultadoTransmision`.
+ * Emisión e-CF directa a la DGII ("Software de Desarrollo Propio"). El cliente
+ * sigue siendo dueño de sus datos (SQLite local): este backend solo firma con
+ * el .p12 de la empresa y habla con la DGII; no guarda comprobantes.
  */
-export const rutaFiscal: FastifyPluginAsync = async (app) => {
-  app.post<{ Body: ComprobanteATransmitir }>("/fiscal/transmitir", async (_request, reply) => {
-    await reply.code(501).send({
-      error: "Transmisión e-CF aún no implementada: falta decidir PAC vs. integración directa a la DGII.",
+export function rutaFiscal(modulo: ModuloFiscal): FastifyPluginAsync {
+  return async (app) => {
+    async function exigirDisponible(reply: FastifyReply): Promise<boolean> {
+      if (modulo.disponible) return true;
+      await reply.code(503).send({ error: `Facturación electrónica no configurada: ${modulo.motivo}` });
+      return false;
+    }
+
+    app.get("/fiscal/estado", async () => {
+      if (!modulo.disponible) return { disponible: false, ambiente: modulo.ambiente, motivo: modulo.motivo };
+      return { disponible: true, ambiente: modulo.ambiente, certificadoVence: modulo.certificadoVence.toISOString() };
     });
-  });
-};
+
+    app.post<{ Body: ComprobanteATransmitir }>("/fiscal/comprobantes", async (request, reply) => {
+      if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
+      try {
+        return await modulo.servicio.emitir(request.body);
+      } catch (error) {
+        await responderError(error, reply, app.log);
+      }
+    });
+
+    app.get<{ Params: { trackId: string } }>("/fiscal/comprobantes/:trackId", async (request, reply) => {
+      if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
+      try {
+        return await modulo.servicio.consultar(request.params.trackId);
+      } catch (error) {
+        await responderError(error, reply, app.log);
+      }
+    });
+
+    app.post<{ Body: { rncEmisor: string; rangos: RangoAnulacion[] } }>(
+      "/fiscal/anulaciones",
+      async (request, reply) => {
+        if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
+        try {
+          return await modulo.servicio.anular(request.body.rncEmisor, request.body.rangos);
+        } catch (error) {
+          await responderError(error, reply, app.log);
+        }
+      },
+    );
+  };
+}

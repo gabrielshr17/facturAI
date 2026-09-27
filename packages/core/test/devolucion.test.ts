@@ -9,13 +9,22 @@ import {
   crearMovimientoInventarioRepo,
   crearSecuenciaNcfRepo,
   crearComprobanteFiscalRepo,
+  crearNcfAnulacionRepo,
   crearProveedorFiscalSimulado,
   crearDevolucionRepo,
   cobrarConFiscal,
   registrarDevolucionConFiscal,
   ValidacionError,
   type ProveedorFiscal,
+  type EmisorFiscal,
 } from "../src/index.js";
+
+const EMISOR: EmisorFiscal = {
+  rnc: "131880738",
+  razonSocial: "SUPLIDORA MAROHI SRL",
+  nombreComercial: "Suplidora Marohi",
+  direccion: "Calle Principal #1, Santo Domingo",
+};
 
 async function nuevaDb(): Promise<SqlDriver> {
   const db = createNodeSqliteDriver();
@@ -161,6 +170,7 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
       facturaRepo: crearFacturaRepo(db),
       secuenciaRepo: crearSecuenciaNcfRepo(db),
       comprobanteRepo: crearComprobanteFiscalRepo(db),
+      anulacionRepo: crearNcfAnulacionRepo(db),
       proveedorFiscal: proveedor,
     };
   }
@@ -181,13 +191,13 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
     await cobrarConFiscal(d, t.id, {
       pagos: [{ metodo: "efectivo", monto: 100 }],
       tipoEcf: "32",
-      rncEmisor: "101023122",
+      emisor: EMISOR,
     });
 
     const { devolucion, comprobante } = await registrarDevolucionConFiscal(
       d,
       { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
-      "101023122",
+      EMISOR,
     );
 
     expect(comprobante.tipo_ecf).toBe("34");
@@ -209,11 +219,7 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
     await d.facturaRepo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 50 }] }); // venta normal, sin NCF
 
     await expect(
-      registrarDevolucionConFiscal(
-        d,
-        { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
-        "101023122",
-      ),
+      registrarDevolucionConFiscal(d, { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] }, EMISOR),
     ).rejects.toBeInstanceOf(ValidacionError);
   });
 
@@ -232,15 +238,11 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
     await cobrarConFiscal(d, t.id, {
       pagos: [{ metodo: "efectivo", monto: 50 }],
       tipoEcf: "32",
-      rncEmisor: "101023122",
+      emisor: EMISOR,
     });
 
     await expect(
-      registrarDevolucionConFiscal(
-        d,
-        { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
-        "101023122",
-      ),
+      registrarDevolucionConFiscal(d, { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] }, EMISOR),
     ).rejects.toBeInstanceOf(ValidacionError);
   });
 
@@ -260,7 +262,7 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
     await cobrarConFiscal(d, t.id, {
       pagos: [{ metodo: "efectivo", monto: 50 }],
       tipoEcf: "32",
-      rncEmisor: "101023122",
+      emisor: EMISOR,
     });
 
     const proveedorQueRechaza: ProveedorFiscal = {
@@ -273,7 +275,7 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
       registrarDevolucionConFiscal(
         { ...d, proveedorFiscal: proveedorQueRechaza },
         { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
-        "101023122",
+        EMISOR,
       ),
     ).rejects.toBeInstanceOf(ValidacionError);
 
