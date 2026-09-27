@@ -53,7 +53,7 @@ export function crearApiClient({
     const cabeceras: Record<string, string> = {};
     const llaveCaja = obtenerLlaveCaja();
     if (llaveCaja) cabeceras["X-Caja-Key"] = llaveCaja;
-    else if (token) cabeceras.Authorization = `Bearer ${token}`;
+    if (token) cabeceras.Authorization = `Bearer ${token}`;
     if (cuerpo !== undefined) cabeceras["Content-Type"] = "application/json";
 
     let respuesta: Response;

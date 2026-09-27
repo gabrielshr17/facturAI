@@ -89,12 +89,15 @@ export function registrarAuth(app: FastifyInstance, deps: DependenciasAuth): voi
         await reply.code(503).send({ error: "No se pudo verificar la llave de la caja. Intenta de nuevo." });
         return;
       }
-      if (!caja) {
+      if (caja) {
+        request.usuario = { id: caja.id, correo: null, tipo: "caja", permisoFiscal: true };
+        return;
+      }
+      if (!request.headers.authorization) {
         await reply.code(401).send({ error: "Llave de caja inválida o revocada." });
         return;
       }
-      request.usuario = { id: caja.id, correo: null, tipo: "caja", permisoFiscal: true };
-      return;
+      request.log.warn("Llave de caja inválida o revocada; se intenta con la sesión de Google.");
     }
 
     const auth = request.headers.authorization;

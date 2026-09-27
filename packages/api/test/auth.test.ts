@@ -52,6 +52,15 @@ describe("autenticación del API", () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it("una llave de caja revocada no bloquea a quien también trae una sesión de Google válida", async () => {
+    const app = await servidor(dependencias());
+    const res = await app.inject({
+      url: "/fiscal/prueba",
+      headers: { "x-caja-key": "revocada", authorization: "Bearer jwt-dueno" },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
   it("un usuario de Google en la lista permitida entra a lo fiscal (sin distinguir mayúsculas)", async () => {
     const app = await servidor(dependencias());
     const res = await app.inject({ url: "/fiscal/prueba", headers: { authorization: "Bearer jwt-dueno" } });
