@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { verificarDocumentoFirmado, leerEcfRecibido } from "../../src/fiscal/verificacion.js";
+import { verificarDocumentoFirmado, leerEcfRecibido, leerItemsEcf } from "../../src/fiscal/verificacion.js";
 import { construirXmlEcf } from "../../src/fiscal/xml/ecf.js";
 import { cargarCertificado, firmarXml } from "../../src/fiscal/firma.js";
 import { certificadoPrueba, CLAVE_P12_PRUEBA } from "./certificado-prueba.js";
@@ -54,5 +54,35 @@ describe("lectura de un e-CF recibido", () => {
   it("devuelve null si el XML no es un e-CF", () => {
     expect(leerEcfRecibido("<Otra/>")).toBeNull();
     expect(leerEcfRecibido("no es xml")).toBeNull();
+  });
+});
+
+describe("líneas de un e-CF recibido (para importarlo como compra)", () => {
+  it("con montos ITBIS incluido, el costo unitario es el monto del ítem entre la cantidad", () => {
+    expect(leerItemsEcf(construirXmlEcf(creditoFiscalPrueba(), FIRMA))).toEqual([
+      {
+        descripcion: "Arroz Selecto 5lb",
+        cantidad: 2,
+        costoUnitario: 118,
+        impuestoTipo: "itbis18",
+        tasaImpuesto: 0.18,
+      },
+      { descripcion: "Plátano verde", cantidad: 1, costoUnitario: 50, impuestoTipo: "exento", tasaImpuesto: 0 },
+    ]);
+  });
+
+  it("con montos sin ITBIS (IndicadorMontoGravado 0 o ausente), le suma el ITBIS de la tasa", () => {
+    const xml =
+      "<ECF><Encabezado><IdDoc><TipoeCF>31</TipoeCF></IdDoc></Encabezado><DetallesItems>" +
+      "<Item><NumeroLinea>1</NumeroLinea><IndicadorFacturacion>2</IndicadorFacturacion><NombreItem>Yogurt</NombreItem>" +
+      "<CantidadItem>3</CantidadItem><PrecioUnitarioItem>100</PrecioUnitarioItem><MontoItem>300.00</MontoItem></Item>" +
+      "</DetallesItems></ECF>";
+    expect(leerItemsEcf(xml)).toEqual([
+      { descripcion: "Yogurt", cantidad: 3, costoUnitario: 116, impuestoTipo: "itbis16", tasaImpuesto: 0.16 },
+    ]);
+  });
+
+  it("un XML ilegible no tiene líneas", () => {
+    expect(leerItemsEcf("no es xml")).toEqual([]);
   });
 });

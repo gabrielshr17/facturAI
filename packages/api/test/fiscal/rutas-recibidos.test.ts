@@ -7,6 +7,7 @@ import { DocumentoFiscalInvalidoError } from "../../src/fiscal/errores.js";
 function servicio(cambios: Partial<ServicioRecibidos> = {}): ServicioRecibidos {
   return {
     listar: async () => [],
+    detalle: async () => Promise.reject(new Error("El e-CF recibido x no existe.")),
     responder: async () => ({ dgii: { aceptada: true, mensajes: [] }, emisor: { entregada: true } }),
     marcarImportado: async () => undefined,
     ...cambios,

@@ -3,6 +3,7 @@ import type { ClienteDgii, RespuestaAnulacion } from "./dgii-cliente.js";
 import type { ClienteContribuyente } from "./entrega.js";
 import { DocumentoFiscalInvalidoError } from "./errores.js";
 import { construirXmlAcecf } from "./xml/acecf.js";
+import { leerItemsEcf, type ItemEcf } from "./verificacion.js";
 
 export interface RespuestaComercial {
   aprobado: boolean;
@@ -14,8 +15,14 @@ export interface ResultadoRespuestaComercial {
   emisor: { entregada: true } | { entregada: false; detalle: string };
 }
 
+export interface DetalleRecibido {
+  recibido: FilaEcfRecibido;
+  items: ItemEcf[];
+}
+
 export interface ServicioRecibidos {
   listar(): Promise<FilaEcfRecibido[]>;
+  detalle(id: string): Promise<DetalleRecibido>;
   responder(id: string, respuesta: RespuestaComercial): Promise<ResultadoRespuestaComercial>;
   marcarImportado(id: string): Promise<void>;
 }
@@ -45,6 +52,12 @@ export function crearServicioRecibidos(opciones: OpcionesServicioRecibidos): Ser
 
   return {
     listar: () => almacen.listarEcfRecibidos(),
+
+    async detalle(id) {
+      const recibido = await obtener(id);
+      const xml = await almacen.obtenerXmlEcfRecibido(id);
+      return { recibido, items: xml ? leerItemsEcf(xml) : [] };
+    },
 
     async responder(id, respuesta) {
       const fila = await obtener(id);

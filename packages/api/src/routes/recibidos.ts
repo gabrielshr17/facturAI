@@ -39,6 +39,10 @@ export function rutaRecibidos(servicio: ServicioRecibidos | null): FastifyPlugin
       return recibidos === undefined ? undefined : { recibidos };
     });
 
+    app.get<{ Params: { id: string } }>("/fiscal/recibidos/:id", async (request, reply) =>
+      manejar(reply, (s) => s.detalle(request.params.id)),
+    );
+
     app.post<{ Params: { id: string }; Body: RespuestaComercial }>(
       "/fiscal/recibidos/:id/respuesta",
       async (request, reply) => {

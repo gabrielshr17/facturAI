@@ -39,6 +39,7 @@ export interface AlmacenRecepcion {
   guardarAprobacion(aprobacion: AprobacionRecibida): Promise<void>;
   listarEcfRecibidos(): Promise<FilaEcfRecibido[]>;
   obtenerEcfRecibido(id: string): Promise<FilaEcfRecibido | null>;
+  obtenerXmlEcfRecibido(id: string): Promise<string | null>;
   registrarAprobacionEmitida(id: string, aprobacion: AprobacionEmitida): Promise<void>;
   marcarImportado(id: string, fecha: string): Promise<void>;
 }
@@ -137,6 +138,17 @@ export function crearAlmacenSupabase(db: SupabaseClient): AlmacenRecepcion {
         .overrideTypes<FilaSupabase | null, { merge: false }>();
       if (error) throw new Error(`No se pudo leer el e-CF recibido: ${error.message}`);
       return data ? aFila(data) : null;
+    },
+
+    async obtenerXmlEcfRecibido(id) {
+      const { data, error } = await db
+        .from("ecf_recibido")
+        .select("xml")
+        .eq("id", id)
+        .maybeSingle()
+        .overrideTypes<{ xml: string } | null, { merge: false }>();
+      if (error) throw new Error(`No se pudo leer el XML del e-CF recibido: ${error.message}`);
+      return data?.xml ?? null;
     },
 
     async registrarAprobacionEmitida(id, aprobacion) {

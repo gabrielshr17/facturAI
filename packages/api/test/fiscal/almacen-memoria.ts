@@ -37,6 +37,9 @@ export function crearAlmacenMemoria() {
     async listarEcfRecibidos() {
       return ecfs.map(publica);
     },
+    async obtenerXmlEcfRecibido(id) {
+      return ecfs.find((e) => e.id === id)?.xml ?? null;
+    },
     async obtenerEcfRecibido(id) {
       const fila = ecfs.find((e) => e.id === id);
       return fila ? publica(fila) : null;

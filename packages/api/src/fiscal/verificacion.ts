@@ -1,3 +1,4 @@
+import type { ImpuestoTipo } from "@sfr/core";
 import forge from "node-forge";
 import { DOMParser } from "@xmldom/xmldom";
 import { SignedXml } from "xml-crypto";
@@ -132,4 +133,46 @@ export function leerAprobacionComercial(xml: string): AprobacionComercialLeida |
 export function valorEtiqueta(xml: string, etiqueta: string): string | null {
   const doc = parsear(xml);
   return doc ? valor(doc, etiqueta) : null;
+}
+
+export interface ItemEcf {
+  descripcion: string;
+  cantidad: number;
+  /** Con ITBIS incluido: la misma convención de las compras en `@sfr/core`. */
+  costoUnitario: number;
+  impuestoTipo: ImpuestoTipo;
+  tasaImpuesto: number;
+}
+
+const IMPUESTO_POR_INDICADOR: Record<string, { impuestoTipo: ImpuestoTipo; tasa: number }> = {
+  "1": { impuestoTipo: "itbis18", tasa: 0.18 },
+  "2": { impuestoTipo: "itbis16", tasa: 0.16 },
+};
+
+function redondear2(valor: number): number {
+  return Math.round((valor + Number.EPSILON) * 100) / 100;
+}
+
+export function leerItemsEcf(xml: string): ItemEcf[] {
+  const doc = parsear(xml);
+  if (!doc) return [];
+  const conItbisIncluido = valor(doc, "IndicadorMontoGravado") === "1";
+  const items = doc.getElementsByTagName("Item");
+  const resultado: ItemEcf[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    const campo = (etiqueta: string) => item.getElementsByTagName(etiqueta)[0]?.textContent?.trim() ?? "";
+    const cantidad = Number(campo("CantidadItem")) || 1;
+    const monto = Number(campo("MontoItem")) || 0;
+    const impuesto = IMPUESTO_POR_INDICADOR[campo("IndicadorFacturacion")] ?? { impuestoTipo: "exento", tasa: 0 };
+    const factor = conItbisIncluido ? 1 : 1 + impuesto.tasa;
+    resultado.push({
+      descripcion: campo("NombreItem") || "Artículo",
+      cantidad,
+      costoUnitario: redondear2((monto / cantidad) * factor),
+      impuestoTipo: impuesto.impuestoTipo,
+      tasaImpuesto: impuesto.tasa,
+    });
+  }
+  return resultado;
 }

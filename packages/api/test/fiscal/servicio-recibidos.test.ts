@@ -28,7 +28,10 @@ async function preparar(opciones: { directorio?: DirectorioContribuyente | null;
     fechaEmision: "25-09-2026",
     montoTotal: 1180,
     totalItbis: 180,
-    xml: "<ECF/>",
+    xml:
+      "<ECF><Encabezado><IdDoc><IndicadorMontoGravado>1</IndicadorMontoGravado></IdDoc></Encabezado><DetallesItems>" +
+      "<Item><IndicadorFacturacion>1</IndicadorFacturacion><NombreItem>Cemento</NombreItem>" +
+      "<CantidadItem>10</CantidadItem><MontoItem>1180.00</MontoItem></Item></DetallesItems></ECF>",
     acuseXml: "<ARECF/>",
   });
   const enviadosDgii: string[] = [];
@@ -119,6 +122,16 @@ describe("servicio de e-CF recibidos", () => {
     await servicio.responder("r-1", { aprobado: true });
     await expect(servicio.responder("r-1", { aprobado: true })).rejects.toBeInstanceOf(DocumentoFiscalInvalidoError);
     await expect(servicio.responder("nope", { aprobado: true })).rejects.toThrow(/no existe/);
+  });
+
+  it("el detalle trae las líneas listas para registrar la compra", async () => {
+    const { servicio } = await preparar();
+    const detalle = await servicio.detalle("r-1");
+    expect(detalle.recibido.encf).toBe("E310000000007");
+    expect(detalle.items).toEqual([
+      { descripcion: "Cemento", cantidad: 10, costoUnitario: 118, impuestoTipo: "itbis18", tasaImpuesto: 0.18 },
+    ]);
+    await expect(servicio.detalle("nope")).rejects.toThrow(/no existe/);
   });
 
   it("marca un recibido como importado a Compras", async () => {
