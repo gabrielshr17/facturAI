@@ -11,6 +11,7 @@ import {
   type ResultadoFilaSetPruebas,
 } from "../src/fiscal/certificacion/set-pruebas.js";
 import type { FilaSetPruebas } from "../src/fiscal/certificacion/generador.js";
+import { leerArgumentosSetPruebas } from "../src/fiscal/certificacion/argumentos.js";
 
 const USO = `Uso:
   pnpm --filter @sfr/api set-pruebas <archivo.xlsx> [--salida <carpeta>] [--enviar]
@@ -60,11 +61,9 @@ async function leerFilas(archivo: string): Promise<{ hoja: string; numero: numbe
 }
 
 async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-  const archivo = args.find((a) => !a.startsWith("--"));
-  const enviar = args.includes("--enviar");
-  const indiceSalida = args.indexOf("--salida");
-  const salida = resolve(indiceSalida >= 0 ? (args[indiceSalida + 1] ?? "") : "set-pruebas-salida");
+  const argumentos = leerArgumentosSetPruebas(process.argv.slice(2));
+  const { archivo, enviar } = argumentos;
+  const salida = resolve(argumentos.salida);
   if (!archivo) {
     console.log(USO);
     process.exitCode = 1;
