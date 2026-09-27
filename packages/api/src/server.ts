@@ -34,7 +34,7 @@ await app.register(cors, { origin: true });
 // lograr esto — Fastify resuelve los hooks por jerarquía de `.register()`, no por orden en el
 // archivo — así que el hook de auth se agrega dentro de un child context propio (`protegido`), y
 // `rutaSalud`, registrada como hermana sobre `app` y no como su hija, queda afuera.
-await app.register(rutaSalud);
+await app.register(rutaSalud(moduloFiscal));
 await app.register(
   rutasRecepcion({
     receptor: moduloFiscal.disponible ? { rncPropio: moduloFiscal.rncEmisor, firmar: moduloFiscal.firmar } : null,
@@ -77,7 +77,9 @@ if (moduloFiscal.disponible) {
 
 if (!config.supabaseConfigurado) {
   app.log.warn(
-    "SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY no configurados: todas las solicitudes se autentican " +
-      "como usuario de desarrollo. No usar así en producción.",
+    process.env.NODE_ENV === "production"
+      ? "SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY no configurados: las rutas protegidas rechazan toda solicitud."
+      : "SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY no configurados: todas las solicitudes se autentican " +
+          "como usuario de desarrollo. No usar así en producción.",
   );
 }
