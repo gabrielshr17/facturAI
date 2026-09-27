@@ -210,7 +210,7 @@ export function Compras() {
     setAnalizando(true);
     try {
       const base64 = await leerArchivoComoBase64(archivo);
-      const datos = await analizarComprobante({ data: base64, tipoMime: archivo.type || "image/jpeg" });
+      const datos = await analizarComprobante(api, { data: base64, tipoMime: archivo.type || "image/jpeg" });
       setDatosIA(datos);
       // Solo se rellenan campos que mapean 1:1 al formulario. Los renglones
       // de la compra NO se generan automáticamente — la herramienta solo lee

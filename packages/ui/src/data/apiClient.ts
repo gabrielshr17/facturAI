@@ -24,6 +24,7 @@ export class ApiError extends Error {
 export interface ApiClient {
   get<T>(ruta: string): Promise<T>;
   post<T>(ruta: string, cuerpo: unknown): Promise<T>;
+  patch<T>(ruta: string, cuerpo?: unknown): Promise<T>;
 }
 
 export interface OpcionesApiClient {
@@ -47,7 +48,7 @@ export function crearApiClient({
   obtenerToken,
   obtenerLlaveCaja = () => null,
 }: OpcionesApiClient): ApiClient {
-  async function solicitar<T>(metodo: "GET" | "POST", ruta: string, cuerpo?: unknown): Promise<T> {
+  async function solicitar<T>(metodo: "GET" | "POST" | "PATCH", ruta: string, cuerpo?: unknown): Promise<T> {
     const token = obtenerToken();
     const cabeceras: Record<string, string> = {};
     const llaveCaja = obtenerLlaveCaja();
@@ -73,5 +74,6 @@ export function crearApiClient({
   return {
     get: (ruta) => solicitar("GET", ruta),
     post: (ruta, cuerpo) => solicitar("POST", ruta, cuerpo),
+    patch: (ruta, cuerpo) => solicitar("PATCH", ruta, cuerpo),
   };
 }

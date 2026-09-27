@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { MessageCircle, Bot, X, Camera } from "lucide-react";
 import { enviarMensaje, type MensajeChat } from "../data/chatbotCliente.js";
+import { useRepos } from "../data/contexto.js";
 import { s, c, sombra } from "../estilos.js";
 import { BotonVoz } from "./BotonVoz.js";
 import { mensajeError } from "../utilidades/errores.js";
@@ -21,6 +22,7 @@ function leerArchivoComoBase64(file: File): Promise<string> {
  * fallar en silencio. No guarda nada por sí mismo: es solo conversación.
  */
 export function ChatBot() {
+  const { api } = useRepos();
   const [abierto, setAbierto] = useState(false);
   const [historial, setHistorial] = useState<MensajeChat[]>([]);
   const [texto, setTexto] = useState("");
@@ -56,7 +58,7 @@ export function ChatBot() {
       const imagenAdjunta = archivoAdjunto
         ? { data: await leerArchivoComoBase64(archivoAdjunto), tipoMime: archivoAdjunto.type || "image/jpeg" }
         : undefined;
-      const respuesta = await enviarMensaje(historialPrevio, mensajeTexto, imagenAdjunta);
+      const respuesta = await enviarMensaje(api, historialPrevio, mensajeTexto, imagenAdjunta);
       setHistorial((prev) => [...prev, { rol: "assistant", texto: respuesta }]);
     } catch (e) {
       setError(mensajeError(e));

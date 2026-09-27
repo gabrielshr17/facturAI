@@ -73,7 +73,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 
 - [x] G1. `DGII_P12_BASE64` como alternativa al archivo.
 - [x] G2. `packages/api/Dockerfile` (probado: build + arranque local) y `packages/api/DESPLIEGUE.md`.
-- [ ] G3. Unificar clientes HTTP de chatbot/transferencias sobre `apiClient`.
+- [x] G3. Chatbot y transferencias usan `apiClient` (de paso: el chatbot no enviaba credenciales y fallaba con 401 al activar la autenticación).
 
 ## Necesita al usuario (no se avanza sin él)
 
