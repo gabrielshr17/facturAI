@@ -47,7 +47,9 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 - [x] D2. Pantalla Configuración → Facturación electrónica: estado del servicio, vencimiento del
       certificado (aviso a 30 días), pendientes, cola de anulación (reintentar), utilizados
       (marcar revisado), rechazados con motivo.
-- [ ] D3. Reintentar/reimprimir comprobantes desde Consultar facturas.
+- [x] D3. Consultar facturas: botón "Consultar estado en la DGII" para comprobantes en validación,
+      guía para rechazados; reimprimir ya incluye QR. **Pendiente de decisión:** re-emitir un
+      comprobante rechazado (nuevo e-NCF para la misma venta) — confirmar el procedimiento con el contador.
 
 ## C — Entrega al comprador (rol emisor)
 

@@ -14,6 +14,7 @@ import {
 import { Receipt, ClipboardList } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
+import { ejecutarCicloFiscal } from "../data/seguimientoFiscal.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
 import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
 import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
@@ -44,7 +45,23 @@ const TIPOS: { valor: "" | "normal" | "fiscal"; etiqueta: string }[] = [
 
 /** Consulta de facturas ya cobradas: filtrar, ver detalle y reimprimir. */
 function FacturasCobradas() {
-  const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo } = useRepos();
+  const repos = useRepos();
+  const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo, modoFiscal } = repos;
+  const [consultandoDgii, setConsultandoDgii] = useState(false);
+  const [avisoDgii, setAvisoDgii] = useState<string | null>(null);
+
+  async function consultarDgiiAhora() {
+    setConsultandoDgii(true);
+    setAvisoDgii(null);
+    try {
+      await ejecutarCicloFiscal(repos);
+      await cargar();
+    } catch (e) {
+      setAvisoDgii(mensajeError(e));
+    } finally {
+      setConsultandoDgii(false);
+    }
+  }
   const { elegir } = useAlertas();
   const esAngosto = useEsAngosto();
 
@@ -316,6 +333,26 @@ function FacturasCobradas() {
                   DGII: {ESTADO_DGII[seleccionada.comprobante.estado_dgii].etiqueta}
                   {seleccionada.comprobante.motivo_rechazo ? ` — ${seleccionada.comprobante.motivo_rechazo}` : ""}
                 </span>
+                {seleccionada.comprobante.estado_dgii === "rechazado" && (
+                  <span style={{ display: "block", fontWeight: 400, color: c.gris, fontSize: 13 }}>
+                    No tiene validez fiscal. Revísalo con tu contador antes de volver a facturar esta venta.
+                  </span>
+                )}
+                {seleccionada.comprobante.estado_dgii === "pendiente" && modoFiscal === "dgii" && (
+                  <button
+                    type="button"
+                    style={{ ...s.botonSecundario, marginTop: 8, minHeight: 44 }}
+                    disabled={consultandoDgii}
+                    onClick={() => void consultarDgiiAhora()}
+                  >
+                    {consultandoDgii ? "Consultando…" : "Consultar estado en la DGII"}
+                  </button>
+                )}
+                {avisoDgii && (
+                  <span role="alert" style={{ display: "block", color: c.rojo, fontWeight: 400, fontSize: 13 }}>
+                    {avisoDgii}
+                  </span>
+                )}
               </p>
             )}
 
