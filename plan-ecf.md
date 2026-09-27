@@ -20,12 +20,15 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 
 ## B — Servicios de recepción (obligatorios para postular)
 
-- [ ] B1. XML ARECF (acuse de recibo) + ACECF (aprobación comercial), validados contra XSD oficiales.
-- [ ] B2. Verificación de firma XMLDSig de documentos entrantes.
-- [ ] B3. Rutas públicas (fuera del contexto protegido), rutas exactas DGII:
+- [x] B1. XML ARECF (acuse de recibo) + ACECF (aprobación comercial), validados contra XSD oficiales.
+- [x] B2. Verificación de firma XMLDSig de documentos entrantes.
+- [x] B3. Rutas públicas (fuera del contexto protegido), rutas exactas DGII:
       `/fe/autenticacion/api/semilla`, `/fe/autenticacion/api/validacioncertificado`,
       `/fe/recepcion/api/ecf` (responde ARECF firmado), `/fe/aprobacioncomercial/api/ecf` (200/400).
-- [ ] B4. Persistencia en Postgres: `ecf_recibido`, `aprobacion_comercial_recibida` (XML como texto).
+      Hecho: verificación de firma + SN del emisor, motivos 1-4 del ARECF, token opcional, rutas
+      insensibles a mayúsculas. Sin Postgres o sin certificado responden 503.
+- [~] B4. Persistencia en Postgres: `ecf_recibido`, `aprobacion_comercial_recibida` (XML como texto).
+      Código listo (`fiscal/recepcion/almacen.ts`); faltan las tablas en `schema.sql` (F1).
 - [ ] B5. API protegida para la app: listar recibidos, emitir aprobación/rechazo comercial
       (firma ACECF y envía a DGII + al emisor).
 - [ ] B6. UI en Compras: "Comprobantes de proveedores" — ver, importar como compra, aprobar/rechazar.
@@ -48,7 +51,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 
 ## C — Entrega al comprador (rol emisor)
 
-- [ ] C1. `consultarDirectorio(rnc)` en el cliente DGII.
+- [x] C1. `consultarDirectorio(rnc)` en el cliente DGII.
 - [ ] C2. Tras aceptación de E31/E34 a un comprador electrónico: enviar el e-CF a su URL de recepción,
       guardar el ARECF; reintentos en el ciclo de seguimiento.
 

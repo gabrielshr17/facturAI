@@ -12,6 +12,7 @@ function modulo(servicio: Partial<ServicioEmision>): ModuloFiscal {
     ambiente: "testecf",
     rncEmisor: "131880738",
     certificadoVence: new Date("2027-01-01T00:00:00Z"),
+    firmar: (xml) => xml,
     servicio: {
       emitir: async () => ({ estado: "aceptado" }),
       consultar: async () => ({ estado: "aceptado" }),

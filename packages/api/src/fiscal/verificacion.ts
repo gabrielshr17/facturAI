@@ -37,7 +37,7 @@ function serialSujeto(certificadoPem: string): string {
  * documento entero (`Reference URI=""`) y el certificado incluido debe pertenecer al RNC que
  * dice emitirlo (campo SN). Sin lo segundo, cualquiera podría firmar a nombre de otro.
  */
-export function verificarDocumentoFirmado(xml: string, rncFirmante: string): ResultadoVerificacion {
+export function verificarDocumentoFirmado(xml: string, rncFirmante: string | null): ResultadoVerificacion {
   const doc = parsear(xml);
   if (!doc) return { valido: false, motivo: "especificacion", detalle: "El archivo no es un XML válido." };
 
@@ -55,7 +55,7 @@ export function verificarDocumentoFirmado(xml: string, rncFirmante: string): Res
   const certificadoPem = SignedXml.getCertFromKeyInfo(keyInfo as unknown as Node | null);
   if (!certificadoPem) return { valido: false, motivo: "firma", detalle: "La firma no incluye el certificado." };
 
-  let integra = false;
+  let integra: boolean;
   try {
     const verificador = new SignedXml({ publicCert: certificadoPem });
     verificador.loadSignature(firma as unknown as Node);
@@ -69,7 +69,7 @@ export function verificarDocumentoFirmado(xml: string, rncFirmante: string): Res
   }
   if (!integra) return { valido: false, motivo: "firma", detalle: "El documento fue alterado después de firmado." };
 
-  if (!serialSujeto(certificadoPem).replace(/\D/g, "").includes(rncFirmante)) {
+  if (rncFirmante !== null && !serialSujeto(certificadoPem).replace(/\D/g, "").includes(rncFirmante)) {
     return { valido: false, motivo: "firma", detalle: `El certificado no pertenece al RNC ${rncFirmante}.` };
   }
   return { valido: true };
@@ -108,4 +108,28 @@ export function leerEcfRecibido(xml: string): EcfRecibido | null {
     montoTotal: Number(montoTotal),
     totalItbis: Number(valor(doc, "TotalITBIS") ?? 0),
   };
+}
+
+export interface AprobacionComercialLeida {
+  rncEmisor: string;
+  rncComprador: string;
+  encf: string;
+  aprobado: boolean;
+  motivo: string | null;
+}
+
+export function leerAprobacionComercial(xml: string): AprobacionComercialLeida | null {
+  const doc = parsear(xml);
+  if (!doc || doc.documentElement?.nodeName !== "ACECF") return null;
+  const rncEmisor = valor(doc, "RNCEmisor");
+  const rncComprador = valor(doc, "RNCComprador");
+  const encf = valor(doc, "eNCF");
+  const estado = valor(doc, "Estado");
+  if (!rncEmisor || !rncComprador || !encf || (estado !== "1" && estado !== "2")) return null;
+  return { rncEmisor, rncComprador, encf, aprobado: estado === "1", motivo: valor(doc, "DetalleMotivoRechazo") };
+}
+
+export function valorEtiqueta(xml: string, etiqueta: string): string | null {
+  const doc = parsear(xml);
+  return doc ? valor(doc, etiqueta) : null;
 }

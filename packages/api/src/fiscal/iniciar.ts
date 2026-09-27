@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { ConfigApi } from "../config.js";
 import type { AmbienteDgii } from "./ambiente.js";
-import { cargarCertificado } from "./firma.js";
+import { cargarCertificado, firmarXml } from "./firma.js";
 import { crearClienteDgii } from "./dgii-cliente.js";
 import { crearServicioEmision, type ServicioEmision } from "./servicio-emision.js";
 
@@ -12,6 +12,7 @@ export type ModuloFiscal =
       rncEmisor: string;
       certificadoVence: Date;
       servicio: ServicioEmision;
+      firmar: (xml: string) => string;
     }
   | { disponible: false; ambiente: AmbienteDgii; motivo: string };
 
@@ -48,6 +49,7 @@ export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
       rncEmisor,
       certificadoVence: certificado.venceEl,
       servicio: crearServicioEmision({ ambiente, certificado, cliente }),
+      firmar: (xml) => firmarXml(xml, certificado),
     };
   } catch (error) {
     return {

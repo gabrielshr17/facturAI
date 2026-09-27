@@ -8,6 +8,10 @@ import { rutaChatbot } from "./routes/chatbot.js";
 import { rutaTransferencias } from "./routes/transferencias.js";
 import { iniciarPollerTransferencias } from "./jobs/poller-transferencias.js";
 import { iniciarModuloFiscal } from "./fiscal/iniciar.js";
+import { rutasRecepcion } from "./routes/recepcion.js";
+import { crearAlmacenSupabase } from "./fiscal/recepcion/almacen.js";
+import { crearAutenticadorReceptor } from "./fiscal/recepcion/autenticacion.js";
+import { dbDisponible, obtenerClienteDb } from "./services/db.js";
 
 /**
  * Backend del modo multi-caja/multiusuario (§ Flujo de datos y modos).
@@ -19,7 +23,7 @@ const config = cargarConfig();
 const moduloFiscal = iniciarModuloFiscal(config);
 // 10 MB: el límite por defecto de Fastify (1 MB) rechaza las fotos de
 // comprobantes en base64 que envía el chatbot con visión.
-const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
+const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024, routerOptions: { caseSensitive: false } });
 
 await app.register(cors, { origin: true });
 // `/health` vive FUERA del contexto protegido: tiene que "responder siempre" para servir de
@@ -28,6 +32,13 @@ await app.register(cors, { origin: true });
 // archivo — así que el hook de auth se agrega dentro de un child context propio (`protegido`), y
 // `rutaSalud`, registrada como hermana sobre `app` y no como su hija, queda afuera.
 await app.register(rutaSalud);
+await app.register(
+  rutasRecepcion({
+    receptor: moduloFiscal.disponible ? { rncPropio: moduloFiscal.rncEmisor, firmar: moduloFiscal.firmar } : null,
+    almacen: dbDisponible() ? crearAlmacenSupabase(obtenerClienteDb()) : null,
+    autenticador: crearAutenticadorReceptor(),
+  }),
+);
 await app.register(async (protegido) => {
   registrarAuth(protegido, dependenciasAuthDesdeConfig(config));
   await protegido.register(async (fiscal) => {
