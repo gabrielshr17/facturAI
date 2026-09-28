@@ -25,6 +25,14 @@ export interface ConfigApi {
   gmailConfigurado: boolean;
   /** Cada cuánto se sondea la casilla dedicada en busca de correos nuevos. */
   transferenciasPollIntervaloMs: number;
+  /**
+   * Etiqueta de Gmail que marca "esto es una notificación bancaria" (§ Últimas transferencias
+   * recibidas). Necesaria porque `GMAIL_OAUTH_*` puede apuntar a un Gmail personal real (vía alias
+   * "+", no una casilla 100% dedicada) — sin esta etiqueta el sondeo tomaría CUALQUIER correo no
+   * leído de esa cuenta, no solo los del banco. Por defecto "Transferencias"; el usuario crea un
+   * filtro en Gmail que le ponga esta etiqueta a lo que llega de/para el banco.
+   */
+  gmailEtiquetaTransferencias: string;
 }
 
 export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
@@ -45,5 +53,6 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
     gmailOAuthRefreshToken,
     gmailConfigurado: Boolean(gmailOAuthClientId && gmailOAuthClientSecret && gmailOAuthRefreshToken),
     transferenciasPollIntervaloMs: Number(env.TRANSFERENCIAS_POLL_INTERVALO_MS) || 5 * 60 * 1000,
+    gmailEtiquetaTransferencias: env.GMAIL_LABEL_TRANSFERENCIAS || "Transferencias",
   };
 }
