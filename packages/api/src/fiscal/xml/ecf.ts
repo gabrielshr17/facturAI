@@ -2,6 +2,7 @@ import type { ComprobanteATransmitir, MetodoPago, PagoATransmitir } from "@sfr/c
 import { fechaDgii, fechaHoraDgii, montoDgii } from "../formato.js";
 import { DocumentoFiscalInvalidoError } from "../errores.js";
 import { documentoXml, texto, type Nodo } from "./nodo.js";
+import { perfilDe, type PerfilEcf } from "./perfiles.js";
 import { calcularTotalesEcf, indicadorFacturacion } from "./totales.js";
 
 const FORMA_PAGO_DGII: Record<MetodoPago, string> = {
@@ -50,7 +51,7 @@ function indicadorNotaCredito(doc: ComprobanteATransmitir): string {
   return dias > DIAS_LIMITE_NOTA_CREDITO ? "1" : "0";
 }
 
-function validar(doc: ComprobanteATransmitir): void {
+function validar(doc: ComprobanteATransmitir, perfil: PerfilEcf): void {
   if (doc.lineas.length === 0) throw new DocumentoFiscalInvalidoError("El comprobante no tiene líneas.");
   if (doc.lineas.length > 1000) throw new DocumentoFiscalInvalidoError("La DGII admite como máximo 1000 líneas.");
   if (!texto(doc.emisor.rnc) || !texto(doc.emisor.razonSocial) || !texto(doc.emisor.direccion)) {
@@ -60,40 +61,39 @@ function validar(doc: ComprobanteATransmitir): void {
     if (!texto(doc.receptorDocumentoNumero) || !texto(doc.receptorNombre)) {
       throw new DocumentoFiscalInvalidoError("El E31 requiere RNC y razón social del comprador.");
     }
-    if (!doc.fechaVencimientoSecuencia) {
-      throw new DocumentoFiscalInvalidoError("El E31 requiere la fecha de vencimiento de la secuencia.");
-    }
+  }
+  if (perfil.vencimientoSecuencia && !doc.fechaVencimientoSecuencia) {
+    throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} requiere la fecha de vencimiento de la secuencia.`);
   }
   if (doc.tipoEcf === "32" && !esConsumoResumible(doc) && !texto(doc.receptorDocumentoNumero)) {
     throw new DocumentoFiscalInvalidoError(
       "Una factura de consumo de RD$250,000.00 o más requiere el RNC o cédula del comprador.",
     );
   }
-  if ((doc.tipoEcf === "33" || doc.tipoEcf === "34") && !doc.referencia) {
+  if (perfil.exigeReferencia && !doc.referencia) {
     throw new DocumentoFiscalInvalidoError(
       "Las notas de crédito y débito requieren la referencia al comprobante modificado.",
     );
   }
 }
 
-function idDoc(doc: ComprobanteATransmitir, hayGravado: boolean): Nodo {
-  const esNota = doc.tipoEcf === "33" || doc.tipoEcf === "34";
+function idDoc(doc: ComprobanteATransmitir, perfil: PerfilEcf, hayGravado: boolean): Nodo {
   return [
     "IdDoc",
     [
       ["TipoeCF", doc.tipoEcf],
       ["eNCF", doc.ncf],
-      ["IndicadorNotaCredito", doc.tipoEcf === "34" ? indicadorNotaCredito(doc) : null],
+      ["IndicadorNotaCredito", perfil.indicadorNotaCredito ? indicadorNotaCredito(doc) : null],
       [
         "FechaVencimientoSecuencia",
-        doc.tipoEcf === "31" && doc.fechaVencimientoSecuencia
+        perfil.vencimientoSecuencia && doc.fechaVencimientoSecuencia
           ? fechaDgii(`${doc.fechaVencimientoSecuencia}T12:00:00Z`)
           : null,
       ],
       ["IndicadorMontoGravado", hayGravado ? "1" : null],
       ["TipoIngresos", "01"],
       ["TipoPago", tipoPago(doc.pagos)],
-      esNota ? ["TablaFormasPago", null] : tablaFormasPago(doc.pagos),
+      perfil.formasPago ? tablaFormasPago(doc.pagos) : ["TablaFormasPago", null],
     ],
   ];
 }
@@ -111,13 +111,11 @@ function emisor(doc: ComprobanteATransmitir): Nodo {
   ];
 }
 
-/** En E33, E34 y E47 el bloque Comprador es opcional en el XSD: sin datos se omite (la DGII rechaza tags vacíos). */
-const COMPRADOR_OPCIONAL: ReadonlySet<string> = new Set(["33", "34", "47"]);
-
-function comprador(doc: ComprobanteATransmitir): Nodo {
+/** Cuando el bloque Comprador es opcional en el XSD y no hay datos se omite (la DGII rechaza tags vacíos). */
+function comprador(doc: ComprobanteATransmitir, perfil: PerfilEcf): Nodo {
   const rnc = texto(doc.receptorDocumentoNumero);
   const nombre = texto(doc.receptorNombre, 150);
-  if (!rnc && !nombre && COMPRADOR_OPCIONAL.has(doc.tipoEcf)) return ["Comprador", null];
+  if (!rnc && !nombre && perfil.compradorOpcional) return ["Comprador", null];
   return [
     "Comprador",
     [
@@ -182,10 +180,11 @@ function informacionReferencia(doc: ComprobanteATransmitir): Nodo {
 }
 
 export function construirXmlEcf(doc: ComprobanteATransmitir, fechaHoraFirma: Date): string {
-  validar(doc);
+  const perfil = perfilDe(doc.tipoEcf);
+  validar(doc, perfil);
   const { nodo: nodoTotales, hayGravado } = totales(doc);
   return documentoXml("ECF", [
-    ["Encabezado", [["Version", "1.0"], idDoc(doc, hayGravado), emisor(doc), comprador(doc), nodoTotales]],
+    ["Encabezado", [["Version", "1.0"], idDoc(doc, perfil, hayGravado), emisor(doc), comprador(doc, perfil), nodoTotales]],
     detalles(doc),
     informacionReferencia(doc),
     ["FechaHoraFirma", fechaHoraDgii(fechaHoraFirma)],

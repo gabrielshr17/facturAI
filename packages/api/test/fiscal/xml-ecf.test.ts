@@ -206,3 +206,11 @@ describe("XML e-CF 34 (nota de crédito)", () => {
     expect(() => construirXmlEcf(notaCreditoPrueba({ referencia: null }), FIRMA)).toThrow(/referencia/i);
   });
 });
+
+describe("tipos de e-CF aún no soportados", () => {
+  it("se niega a construir un E41 en lugar de generar un XML inválido", () => {
+    expect(() => construirXmlEcf(consumoPrueba({ tipoEcf: "41", ncf: "E410000000001" }), FIRMA)).toThrow(
+      /E41.*no se puede emitir/i,
+    );
+  });
+});
