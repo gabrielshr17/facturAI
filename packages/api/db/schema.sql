@@ -536,3 +536,14 @@ CREATE TABLE aprobacion_comercial_recibida (
 );
 CREATE INDEX ix_aprobacion_comercial_encf ON aprobacion_comercial_recibida(encf);
 ALTER TABLE aprobacion_comercial_recibida ENABLE ROW LEVEL SECURITY;
+
+-- Sin RLS, la API pública de Supabase (llave anónima, que va en el cliente) leería estas tablas.
+-- Sin políticas solo el backend, con la llave de servicio, accede. El modo de sincronización
+-- multi-caja (Fase 2) deberá añadir políticas explícitas por usuario.
+DO $$
+DECLARE t TEXT;
+BEGIN
+  FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+  END LOOP;
+END $$;

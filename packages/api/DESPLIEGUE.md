@@ -81,6 +81,18 @@ Cualquiera puede enviar un XML a `/fe/recepcion/api/ecf`. Por eso:
    (servicio Consulta Estado) que ese e-CF existe, es válido y tiene el mismo código de seguridad y
    monto. Un documento falsificado nunca llega a Compras.
 
+## Crear Supabase y aplicar el esquema
+
+1. En supabase.com: New project. Guarda la contraseña de la base de datos. Elige la región más cercana.
+2. Project Settings → API: copia la **Project URL** y la llave **service_role**. Esta última es secreta:
+   solo va como variable del hosting (`SUPABASE_SERVICE_ROLE_KEY`), nunca en el cliente ni en git.
+3. SQL Editor → New query: pega **todo** el contenido de `packages/api/db/schema.sql` y pulsa Run.
+   Debe terminar sin errores. Crea las 28 tablas, incluidas las de llaves de caja y e-CF recibidos.
+4. Verifica en Table Editor que las tablas salen con el candado de RLS activado. El esquema activa RLS en todas
+   y no crea políticas: la llave anónima no lee nada, y solo el backend (llave de servicio) accede.
+5. Corre el esquema **una sola vez** sobre un proyecto vacío: no es idempotente. Si hay que repetirlo, usa un
+   proyecto nuevo o elimina las tablas antes.
+
 ## Antes de postular
 
 1. Aplicar `db/schema.sql` en el Postgres de Supabase (con OK del dueño).

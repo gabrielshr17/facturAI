@@ -84,3 +84,19 @@ describe("db/schema.sql (Postgres) sigue a las migraciones SQLite de @sfr/core",
     expect(postgres.has("aprobacion_comercial_recibida")).toBe(true);
   }, 60_000);
 });
+
+describe("db/schema.sql (Postgres) no expone datos por la API pública de Supabase", () => {
+  it("todas las tablas tienen RLS activado y ninguna política abre el acceso", async () => {
+    const pg = new PGlite();
+    await pg.exec(readFileSync(RUTA_ESQUEMA, "utf8"));
+    const sinRls = await pg.query<{ relname: string }>(
+      `SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity ORDER BY c.relname`,
+    );
+    const politicas = await pg.query<{ policyname: string }>("SELECT policyname FROM pg_policies");
+    await pg.close();
+
+    expect(sinRls.rows.map((r) => r.relname)).toEqual([]);
+    expect(politicas.rows).toEqual([]);
+  }, 60_000);
+});
