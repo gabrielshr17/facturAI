@@ -85,8 +85,12 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 - [x] H3a. E45 (gubernamental): XML, cobro (exige RNC y razón social), entrega al comprador y selección en el modal de cobro.
 - [ ] H3b. E44 y E46 (sin ITBIS). **Bloqueado:** requieren un modo de ticket exonerado de ITBIS (hoy un ticket siempre
       calcula ITBIS); decidir con el contador. E46 además usa ITBIS a tasa 0% (ITBIS3) y datos de embarque.
-- [ ] H4. E41, E43, E47 (gastos y compras emitidos al proveedor, flujo nuevo en Compras).
-- [ ] H5. Transversal: secuencias por tipo en Configuración, generador/`set-pruebas` para los tipos nuevos.
+- [x] H4. E41, E43, E47 (gastos y compras emitidos al proveedor): `emitirComprobanteDeCompra`, migración de
+      `comprobante_fiscal` (compra_id, factura_id opcional) y acción "Emitir comprobante fiscal" en el detalle de
+      una compra. Las retenciones las digita el usuario (sin porcentajes fijos hasta que el contador los confirme).
+      **Falta:** representación impresa de E41/E43/E47; verlo en pantalla a 375/768/1440 px; emitir uno real.
+- [x] H5. Transversal: Configuración ya ofrecía secuencias de todos los tipos; el generador y `set-pruebas` funcionan
+      con E33, E41, E43, E44, E45, E46 y E47 (pruebas de ida y vuelta y filas manuales validadas contra el XSD).
 
 ## Necesita al usuario (no se avanza sin él)
 
@@ -114,3 +118,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
   monetario.
 - 2026-09-30 (tarde): H3a (E45). La nota de débito admite E31, E32 y E45 como comprobante original. La lista de secuencias de Configuración ya
   ofrece todos los tipos, incluido E33.
+- 2026-09-30 (noche): H4 y H5. Revisión de código del backend de compras: la migración de `comprobante_fiscal` pasó de
+  un solo paso con PRAGMA a tres migraciones reanudables, porque el driver de escritorio (Tauri) ejecuta cada sentencia
+  por separado y sin transacción. Pendiente antes de certificar: Excel de pruebas, hosting con SSL, aplicar el esquema
+  a Supabase (incluye la migración) y ver las pantallas nuevas en el navegador.
