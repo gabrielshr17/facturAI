@@ -555,13 +555,37 @@ describe("emitirNotaDebitoFiscal — nota de débito E33 hacia la DGII", () => {
     );
   });
 
+  it("permite una nota de débito sobre un E45 y hereda su comprador", async () => {
+    const { proveedor, recibidos } = proveedorQueResponde(ACEPTADO);
+    const d = depsCon(db, proveedor);
+    await d.secuenciaRepo.crear({ tipoEcf: "45", rangoDesde: 1, rangoHasta: 100, vencimiento: hoyMasDias(365) });
+    await d.secuenciaRepo.crear({ tipoEcf: "33", rangoDesde: 1, rangoHasta: 100, vencimiento: hoyMasDias(400) });
+    const t = await ticket(d.facturaRepo);
+    const { comprobante: original } = await cobrarConFiscal(d, t.id, {
+      pagos: [{ metodo: "efectivo", monto: 118 }],
+      tipoEcf: "45",
+      receptorDocumentoTipo: "rnc",
+      receptorDocumentoNumero: "101023122",
+      receptorNombre: "MINISTERIO EJEMPLO",
+      emisor: EMISOR,
+    });
+
+    await emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: original.id }, EMISOR);
+
+    const nota = recibidos.at(-1);
+    expect(nota?.tipoEcf).toBe("33");
+    expect(nota?.referencia?.ncfModificado).toBe(original.ncf);
+    expect(nota?.receptorDocumentoNumero).toBe("101023122");
+    expect(nota?.receptorNombre).toBe("MINISTERIO EJEMPLO");
+  });
+
   it("no permite una nota de débito sobre otra nota", async () => {
     const d = depsCon(db, proveedorQueResponde(ACEPTADO).proveedor);
     const original = await ventaFiscal(d);
     const { comprobante: nota } = await emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: original.id }, EMISOR);
 
     await expect(emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: nota.id }, EMISOR)).rejects.toThrow(
-      /E31 o un E32/,
+      /E31, E32 o E45/,
     );
   });
 });

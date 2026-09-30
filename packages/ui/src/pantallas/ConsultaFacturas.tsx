@@ -439,11 +439,11 @@ function FacturasCobradas() {
   );
 }
 
-/** Solo un E31 o E32 con validez fiscal puede recibir una nota de débito (la regla definitiva vive en @sfr/core). */
+/** Solo un E31, E32 o E45 con validez fiscal puede recibir una nota de débito (la regla definitiva vive en @sfr/core). */
 function admiteNotaDebito(comprobante: ComprobanteFiscal | null): boolean {
   return (
     !!comprobante &&
-    (comprobante.tipo_ecf === "31" || comprobante.tipo_ecf === "32") &&
+    (comprobante.tipo_ecf === "31" || comprobante.tipo_ecf === "32" || comprobante.tipo_ecf === "45") &&
     (comprobante.estado_dgii === "aceptado" || comprobante.estado_dgii === "aceptado_condicional")
   );
 }

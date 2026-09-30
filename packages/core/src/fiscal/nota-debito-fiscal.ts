@@ -33,7 +33,7 @@ export interface ResultadoNotaDebitoFiscal {
   comprobante: ComprobanteFiscal;
 }
 
-const TIPOS_MODIFICABLES = new Set(["31", "32"]);
+const TIPOS_MODIFICABLES = new Set(["31", "32", "45"]);
 const ESTADOS_CON_VALIDEZ = new Set(["aceptado", "aceptado_condicional"]);
 
 function validarEntrada(input: NotaDebitoInput): void {
@@ -53,7 +53,7 @@ function validarEntrada(input: NotaDebitoInput): void {
 function validarOriginal(original: ComprobanteFiscal): void {
   if (!TIPOS_MODIFICABLES.has(original.tipo_ecf)) {
     throw new ValidacionError([
-      { campo: "comprobante", mensaje: "Solo se puede emitir una nota de débito sobre un E31 o un E32." },
+      { campo: "comprobante", mensaje: "Solo se puede emitir una nota de débito sobre un E31, E32 o E45." },
     ]);
   }
   if (!ESTADOS_CON_VALIDEZ.has(original.estado_dgii)) {

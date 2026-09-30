@@ -112,6 +112,5 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 - 2026-09-30: H1–H2 (perfiles por tipo y nota de débito E33). El paquete `@sfr/ui` ahora tiene vitest. Decisiones:
   la nota de débito usa siempre código de modificación 3 (corrige montos); "corrige texto" no aplica a un cargo
   monetario.
-- 2026-09-30 (tarde): H3a (E45). La nota de débito solo admite E31/E32 como comprobante original; si hace falta sobre un
-  E45, ampliar `TIPOS_MODIFICABLES` en core y `admiteNotaDebito` en la UI. La lista de secuencias de Configuración ya
+- 2026-09-30 (tarde): H3a (E45). La nota de débito admite E31, E32 y E45 como comprobante original. La lista de secuencias de Configuración ya
   ofrece todos los tipos, incluido E33.
