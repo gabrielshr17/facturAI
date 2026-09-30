@@ -3,7 +3,7 @@ import { construirXmlEcf } from "../../src/fiscal/xml/ecf.js";
 import { cargarCertificado, firmarXml } from "../../src/fiscal/firma.js";
 import { certificadoPrueba, CLAVE_P12_PRUEBA } from "./certificado-prueba.js";
 import { erroresContraXsd } from "./xsd.js";
-import { consumoPrueba, creditoFiscalPrueba, notaCreditoPrueba } from "./datos-prueba.js";
+import { consumoPrueba, creditoFiscalPrueba, notaCreditoPrueba, notaDebitoPrueba } from "./datos-prueba.js";
 
 const FIRMA = new Date("2026-10-01T18:31:05.000Z");
 
@@ -204,6 +204,48 @@ describe("XML e-CF 34 (nota de crédito)", () => {
 
   it("se niega a construir una nota de crédito sin referencia", () => {
     expect(() => construirXmlEcf(notaCreditoPrueba({ referencia: null }), FIRMA)).toThrow(/referencia/i);
+  });
+});
+
+describe("XML e-CF 33 (nota de débito)", () => {
+  it("cumple el XSD oficial y referencia el comprobante modificado", async () => {
+    const xml = construirXmlEcf(notaDebitoPrueba(), FIRMA);
+
+    expect(xml).toContain(
+      "<InformacionReferencia><NCFModificado>E310000000001</NCFModificado>" +
+        "<FechaNCFModificado>25-09-2026</FechaNCFModificado><CodigoModificacion>3</CodigoModificacion>" +
+        "<RazonModificacion>Interés por pago tardío</RazonModificacion></InformacionReferencia>",
+    );
+    expect(await erroresContraXsd(firmado(xml), "ecf-33")).toEqual([]);
+  });
+
+  it("lleva el vencimiento de la secuencia y no el indicador de nota de crédito ni formas de pago", () => {
+    const xml = construirXmlEcf(notaDebitoPrueba(), FIRMA);
+
+    expect(valorDe(xml, "FechaVencimientoSecuencia")).toBe("31-12-2027");
+    expect(xml).not.toContain("IndicadorNotaCredito");
+    expect(xml).not.toContain("TablaFormasPago");
+    expect(valorDe(xml, "TipoeCF")).toBe("33");
+  });
+
+  it("desglosa el ITBIS del cargo adicional", () => {
+    const xml = construirXmlEcf(notaDebitoPrueba(), FIRMA);
+
+    expect(valorDe(xml, "MontoGravadoI1")).toBe("50.00");
+    expect(valorDe(xml, "TotalITBIS")).toBe("9.00");
+    expect(valorDe(xml, "MontoTotal")).toBe("59.00");
+  });
+
+  it("sin comprador omite el bloque Comprador", () => {
+    expect(construirXmlEcf(notaDebitoPrueba(), FIRMA)).not.toContain("<Comprador>");
+  });
+
+  it("se niega a construir una nota de débito sin referencia", () => {
+    expect(() => construirXmlEcf(notaDebitoPrueba({ referencia: null }), FIRMA)).toThrow(/referencia/i);
+  });
+
+  it("se niega a construir una nota de débito sin vencimiento de secuencia", () => {
+    expect(() => construirXmlEcf(notaDebitoPrueba({ fechaVencimientoSecuencia: null }), FIRMA)).toThrow(/vencimiento/i);
   });
 });
 

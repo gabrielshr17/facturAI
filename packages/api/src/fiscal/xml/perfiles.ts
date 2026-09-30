@@ -27,7 +27,7 @@ const PERFILES: Partial<Record<TipoEcfEmitible, PerfilEcf>> = {
     exigeReferencia: false,
   },
   "33": {
-    vencimientoSecuencia: false,
+    vencimientoSecuencia: true,
     indicadorNotaCredito: false,
     formasPago: false,
     compradorOpcional: true,

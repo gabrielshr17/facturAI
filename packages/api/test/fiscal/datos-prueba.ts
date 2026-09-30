@@ -62,3 +62,23 @@ export function notaCreditoPrueba(cambios: Partial<ComprobanteATransmitir> = {})
     ...cambios,
   });
 }
+
+export function notaDebitoPrueba(cambios: Partial<ComprobanteATransmitir> = {}): ComprobanteATransmitir {
+  return consumoPrueba({
+    ncf: "E330000000001",
+    tipoEcf: "33",
+    lineas: [{ descripcion: "Interés por mora", cantidad: 1, precioUnitario: 59, tasaImpuesto: 0.18, subtotal: 59 }],
+    pagos: [],
+    montoGravado: 50,
+    montoExento: 0,
+    montoItbis: 9,
+    total: 59,
+    referencia: {
+      ncfModificado: "E310000000001",
+      fechaNcfModificado: "2026-09-25T15:00:00.000Z",
+      codigoModificacion: 3,
+      razon: "Interés por pago tardío",
+    },
+    ...cambios,
+  });
+}
