@@ -75,6 +75,17 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 - [x] G2. `packages/api/Dockerfile` (probado: build + arranque local) y `packages/api/DESPLIEGUE.md`.
 - [x] G3. Chatbot y transferencias usan `apiClient` (de paso: el chatbot no enviaba credenciales y fallaba con 401 al activar la autenticación).
 
+## H — Tipos de e-CF adicionales (E33, E41, E43–E47)
+
+- [x] H1. Reglas por tipo en `fiscal/xml/perfiles.ts`; un tipo sin perfil falla en vez de generar XML inválido.
+- [x] H2. E33 (nota de débito): XML, servicio `emitirNotaDebitoFiscal` (secuencia E33, cola de anulación),
+      botón en Consultar facturas y RI con "e-NCF modificado" + código de modificación en palabras.
+      **Falta:** reimprimir una nota ya guardada y la RI de E34 al devolver (hoy solo se imprime la E33 recién
+      emitida); configurar la secuencia E33 en Configuración (verificar que la lista de tipos la ofrezca).
+- [ ] H3. E45, E44, E46 (ventas especiales, desde el modal de cobro).
+- [ ] H4. E41, E43, E47 (gastos y compras emitidos al proveedor, flujo nuevo en Compras).
+- [ ] H5. Transversal: secuencias por tipo en Configuración, generador/`set-pruebas` para los tipos nuevos.
+
 ## Necesita al usuario (no se avanza sin él)
 
 - Hosting + dominio con SSL para las URL públicas (cuenta de Render/Fly/Railway).
@@ -96,3 +107,6 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
   opcionales `DGII_CA_RAICES_PATH`), respuesta comercial duplicable (reserva atómica), "envío
   duplicado" mostrado como no recibido, llave de caja revocada bloqueaba la sesión de Google, y
   argumentos de `set-pruebas`.
+- 2026-09-30: H1–H2 (perfiles por tipo y nota de débito E33). El paquete `@sfr/ui` ahora tiene vitest. Decisiones:
+  la nota de débito usa siempre código de modificación 3 (corrige montos); "corrige texto" no aplica a un cargo
+  monetario.

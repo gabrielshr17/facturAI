@@ -38,6 +38,8 @@ export interface ComprobanteRecibo {
   fechaFirma?: string | null;
   /** URL de consulta del timbre en la DGII: se imprime como código QR. */
   qrUrl?: string | null;
+  /** Solo en notas de crédito y débito: el e-CF que modifican y el código en palabras. */
+  referencia?: { ncfModificado: string; codigoModificacion: string } | null;
 }
 
 export interface ReciboDatos {

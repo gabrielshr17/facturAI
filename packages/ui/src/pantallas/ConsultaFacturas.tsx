@@ -19,6 +19,7 @@ import { comprobanteParaRecibo } from "../impresion/representacion.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
 import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
 import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
+import { ModalNotaDebito } from "../componentes/ModalNotaDebito.js";
 import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { useEsAngosto } from "../hooks/useBreakpoint.js";
@@ -80,6 +81,8 @@ function FacturasCobradas() {
   const [pagosSel, setPagosSel] = useState<Pago[]>([]);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [mostrarDevolucion, setMostrarDevolucion] = useState(false);
+  const [mostrarNotaDebito, setMostrarNotaDebito] = useState(false);
+  const notaDebitoOcupada = useRef(false);
 
   const seleccionada = filas.find((f) => f.factura.id === seleccionadaId) ?? null;
 
@@ -92,7 +95,9 @@ function FacturasCobradas() {
     },
     Escape: () => {
       if (mostrarDevolucion) setMostrarDevolucion(false);
-      else setSeleccionadaId(null);
+      else if (mostrarNotaDebito) {
+        if (!notaDebitoOcupada.current) setMostrarNotaDebito(false);
+      } else setSeleccionadaId(null);
     },
   });
 
@@ -396,6 +401,11 @@ function FacturasCobradas() {
               <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => setMostrarDevolucion(true)}>
                 Devolver
               </button>
+              {admiteNotaDebito(seleccionada.comprobante) && modoFiscal === "dgii" && (
+                <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => setMostrarNotaDebito(true)}>
+                  Nota de débito
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -410,7 +420,31 @@ function FacturasCobradas() {
           onCompletada={() => void recargarDespuesDeDevolucion()}
         />
       )}
+
+      {mostrarNotaDebito && seleccionada?.comprobante && (
+        <ModalNotaDebito
+          comprobante={seleccionada.comprobante}
+          factura={seleccionada.factura}
+          cliente={seleccionada.cliente}
+          emisor={emisorDesdeNegocio(negocio)}
+          negocioRecibo={negocio ?? negocioReciboDefault}
+          onCerrar={() => setMostrarNotaDebito(false)}
+          onEmitida={() => void cargar()}
+          onOcupado={(ocupado) => {
+            notaDebitoOcupada.current = ocupado;
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Solo un E31 o E32 con validez fiscal puede recibir una nota de débito (la regla definitiva vive en @sfr/core). */
+function admiteNotaDebito(comprobante: ComprobanteFiscal | null): boolean {
+  return (
+    !!comprobante &&
+    (comprobante.tipo_ecf === "31" || comprobante.tipo_ecf === "32") &&
+    (comprobante.estado_dgii === "aceptado" || comprobante.estado_dgii === "aceptado_condicional")
   );
 }
 
