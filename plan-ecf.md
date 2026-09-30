@@ -122,3 +122,8 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
   un solo paso con PRAGMA a tres migraciones reanudables, porque el driver de escritorio (Tauri) ejecuta cada sentencia
   por separado y sin transacción. Pendiente antes de certificar: Excel de pruebas, hosting con SSL, aplicar el esquema
   a Supabase (incluye la migración) y ver las pantallas nuevas en el navegador.
+- 2026-09-30 (cierre): reimpresión de notas guardadas (líneas reconstruidas del XML firmado), municipio y provincia del
+  emisor, RLS en todas las tablas de Postgres y pasos de Supabase en DESPLIEGUE.md. Decisiones: E44/E46 no se construyen
+  en la app (solo se postula por los tipos que se usan); E41/E43/E47 no se imprimen (documentos internos). ISC de alcoholes
+  investigado en docs/investigacion-fiscal.md pero SIN construir: cambia el cálculo del ITBIS y necesita al contador.
+  Falta: imprimir la E34 al devolver (hoy solo se reimprime desde Consultar facturas).
