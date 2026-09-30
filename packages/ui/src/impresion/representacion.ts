@@ -130,3 +130,64 @@ export async function datosReciboNotaDebito(datos: DatosNotaDebito): Promise<Rec
     comprobante: await comprobanteParaRecibo(nota, datos.secuencias),
   };
 }
+
+const TASA_POR_INDICADOR: Record<string, number> = { "1": 0.18, "2": 0.16 };
+
+function desescaparXml(texto: string): string {
+  return texto
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function valorXml(bloque: string, etiqueta: string): string {
+  return desescaparXml(bloque.match(new RegExp(`<${etiqueta}>([^<]*)</${etiqueta}>`))?.[1] ?? "");
+}
+
+export function lineasDesdeXml(xml: string | null): ReciboDatos["lineas"] {
+  if (!xml) return [];
+  return [...xml.matchAll(/<Item>([\s\S]*?)<\/Item>/g)].map(([, item]) => {
+    const subtotal = Number(valorXml(item!, "MontoItem"));
+    const tasa = TASA_POR_INDICADOR[valorXml(item!, "IndicadorFacturacion")] ?? 0;
+    return {
+      descripcion: valorXml(item!, "NombreItem"),
+      cantidad: Number(valorXml(item!, "CantidadItem")),
+      precio_unitario: Number(valorXml(item!, "PrecioUnitarioItem")),
+      subtotal,
+      tasa_impuesto: tasa,
+      monto_itbis: tasa === 0 ? 0 : Math.round((subtotal - subtotal / (1 + tasa) + Number.EPSILON) * 100) / 100,
+    };
+  });
+}
+
+export interface DatosNotaGuardada {
+  nota: ComprobanteFiscal;
+  factura: Pick<Factura, "numero_interno">;
+  cliente: Pick<Cliente, "nombre" | "apellidos"> | null;
+  negocio: ReciboDatos["negocio"];
+  secuencias: Pick<SecuenciaNcfRepo, "obtener">;
+}
+
+export async function datosReciboNotaGuardada(datos: DatosNotaGuardada): Promise<ReciboDatos> {
+  const { nota } = datos;
+  return {
+    negocio: datos.negocio,
+    factura: {
+      numero_interno: datos.factura.numero_interno,
+      fecha_hora: nota.fecha_emision,
+      subtotal_gravado: nota.monto_gravado,
+      subtotal_exento: nota.monto_exento,
+      total_itbis: nota.monto_itbis,
+      total: nota.total,
+      monto_pagado: 0,
+      cambio: 0,
+      notas: null,
+    },
+    lineas: lineasDesdeXml(nota.xml_firmado),
+    pagos: [],
+    cliente: datos.cliente,
+    comprobante: await comprobanteParaRecibo(nota, datos.secuencias),
+  };
+}

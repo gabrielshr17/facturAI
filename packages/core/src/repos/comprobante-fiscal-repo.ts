@@ -125,6 +125,14 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
       );
     },
 
+    async listarNotasPorFactura(facturaId: string): Promise<ComprobanteFiscal[]> {
+      return db.all<ComprobanteFiscal>(
+        `SELECT ${COLS} FROM comprobante_fiscal
+          WHERE factura_id=? AND tipo_ecf IN ('33','34') AND deleted_at IS NULL ORDER BY created_at, rowid`,
+        [facturaId],
+      );
+    },
+
     async obtenerPorCompra(compraId: string): Promise<ComprobanteFiscal | undefined> {
       return db.get<ComprobanteFiscal>(
         `SELECT ${COLS} FROM comprobante_fiscal WHERE compra_id=? AND deleted_at IS NULL`,

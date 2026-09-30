@@ -15,7 +15,7 @@ import { Receipt, ClipboardList } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { ejecutarCicloFiscal } from "../data/seguimientoFiscal.js";
-import { comprobanteParaRecibo } from "../impresion/representacion.js";
+import { comprobanteParaRecibo, datosReciboNotaGuardada } from "../impresion/representacion.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
 import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
 import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
@@ -82,6 +82,7 @@ function FacturasCobradas() {
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [mostrarDevolucion, setMostrarDevolucion] = useState(false);
   const [mostrarNotaDebito, setMostrarNotaDebito] = useState(false);
+  const [notasSel, setNotasSel] = useState<ComprobanteFiscal[]>([]);
   const notaDebitoOcupada = useRef(false);
 
   const seleccionada = filas.find((f) => f.factura.id === seleccionadaId) ?? null;
@@ -139,7 +140,13 @@ function FacturasCobradas() {
     if (!seleccionadaId) return;
     void repo.obtenerLineas(seleccionadaId).then(setLineasSel);
     void repo.obtenerPagos(seleccionadaId).then(setPagosSel);
-  }, [repo, seleccionadaId]);
+    let vigente = true;
+    void comprobanteFiscal.listarNotasPorFactura(seleccionadaId).then((n) => vigente && setNotasSel(n));
+    return () => {
+      vigente = false;
+      setNotasSel([]);
+    };
+  }, [repo, comprobanteFiscal, seleccionadaId]);
 
   async function recargarDespuesDeDevolucion() {
     if (seleccionadaId) await repo.obtenerLineas(seleccionadaId).then(setLineasSel);
@@ -162,6 +169,27 @@ function FacturasCobradas() {
     telefono: null,
     ancho_impresora_default: 80,
   };
+
+  async function reimprimirNota(fila: FilaFactura, nota: ComprobanteFiscal) {
+    const salida = await elegir(
+      "¿Cómo quieres reimprimir esta nota?",
+      [
+        { valor: "imprimir", etiqueta: "Imprimir" },
+        { valor: "pdf", etiqueta: "Guardar PDF" },
+      ],
+      { titulo: "Reimprimir nota" },
+    );
+    if (!salida) return;
+    const datos = await datosReciboNotaGuardada({
+      nota,
+      factura: fila.factura,
+      cliente: fila.cliente,
+      negocio: negocio ?? negocioReciboDefault,
+      secuencias: secuenciaNcf,
+    });
+    if (salida === "imprimir") imprimirRecibo(datos);
+    else guardarPdf(generarPdfRecibo(datos), `Nota-${nota.ncf}.pdf`);
+  }
 
   async function reimprimir(fila: FilaFactura) {
     const salida = await elegir(
@@ -354,6 +382,29 @@ function FacturasCobradas() {
               </p>
             )}
 
+            {notasSel.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <label style={s.label}>Notas de esta venta</label>
+                {notasSel.map((n) => (
+                  <div
+                    key={n.id}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
+                  >
+                    <span style={{ fontSize: 13 }}>
+                      {ETIQUETA_TIPO_ECF[n.tipo_ecf]} · {n.ncf} · RD$ {money(n.total)}
+                    </span>
+                    <button
+                      type="button"
+                      style={{ ...s.botonSecundario, minHeight: 44 }}
+                      onClick={() => void reimprimirNota(seleccionada, n)}
+                    >
+                      Reimprimir
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <table style={{ ...s.tabla, marginTop: 8 }}>
               <tbody>
                 {lineasSel.map((l) => (
@@ -429,7 +480,10 @@ function FacturasCobradas() {
           emisor={emisorDesdeNegocio(negocio)}
           negocioRecibo={negocio ?? negocioReciboDefault}
           onCerrar={() => setMostrarNotaDebito(false)}
-          onEmitida={() => void cargar()}
+          onEmitida={() => {
+            void cargar();
+            void comprobanteFiscal.listarNotasPorFactura(seleccionada.factura.id).then(setNotasSel);
+          }}
           onOcupado={(ocupado) => {
             notaDebitoOcupada.current = ocupado;
           }}
