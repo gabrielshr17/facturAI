@@ -173,7 +173,8 @@ export interface SecuenciaNcf extends Auditoria {
 
 export interface ComprobanteFiscal extends Auditoria {
   id: string;
-  factura_id: string;
+  factura_id: string | null;
+  compra_id: string | null;
   tipo_ecf: TipoEcf;
   ncf: string;
   secuencia_id: string;

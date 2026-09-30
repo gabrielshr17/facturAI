@@ -197,6 +197,13 @@ export function crearCompraRepo(db: SqlDriver) {
       );
     },
 
+    async marcarComprobanteEmitido(id: string): Promise<void> {
+      await db.run(
+        "UPDATE compra SET tiene_comprobante_fiscal=1, estado_clasificacion='con_fiscal', updated_at=? WHERE id=?",
+        [now(), id],
+      );
+    },
+
     /** Lista de compras, filtrable por período y proveedor, más reciente primero. */
     async listar(
       filtro: { desde?: string | null; hasta?: string | null; proveedorId?: string | null } = {},

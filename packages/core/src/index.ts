@@ -63,6 +63,14 @@ export {
   type ResultadoNotaDebitoFiscal,
 } from "./fiscal/nota-debito-fiscal.js";
 export {
+  emitirComprobanteDeCompra,
+  type TipoEcfDeCompra,
+  type RetencionLineaInput,
+  type ComprobanteDeCompraInput,
+  type ComprobanteDeCompraDeps,
+  type ResultadoComprobanteDeCompra,
+} from "./fiscal/comprobante-compra.js";
+export {
   crearClienteAuth,
   iniciarSesionGoogleWeb,
   iniciarSesionGoogleDesktop,

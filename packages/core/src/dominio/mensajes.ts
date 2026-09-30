@@ -18,5 +18,6 @@ export const MSG = {
   lineaNoExiste: "Ese renglón del ticket ya no existe. Es posible que se quitara desde otra ventana.",
   comprobanteNoExiste:
     "No se encontró el comprobante fiscal de esa factura, así que no se puede emitir la nota de crédito.",
+  compraNoExiste: "Esa compra ya no existe. Es posible que se haya eliminado desde otra ventana; actualiza la lista.",
   secuenciaNoExiste: "Esa secuencia de NCF ya no existe. Revísala en Configuración → Comprobantes fiscales.",
 } as const;

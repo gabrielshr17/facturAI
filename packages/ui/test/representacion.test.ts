@@ -6,6 +6,7 @@ function comprobante(cambios: Partial<ComprobanteFiscal>): ComprobanteFiscal {
   return {
     id: "c1",
     factura_id: "f1",
+    compra_id: null,
     tipo_ecf: "32",
     ncf: "E320000000001",
     secuencia_id: "s1",

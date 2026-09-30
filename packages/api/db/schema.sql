@@ -175,7 +175,8 @@ CREATE TABLE secuencia_ncf (
 
 CREATE TABLE comprobante_fiscal (
   id                        TEXT PRIMARY KEY,
-  factura_id                TEXT NOT NULL REFERENCES factura(id),
+  factura_id                TEXT REFERENCES factura(id),
+  compra_id                 TEXT, -- FK agregada más abajo (compra se crea después); E41/E43/E47 se emiten sobre una compra
   tipo_ecf                  TEXT NOT NULL,
   ncf                       TEXT NOT NULL,
   secuencia_id              TEXT NOT NULL REFERENCES secuencia_ncf(id),
@@ -202,10 +203,14 @@ CREATE TABLE comprobante_fiscal (
   acuse_recibo_xml          TEXT,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
-  deleted_at                TIMESTAMPTZ
+  deleted_at                TIMESTAMPTZ,
+  CHECK (factura_id IS NOT NULL OR compra_id IS NOT NULL)
 );
 CREATE UNIQUE INDEX ux_comprobante_fiscal_ncf ON comprobante_fiscal(ncf);
 CREATE INDEX ix_comprobante_fiscal_factura ON comprobante_fiscal(factura_id);
+CREATE INDEX ix_comprobante_fiscal_compra ON comprobante_fiscal(compra_id);
+CREATE UNIQUE INDEX ux_comprobante_fiscal_compra ON comprobante_fiscal(compra_id)
+  WHERE compra_id IS NOT NULL AND deleted_at IS NULL;
 CREATE INDEX ix_comprobante_fiscal_estado ON comprobante_fiscal(estado_dgii);
 CREATE INDEX ix_comprobante_fiscal_entrega ON comprobante_fiscal(entrega_estado);
 
@@ -285,6 +290,9 @@ CREATE TABLE compra (
 );
 CREATE INDEX ix_compra_fecha ON compra(fecha);
 CREATE INDEX ix_compra_mes_ano ON compra(mes_ano_contable);
+
+ALTER TABLE comprobante_fiscal ADD CONSTRAINT fk_comprobante_compra
+  FOREIGN KEY (compra_id) REFERENCES compra(id);
 
 CREATE TABLE compra_linea (
   id             TEXT PRIMARY KEY,

@@ -546,4 +546,89 @@ export const migrations: Migration[] = [
       ALTER TABLE comprobante_fiscal ADD COLUMN receptor_nombre TEXT;
     `,
   },
+  {
+    id: 14,
+    nombre: "comprobante_de_compra_respaldo",
+    sql: /* sql */ `
+      -- El driver de escritorio ejecuta cada sentencia por separado y sin transacción, así que
+      -- reconstruir comprobante_fiscal se hace en tres migraciones que se pueden repetir sin daño.
+      -- Esta copia la tabla y suelta los enlaces que la referencian para poder reemplazarla.
+      CREATE TABLE IF NOT EXISTS comprobante_fiscal_respaldo AS SELECT * FROM comprobante_fiscal;
+      CREATE TABLE IF NOT EXISTS factura_enlace_respaldo AS SELECT id, comprobante_id FROM factura WHERE comprobante_id IS NOT NULL;
+      CREATE TABLE IF NOT EXISTS devolucion_enlace_respaldo AS SELECT id, comprobante_id FROM devolucion WHERE comprobante_id IS NOT NULL;
+      UPDATE factura SET comprobante_id = NULL WHERE comprobante_id IS NOT NULL;
+      UPDATE devolucion SET comprobante_id = NULL WHERE comprobante_id IS NOT NULL;
+    `,
+  },
+  {
+    id: 15,
+    nombre: "comprobante_de_compra_tabla",
+    sql: /* sql */ `
+      DROP TABLE IF EXISTS comprobante_fiscal;
+      CREATE TABLE comprobante_fiscal (
+        id                       TEXT PRIMARY KEY,
+        factura_id               TEXT REFERENCES factura(id),
+        compra_id                TEXT REFERENCES compra(id),
+        tipo_ecf                 TEXT NOT NULL,
+        ncf                      TEXT NOT NULL,
+        secuencia_id             TEXT NOT NULL REFERENCES secuencia_ncf(id),
+        rnc_emisor               TEXT,
+        receptor_documento_tipo  TEXT,
+        receptor_documento_numero TEXT,
+        receptor_nombre          TEXT,
+        fecha_emision            TEXT NOT NULL,
+        monto_gravado            REAL NOT NULL DEFAULT 0,
+        monto_exento             REAL NOT NULL DEFAULT 0,
+        monto_itbis              REAL NOT NULL DEFAULT 0,
+        total                    REAL NOT NULL DEFAULT 0,
+        estado_dgii              TEXT NOT NULL DEFAULT 'pendiente',
+        track_id_dgii            TEXT,
+        codigo_seguridad         TEXT,
+        xml_firmado_ruta         TEXT,
+        qr_url                   TEXT,
+        fecha_transmision        TEXT,
+        fecha_firma              TEXT,
+        xml_firmado              TEXT,
+        motivo_rechazo           TEXT,
+        entrega_estado           TEXT NOT NULL DEFAULT 'no_aplica',
+        entrega_detalle          TEXT,
+        acuse_recibo_xml         TEXT,
+        created_at               TEXT NOT NULL,
+        updated_at               TEXT NOT NULL,
+        deleted_at               TEXT,
+        CHECK (factura_id IS NOT NULL OR compra_id IS NOT NULL)
+      );
+      CREATE UNIQUE INDEX ux_comprobante_fiscal_ncf ON comprobante_fiscal(ncf);
+      CREATE UNIQUE INDEX ux_comprobante_fiscal_compra ON comprobante_fiscal(compra_id) WHERE compra_id IS NOT NULL AND deleted_at IS NULL;
+      CREATE INDEX ix_comprobante_fiscal_factura ON comprobante_fiscal(factura_id);
+      CREATE INDEX ix_comprobante_fiscal_compra ON comprobante_fiscal(compra_id);
+      CREATE INDEX ix_comprobante_fiscal_estado ON comprobante_fiscal(estado_dgii);
+      CREATE INDEX ix_comprobante_fiscal_entrega ON comprobante_fiscal(entrega_estado);
+    `,
+  },
+  {
+    id: 16,
+    nombre: "comprobante_de_compra_restaurar",
+    sql: /* sql */ `
+      INSERT OR IGNORE INTO comprobante_fiscal (
+        id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
+        receptor_documento_numero, receptor_nombre, fecha_emision, monto_gravado, monto_exento,
+        monto_itbis, total, estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url,
+        fecha_transmision, fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle,
+        acuse_recibo_xml, created_at, updated_at, deleted_at
+      )
+      SELECT
+        id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
+        receptor_documento_numero, receptor_nombre, fecha_emision, monto_gravado, monto_exento,
+        monto_itbis, total, estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url,
+        fecha_transmision, fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle,
+        acuse_recibo_xml, created_at, updated_at, deleted_at
+      FROM comprobante_fiscal_respaldo;
+      UPDATE factura SET comprobante_id = (SELECT e.comprobante_id FROM factura_enlace_respaldo e WHERE e.id = factura.id) WHERE id IN (SELECT id FROM factura_enlace_respaldo);
+      UPDATE devolucion SET comprobante_id = (SELECT e.comprobante_id FROM devolucion_enlace_respaldo e WHERE e.id = devolucion.id) WHERE id IN (SELECT id FROM devolucion_enlace_respaldo);
+      DROP TABLE IF EXISTS comprobante_fiscal_respaldo;
+      DROP TABLE IF EXISTS factura_enlace_respaldo;
+      DROP TABLE IF EXISTS devolucion_enlace_respaldo;
+    `,
+  },
 ];

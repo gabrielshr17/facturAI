@@ -4,7 +4,8 @@ import type { TipoEcf } from "../dominio/ecf.js";
 import type { ComprobanteFiscal, EstadoDgii, EstadoEntrega } from "./tipos.js";
 
 export interface CrearComprobanteInput {
-  facturaId: string;
+  facturaId?: string | null;
+  compraId?: string | null;
   tipoEcf: TipoEcf;
   ncf: string;
   secuenciaId: string;
@@ -25,7 +26,7 @@ export interface CrearComprobanteInput {
   motivoRechazo?: string | null;
 }
 
-const COLS = `id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
+const COLS = `id, factura_id, compra_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
   receptor_documento_numero, receptor_nombre, fecha_emision, monto_gravado, monto_exento, monto_itbis, total,
   estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url, fecha_transmision,
   fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle, acuse_recibo_xml,
@@ -45,7 +46,8 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
       const ts = now();
       const c: ComprobanteFiscal = {
         id: newId(),
-        factura_id: input.facturaId,
+        factura_id: input.facturaId ?? null,
+        compra_id: input.compraId ?? null,
         tipo_ecf: input.tipoEcf,
         ncf: input.ncf,
         secuencia_id: input.secuenciaId,
@@ -75,9 +77,10 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
         deleted_at: null,
       };
 
-      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(29).fill("?").join(",")})`, [
+      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(30).fill("?").join(",")})`, [
         c.id,
         c.factura_id,
+        c.compra_id,
         c.tipo_ecf,
         c.ncf,
         c.secuencia_id,
@@ -119,6 +122,13 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
       return db.get<ComprobanteFiscal>(
         `SELECT ${COLS} FROM comprobante_fiscal WHERE factura_id=? AND deleted_at IS NULL`,
         [facturaId],
+      );
+    },
+
+    async obtenerPorCompra(compraId: string): Promise<ComprobanteFiscal | undefined> {
+      return db.get<ComprobanteFiscal>(
+        `SELECT ${COLS} FROM comprobante_fiscal WHERE compra_id=? AND deleted_at IS NULL`,
+        [compraId],
       );
     },
 
