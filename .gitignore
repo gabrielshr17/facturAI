@@ -28,3 +28,5 @@ productDatabase/
 # Certificado digital e-CF (DGII): nunca versionar
 *.p12
 *.pfx
+
+docs/dgii/pdf/
