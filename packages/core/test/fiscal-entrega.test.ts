@@ -55,7 +55,7 @@ describe("entrega de e-CF a compradores electrónicos", () => {
     });
   }
 
-  it("solo los E31/E33/E34 a un RNC quedan pendientes de entrega; el resto no aplica", async () => {
+  it("solo los E31/E33/E34/E45 a un RNC quedan pendientes de entrega; el resto no aplica", async () => {
     const repo = crearComprobanteFiscalRepo(db);
     const e31 = await comprobante({ tipoEcf: "31", ncf: "E310000000001", estadoDgii: "aceptado" });
     const e32 = await comprobante({ tipoEcf: "32", ncf: "E320000000001", estadoDgii: "aceptado" });

@@ -31,7 +31,7 @@ const COLS = `id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_
   fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle, acuse_recibo_xml,
   created_at, updated_at, deleted_at`;
 
-const TIPOS_CON_ENTREGA: ReadonlySet<TipoEcf> = new Set(["31", "33", "34"]);
+const TIPOS_CON_ENTREGA: ReadonlySet<TipoEcf> = new Set(["31", "33", "34", "45"]);
 
 function entregaInicial(tipoEcf: TipoEcf, receptorTipo: "rnc" | "cedula" | null): EstadoEntrega {
   return TIPOS_CON_ENTREGA.has(tipoEcf) && receptorTipo === "rnc" ? "pendiente" : "no_aplica";

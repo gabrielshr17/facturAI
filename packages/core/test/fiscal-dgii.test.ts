@@ -217,6 +217,76 @@ describe("cobrarConFiscal — integración con la DGII", () => {
     ).rejects.toBeInstanceOf(ValidacionError);
   });
 
+  describe("Gubernamental (E45)", () => {
+    const COMPRADOR = {
+      receptorDocumentoTipo: "rnc" as const,
+      receptorDocumentoNumero: "101023122",
+      receptorNombre: "MINISTERIO EJEMPLO",
+    };
+
+    async function depsConSecuenciaE45(proveedor: ProveedorFiscal) {
+      const d = depsCon(db, proveedor);
+      await d.secuenciaRepo.crear({ tipoEcf: "45", rangoDesde: 1, rangoHasta: 100, vencimiento: hoyMasDias(365) });
+      return d;
+    }
+
+    it("exige RNC y razón social del comprador, sin consumir número", async () => {
+      const d = await depsConSecuenciaE45(proveedorQueResponde(ACEPTADO).proveedor);
+      const t = await ticket(d.facturaRepo);
+      const pagos = [{ metodo: "efectivo" as const, monto: 118 }];
+
+      await expect(
+        cobrarConFiscal(d, t.id, { pagos, tipoEcf: "45", receptorNombre: "MINISTERIO EJEMPLO", emisor: EMISOR }),
+      ).rejects.toBeInstanceOf(ValidacionError);
+      await expect(
+        cobrarConFiscal(d, t.id, {
+          pagos,
+          tipoEcf: "45",
+          receptorDocumentoTipo: "rnc",
+          receptorDocumentoNumero: "101023122",
+          emisor: EMISOR,
+        }),
+      ).rejects.toBeInstanceOf(ValidacionError);
+      expect((await d.secuenciaRepo.obtenerVigente("45"))?.proximo_numero).toBe(1);
+    });
+
+    it("transmite el E45 con su secuencia, el comprador y el vencimiento", async () => {
+      const { proveedor, recibidos } = proveedorQueResponde(ACEPTADO);
+      const d = await depsConSecuenciaE45(proveedor);
+      const t = await ticket(d.facturaRepo);
+
+      const { comprobante } = await cobrarConFiscal(d, t.id, {
+        pagos: [{ metodo: "efectivo", monto: 118 }],
+        tipoEcf: "45",
+        ...COMPRADOR,
+        emisor: EMISOR,
+      });
+
+      const enviado = recibidos.at(-1);
+      expect(enviado?.tipoEcf).toBe("45");
+      expect(enviado?.ncf).toBe("E450000000001");
+      expect(enviado?.receptorDocumentoNumero).toBe("101023122");
+      expect(enviado?.receptorNombre).toBe("MINISTERIO EJEMPLO");
+      expect(enviado?.fechaVencimientoSecuencia).toBe(hoyMasDias(365));
+      expect(comprobante.tipo_ecf).toBe("45");
+      expect(comprobante.estado_dgii).toBe("aceptado");
+    });
+
+    it("queda pendiente de entrega al comprador, como el E31", async () => {
+      const d = await depsConSecuenciaE45(proveedorQueResponde(ACEPTADO).proveedor);
+      const t = await ticket(d.facturaRepo);
+
+      const { comprobante } = await cobrarConFiscal(d, t.id, {
+        pagos: [{ metodo: "efectivo", monto: 118 }],
+        tipoEcf: "45",
+        ...COMPRADOR,
+        emisor: EMISOR,
+      });
+
+      expect(comprobante.entrega_estado).toBe("pendiente");
+    });
+  });
+
   it("un consumo de RD$250,000 o más exige RNC o cédula del comprador, sin consumir número", async () => {
     const { proveedor } = proveedorQueResponde(ACEPTADO);
     const d = depsCon(db, proveedor);

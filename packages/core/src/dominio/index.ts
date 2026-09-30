@@ -23,6 +23,7 @@ export {
   type TipoEcf,
   formatearNcf,
   tipoEcfSugerido,
+  requiereCompradorIdentificado,
   ETIQUETA_TIPO_ECF,
   NOMBRE_TIPO_ECF,
   DESCRIPCION_CODIGO_MODIFICACION,

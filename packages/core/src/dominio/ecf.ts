@@ -60,6 +60,11 @@ export const DESCRIPCION_CODIGO_MODIFICACION: Record<1 | 2 | 3 | 4 | 5, string> 
   5: "Referencia Factura Consumo Electrónica",
 };
 
+/** El crédito fiscal y el gubernamental se emiten a un comprador identificado: RNC y razón social. */
+export function requiereCompradorIdentificado(tipoEcf: TipoEcf): boolean {
+  return tipoEcf === "31" || tipoEcf === "45";
+}
+
 /** La fecha de vencimiento de la secuencia no aplica a notas de crédito ni a facturas de consumo. */
 export function requiereVencimientoEnRepresentacion(tipoEcf: TipoEcf): boolean {
   return tipoEcf !== "32" && tipoEcf !== "34";

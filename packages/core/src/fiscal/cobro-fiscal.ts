@@ -5,7 +5,7 @@ import type { NcfAnulacionRepo } from "../repos/ncf-anulacion-repo.js";
 import type { EmisorFiscal, PagoATransmitir, ProveedorFiscal } from "./proveedor.js";
 import { redondear2 } from "../dominio/dinero.js";
 import { procesarCobro, type PagoInput } from "../dominio/factura.js";
-import { formatearNcf, type TipoEcf } from "../dominio/ecf.js";
+import { ETIQUETA_TIPO_ECF, formatearNcf, requiereCompradorIdentificado, type TipoEcf } from "../dominio/ecf.js";
 import { esDocumentoValido } from "../dominio/validacion.js";
 import { ValidacionError } from "../repos/producto-repo.js";
 import type { Factura, ComprobanteFiscal } from "../repos/tipos.js";
@@ -75,15 +75,18 @@ export async function cobrarConFiscal(
   const emisor = validarEmisor(input.emisor);
   const receptorNombre = input.receptorNombre?.trim() || null;
 
-  if (input.tipoEcf === "31" && !input.receptorDocumentoNumero) {
-    throw new ValidacionError([
-      { campo: "receptorDocumentoNumero", mensaje: "El Crédito Fiscal (E31) requiere el RNC del comprador." },
-    ]);
-  }
-  if (input.tipoEcf === "31" && !receptorNombre) {
-    throw new ValidacionError([
-      { campo: "receptorNombre", mensaje: "El Crédito Fiscal (E31) requiere la razón social del comprador." },
-    ]);
+  if (requiereCompradorIdentificado(input.tipoEcf)) {
+    const etiqueta = ETIQUETA_TIPO_ECF[input.tipoEcf];
+    if (!input.receptorDocumentoNumero) {
+      throw new ValidacionError([
+        { campo: "receptorDocumentoNumero", mensaje: `El ${etiqueta} requiere el RNC del comprador.` },
+      ]);
+    }
+    if (!receptorNombre) {
+      throw new ValidacionError([
+        { campo: "receptorNombre", mensaje: `El ${etiqueta} requiere la razón social del comprador.` },
+      ]);
+    }
   }
   if (input.receptorDocumentoNumero && !esDocumentoValido(input.receptorDocumentoTipo, input.receptorDocumentoNumero)) {
     const etiqueta = input.receptorDocumentoTipo === "cedula" ? "cédula" : "RNC";
