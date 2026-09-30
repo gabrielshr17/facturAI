@@ -4,11 +4,14 @@ import { cargarCertificado, firmarXml } from "../../src/fiscal/firma.js";
 import { certificadoPrueba, CLAVE_P12_PRUEBA } from "./certificado-prueba.js";
 import { erroresContraXsd } from "./xsd.js";
 import {
+  compraInformalPrueba,
   consumoPrueba,
   creditoFiscalPrueba,
+  gastoMenorPrueba,
+  gubernamentalPrueba,
   notaCreditoPrueba,
   notaDebitoPrueba,
-  gubernamentalPrueba,
+  pagoExteriorPrueba,
 } from "./datos-prueba.js";
 
 const FIRMA = new Date("2026-10-01T18:31:05.000Z");
@@ -280,10 +283,132 @@ describe("XML e-CF 45 (gubernamental)", () => {
   });
 });
 
+describe("XML e-CF 41 (compras a proveedores sin comprobante)", () => {
+  it("cumple el XSD oficial con el proveedor como comprador y las retenciones por línea", async () => {
+    const xml = construirXmlEcf(compraInformalPrueba(), FIRMA);
+
+    expect(valorDe(xml, "FechaVencimientoSecuencia")).toBe("31-12-2027");
+    expect(valorDe(xml, "RNCComprador")).toBe("101010101");
+    expect(valorDe(xml, "RazonSocialComprador")).toBe("PLOMERO EJEMPLO SRL");
+    expect(xml).not.toContain("TipoIngresos");
+    expect(xml).not.toContain("TablaFormasPago");
+    expect(await erroresContraXsd(firmado(xml), "ecf-41")).toEqual([]);
+  });
+
+  it("cada ítem declara la retención: un servicio lleva ISR y un ítem exento lleva ITBIS retenido en cero", () => {
+    const xml = construirXmlEcf(compraInformalPrueba(), FIRMA);
+
+    expect(xml).toContain(
+      "<IndicadorFacturacion>1</IndicadorFacturacion><Retencion>" +
+        "<IndicadorAgenteRetencionoPercepcion>1</IndicadorAgenteRetencionoPercepcion>" +
+        "<MontoITBISRetenido>54.00</MontoITBISRetenido><MontoISRRetenido>50.00</MontoISRRetenido></Retencion>" +
+        "<NombreItem>Reparación de tubería</NombreItem><IndicadorBienoServicio>2</IndicadorBienoServicio>",
+    );
+    expect(xml).toContain(
+      "<IndicadorFacturacion>4</IndicadorFacturacion><Retencion>" +
+        "<IndicadorAgenteRetencionoPercepcion>1</IndicadorAgenteRetencionoPercepcion>" +
+        "<MontoITBISRetenido>0.00</MontoITBISRetenido></Retencion>" +
+        "<NombreItem>Llave de paso</NombreItem><IndicadorBienoServicio>1</IndicadorBienoServicio>",
+    );
+  });
+
+  it("un ítem gravado sin ITBIS retenido declara cero de forma explícita y el total lo suma", async () => {
+    const lineas = compraInformalPrueba().lineas.map((l, i) =>
+      i === 0 ? { ...l, itbisRetenido: undefined, isrRetenido: undefined } : l,
+    );
+    const xml = construirXmlEcf(compraInformalPrueba({ lineas }), FIRMA);
+
+    expect(xml).toContain(
+      "<IndicadorAgenteRetencionoPercepcion>1</IndicadorAgenteRetencionoPercepcion>" +
+        "<MontoITBISRetenido>0.00</MontoITBISRetenido></Retencion><NombreItem>Reparación de tubería",
+    );
+    expect(valorDe(xml, "TotalITBISRetenido")).toBe("0.00");
+    expect(xml).not.toContain("TotalISRRetencion");
+    expect(await erroresContraXsd(firmado(xml), "ecf-41")).toEqual([]);
+  });
+
+  it("totaliza el ITBIS y el ISR retenidos", () => {
+    const xml = construirXmlEcf(compraInformalPrueba(), FIRMA);
+
+    expect(valorDe(xml, "TotalITBISRetenido")).toBe("54.00");
+    expect(valorDe(xml, "TotalISRRetencion")).toBe("50.00");
+    expect(valorDe(xml, "MontoTotal")).toBe("1230.00");
+  });
+
+  it("se niega a retener ISR en un bien", () => {
+    const lineas = compraInformalPrueba().lineas.map((l, i) => (i === 1 ? { ...l, isrRetenido: 5 } : l));
+    expect(() => construirXmlEcf(compraInformalPrueba({ lineas }), FIRMA)).toThrow(/ISR.*servicio/i);
+  });
+
+  it("se niega a construir un E41 sin RNC o razón social del proveedor", () => {
+    expect(() => construirXmlEcf(compraInformalPrueba({ receptorDocumentoNumero: null }), FIRMA)).toThrow(/RNC/);
+    expect(() => construirXmlEcf(compraInformalPrueba({ receptorNombre: null }), FIRMA)).toThrow(/razón social/);
+  });
+});
+
+describe("XML e-CF 43 (gastos menores)", () => {
+  it("cumple el XSD oficial, sin comprador ni tipo de ingresos, con el ítem exento", async () => {
+    const xml = construirXmlEcf(gastoMenorPrueba(), FIRMA);
+
+    expect(xml).not.toContain("Comprador");
+    expect(xml).not.toContain("TipoIngresos");
+    expect(valorDe(xml, "FechaVencimientoSecuencia")).toBe("31-12-2027");
+    expect(valorDe(xml, "MontoExento")).toBe("350.00");
+    expect(valorDe(xml, "MontoTotal")).toBe("350.00");
+    expect(await erroresContraXsd(firmado(xml), "ecf-43")).toEqual([]);
+  });
+
+  it("se niega a construir un E43 con una línea gravada", () => {
+    const lineas = [{ descripcion: "Café", cantidad: 1, precioUnitario: 118, tasaImpuesto: 0.18, subtotal: 118 }];
+    expect(() => construirXmlEcf(gastoMenorPrueba({ lineas }), FIRMA)).toThrow(/exent/i);
+  });
+});
+
+describe("XML e-CF 47 (pagos al exterior)", () => {
+  it("cumple el XSD oficial con el proveedor extranjero identificado y el ISR retenido", async () => {
+    const xml = construirXmlEcf(pagoExteriorPrueba(), FIRMA);
+
+    expect(valorDe(xml, "IdentificadorExtranjero")).toBe("PA1234567");
+    expect(valorDe(xml, "RazonSocialComprador")).toBe("ACME LLC");
+    expect(xml).not.toContain("RNCComprador");
+    expect(valorDe(xml, "MontoISRRetenido")).toBe("2700.00");
+    expect(valorDe(xml, "TotalISRRetencion")).toBe("2700.00");
+    expect(valorDe(xml, "MontoExento")).toBe("10000.00");
+    expect(await erroresContraXsd(firmado(xml), "ecf-47")).toEqual([]);
+  });
+
+  it("se niega a construir un E47 sin el ISR retenido en cada línea", () => {
+    const lineas = [
+      { descripcion: "Licencia", cantidad: 1, precioUnitario: 100, tasaImpuesto: 0, subtotal: 100, esServicio: true },
+    ];
+    expect(() => construirXmlEcf(pagoExteriorPrueba({ lineas }), FIRMA)).toThrow(/ISR/);
+  });
+
+  it("se niega a retener ISR en un pago que no se declara como servicio", () => {
+    const lineas = pagoExteriorPrueba().lineas.map((l) => ({ ...l, esServicio: undefined }));
+    expect(() => construirXmlEcf(pagoExteriorPrueba({ lineas }), FIRMA)).toThrow(/ISR.*servicio/i);
+  });
+
+  it("se niega a construir un E47 con una línea gravada", () => {
+    const lineas = [
+      {
+        descripcion: "Licencia",
+        cantidad: 1,
+        precioUnitario: 118,
+        tasaImpuesto: 0.18,
+        subtotal: 118,
+        esServicio: true,
+        isrRetenido: 10,
+      },
+    ];
+    expect(() => construirXmlEcf(pagoExteriorPrueba({ lineas }), FIRMA)).toThrow(/exent/i);
+  });
+});
+
 describe("tipos de e-CF aún no soportados", () => {
-  it("se niega a construir un E41 en lugar de generar un XML inválido", () => {
-    expect(() => construirXmlEcf(consumoPrueba({ tipoEcf: "41", ncf: "E410000000001" }), FIRMA)).toThrow(
-      /E41.*no se puede emitir/i,
+  it("se niega a construir un E44 en lugar de generar un XML inválido", () => {
+    expect(() => construirXmlEcf(consumoPrueba({ tipoEcf: "44", ncf: "E440000000001" }), FIRMA)).toThrow(
+      /E44.*no se puede emitir/i,
     );
   });
 });

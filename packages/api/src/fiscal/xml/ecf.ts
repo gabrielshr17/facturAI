@@ -3,7 +3,7 @@ import { fechaDgii, fechaHoraDgii, montoDgii } from "../formato.js";
 import { DocumentoFiscalInvalidoError } from "../errores.js";
 import { documentoXml, texto, type Nodo } from "./nodo.js";
 import { perfilDe, type PerfilEcf } from "./perfiles.js";
-import { calcularTotalesEcf, indicadorFacturacion } from "./totales.js";
+import { calcularTotalesEcf, indicadorFacturacion, redondear2 } from "./totales.js";
 
 const FORMA_PAGO_DGII: Record<MetodoPago, string> = {
   efectivo: "1",
@@ -51,15 +51,28 @@ function indicadorNotaCredito(doc: ComprobanteATransmitir): string {
   return dias > DIAS_LIMITE_NOTA_CREDITO ? "1" : "0";
 }
 
+function validarRetenciones(doc: ComprobanteATransmitir, perfil: PerfilEcf): void {
+  if (perfil.retencion === "isr" && doc.lineas.some((l) => l.isrRetenido === undefined)) {
+    throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} requiere el ISR retenido en cada línea.`);
+  }
+  if (perfil.retencion !== "ninguna" && doc.lineas.some((l) => (l.isrRetenido ?? 0) > 0 && !l.esServicio)) {
+    throw new DocumentoFiscalInvalidoError("Solo se puede retener ISR en un servicio, no en un bien.");
+  }
+}
+
 function validar(doc: ComprobanteATransmitir, perfil: PerfilEcf): void {
   if (doc.lineas.length === 0) throw new DocumentoFiscalInvalidoError("El comprobante no tiene líneas.");
   if (doc.lineas.length > 1000) throw new DocumentoFiscalInvalidoError("La DGII admite como máximo 1000 líneas.");
   if (!texto(doc.emisor.rnc) || !texto(doc.emisor.razonSocial) || !texto(doc.emisor.direccion)) {
     throw new DocumentoFiscalInvalidoError("Faltan datos del emisor (RNC, razón social o dirección).");
   }
-  if (perfil.compradorIdentificado && (!texto(doc.receptorDocumentoNumero) || !texto(doc.receptorNombre))) {
+  if (perfil.comprador === "identificado" && (!texto(doc.receptorDocumentoNumero) || !texto(doc.receptorNombre))) {
     throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} requiere RNC y razón social del comprador.`);
   }
+  if (perfil.soloExento && doc.lineas.some((l) => indicadorFacturacion(l) !== 4)) {
+    throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} solo admite ítems exentos de ITBIS.`);
+  }
+  validarRetenciones(doc, perfil);
   if (perfil.vencimientoSecuencia && !doc.fechaVencimientoSecuencia) {
     throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} requiere la fecha de vencimiento de la secuencia.`);
   }
@@ -89,8 +102,8 @@ function idDoc(doc: ComprobanteATransmitir, perfil: PerfilEcf, hayGravado: boole
           : null,
       ],
       ["IndicadorMontoGravado", hayGravado ? "1" : null],
-      ["TipoIngresos", "01"],
-      ["TipoPago", tipoPago(doc.pagos)],
+      ["TipoIngresos", perfil.tipoIngresos ? "01" : null],
+      ["TipoPago", perfil.tipoPago ? tipoPago(doc.pagos) : null],
       perfil.formasPago ? tablaFormasPago(doc.pagos) : ["TablaFormasPago", null],
     ],
   ];
@@ -113,18 +126,28 @@ function emisor(doc: ComprobanteATransmitir): Nodo {
 function comprador(doc: ComprobanteATransmitir, perfil: PerfilEcf): Nodo {
   const rnc = texto(doc.receptorDocumentoNumero);
   const nombre = texto(doc.receptorNombre, 150);
-  if (!rnc && !nombre && perfil.compradorOpcional) return ["Comprador", null];
-  return [
-    "Comprador",
-    [
-      ["RNCComprador", rnc],
-      ["RazonSocialComprador", nombre],
-    ],
-  ];
+  const sinDatos = !rnc && !nombre;
+  if (
+    perfil.comprador === "ninguno" ||
+    (sinDatos && perfil.comprador !== "anonimo" && perfil.comprador !== "identificado")
+  ) {
+    return ["Comprador", null];
+  }
+  const identificacion: Nodo =
+    perfil.comprador === "extranjero" ? ["IdentificadorExtranjero", rnc] : ["RNCComprador", rnc];
+  return ["Comprador", [identificacion, ["RazonSocialComprador", nombre]]];
 }
 
-function totales(doc: ComprobanteATransmitir): { nodo: Nodo; hayGravado: boolean } {
+function sumaRetenida(valores: (number | undefined)[]): number | null {
+  const definidos = valores.filter((v): v is number => v !== undefined);
+  return definidos.length === 0 ? null : redondear2(definidos.reduce((suma, v) => suma + v, 0));
+}
+
+function totales(doc: ComprobanteATransmitir, perfil: PerfilEcf): { nodo: Nodo; hayGravado: boolean } {
   const t = calcularTotalesEcf(doc.lineas);
+  const itbisRetenido =
+    perfil.retencion === "itbisEIsr" ? sumaRetenida(doc.lineas.map((l) => l.itbisRetenido ?? 0)) : null;
+  const isrRetenido = perfil.retencion === "ninguna" ? null : sumaRetenida(doc.lineas.map((l) => l.isrRetenido));
   return {
     hayGravado: t.hayGravado,
     nodo: [
@@ -140,12 +163,27 @@ function totales(doc: ComprobanteATransmitir): { nodo: Nodo; hayGravado: boolean
         ["TotalITBIS1", monto(t.totalItbis1)],
         ["TotalITBIS2", monto(t.totalItbis2)],
         ["MontoTotal", montoDgii(t.montoTotal)],
+        ["TotalITBISRetenido", monto(itbisRetenido)],
+        ["TotalISRRetencion", monto(isrRetenido)],
       ],
     ],
   };
 }
 
-function detalles(doc: ComprobanteATransmitir): Nodo {
+function retencionItem(linea: ComprobanteATransmitir["lineas"][number], perfil: PerfilEcf): Nodo {
+  if (perfil.retencion === "ninguna") return ["Retencion", null];
+  const itbis = perfil.retencion === "itbisEIsr" ? (linea.itbisRetenido ?? 0) : undefined;
+  return [
+    "Retencion",
+    [
+      ["IndicadorAgenteRetencionoPercepcion", "1"],
+      ["MontoITBISRetenido", itbis === undefined ? null : montoDgii(itbis)],
+      ["MontoISRRetenido", linea.isrRetenido === undefined ? null : montoDgii(linea.isrRetenido)],
+    ],
+  ];
+}
+
+function detalles(doc: ComprobanteATransmitir, perfil: PerfilEcf): Nodo {
   return [
     "DetallesItems",
     doc.lineas.map((linea, i): Nodo => [
@@ -153,8 +191,9 @@ function detalles(doc: ComprobanteATransmitir): Nodo {
       [
         ["NumeroLinea", String(i + 1)],
         ["IndicadorFacturacion", String(indicadorFacturacion(linea))],
+        retencionItem(linea, perfil),
         ["NombreItem", texto(linea.descripcion, 80) ?? "Artículo"],
-        ["IndicadorBienoServicio", "1"],
+        ["IndicadorBienoServicio", linea.esServicio ? "2" : "1"],
         ["CantidadItem", montoDgii(linea.cantidad)],
         ["PrecioUnitarioItem", montoDgii(linea.precioUnitario)],
         ["MontoItem", montoDgii(linea.subtotal)],
@@ -180,13 +219,13 @@ function informacionReferencia(doc: ComprobanteATransmitir): Nodo {
 export function construirXmlEcf(doc: ComprobanteATransmitir, fechaHoraFirma: Date): string {
   const perfil = perfilDe(doc.tipoEcf);
   validar(doc, perfil);
-  const { nodo: nodoTotales, hayGravado } = totales(doc);
+  const { nodo: nodoTotales, hayGravado } = totales(doc, perfil);
   return documentoXml("ECF", [
     [
       "Encabezado",
       [["Version", "1.0"], idDoc(doc, perfil, hayGravado), emisor(doc), comprador(doc, perfil), nodoTotales],
     ],
-    detalles(doc),
+    detalles(doc, perfil),
     informacionReferencia(doc),
     ["FechaHoraFirma", fechaHoraDgii(fechaHoraFirma)],
   ]);

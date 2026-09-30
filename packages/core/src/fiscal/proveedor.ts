@@ -21,6 +21,10 @@ export interface LineaATransmitir {
   precioUnitario: number;
   tasaImpuesto: number;
   subtotal: number;
+  /** Servicio (no bien): solo a un servicio se le retiene ISR en un E41. */
+  esServicio?: boolean;
+  itbisRetenido?: number;
+  isrRetenido?: number;
 }
 
 export interface PagoATransmitir {

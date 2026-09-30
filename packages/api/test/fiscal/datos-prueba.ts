@@ -93,3 +93,80 @@ export function gubernamentalPrueba(cambios: Partial<ComprobanteATransmitir> = {
     ...cambios,
   });
 }
+
+export function compraInformalPrueba(cambios: Partial<ComprobanteATransmitir> = {}): ComprobanteATransmitir {
+  return consumoPrueba({
+    ncf: "E410000000001",
+    tipoEcf: "41",
+    receptorDocumentoTipo: "rnc",
+    receptorDocumentoNumero: "101010101",
+    receptorNombre: "PLOMERO EJEMPLO SRL",
+    lineas: [
+      {
+        descripcion: "Reparación de tubería",
+        cantidad: 1,
+        precioUnitario: 1180,
+        tasaImpuesto: 0.18,
+        subtotal: 1180,
+        esServicio: true,
+        itbisRetenido: 54,
+        isrRetenido: 50,
+      },
+      {
+        descripcion: "Llave de paso",
+        cantidad: 2,
+        precioUnitario: 25,
+        tasaImpuesto: 0,
+        subtotal: 50,
+        itbisRetenido: 0,
+      },
+    ],
+    pagos: [],
+    montoGravado: 1000,
+    montoExento: 50,
+    montoItbis: 180,
+    total: 1230,
+    ...cambios,
+  });
+}
+
+export function gastoMenorPrueba(cambios: Partial<ComprobanteATransmitir> = {}): ComprobanteATransmitir {
+  return consumoPrueba({
+    ncf: "E430000000001",
+    tipoEcf: "43",
+    lineas: [{ descripcion: "Taxi a la aduana", cantidad: 1, precioUnitario: 350, tasaImpuesto: 0, subtotal: 350 }],
+    pagos: [],
+    montoGravado: 0,
+    montoExento: 350,
+    montoItbis: 0,
+    total: 350,
+    ...cambios,
+  });
+}
+
+export function pagoExteriorPrueba(cambios: Partial<ComprobanteATransmitir> = {}): ComprobanteATransmitir {
+  return consumoPrueba({
+    ncf: "E470000000001",
+    tipoEcf: "47",
+    receptorDocumentoTipo: null,
+    receptorDocumentoNumero: "PA1234567",
+    receptorNombre: "ACME LLC",
+    lineas: [
+      {
+        descripcion: "Licencia de software",
+        cantidad: 1,
+        precioUnitario: 10000,
+        tasaImpuesto: 0,
+        subtotal: 10000,
+        esServicio: true,
+        isrRetenido: 2700,
+      },
+    ],
+    pagos: [],
+    montoGravado: 0,
+    montoExento: 10000,
+    montoItbis: 0,
+    total: 10000,
+    ...cambios,
+  });
+}
