@@ -10,6 +10,7 @@ import {
   crearDevolucionRepo,
   cobrarConFiscal,
   registrarDevolucionConFiscal,
+  emitirNotaDebitoFiscal,
   reconciliarComprobantesPendientes,
   anularNcfPendientes,
   ValidacionError,
@@ -344,6 +345,156 @@ function crearProveedorQueRechazaDespues(aceptadas: number): ProveedorFiscal {
     },
   };
 }
+
+describe("emitirNotaDebitoFiscal — nota de débito E33 hacia la DGII", () => {
+  let db: SqlDriver;
+
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
+
+  async function ventaFiscal(d: ReturnType<typeof depsCon>, conSecuencia33 = true) {
+    await d.secuenciaRepo.crear({ tipoEcf: "32", rangoDesde: 1, rangoHasta: 100, vencimiento: hoyMasDias(365) });
+    if (conSecuencia33) {
+      await d.secuenciaRepo.crear({ tipoEcf: "33", rangoDesde: 1, rangoHasta: 100, vencimiento: hoyMasDias(400) });
+    }
+    const t = await ticket(d.facturaRepo, 118, 1);
+    const { comprobante } = await cobrarConFiscal(d, t.id, {
+      pagos: [{ metodo: "efectivo", monto: 118 }],
+      tipoEcf: "32",
+      emisor: EMISOR,
+    });
+    return comprobante;
+  }
+
+  it("referencia el comprobante original y transmite el cargo adicional con su ITBIS", async () => {
+    const { proveedor, recibidos } = proveedorQueResponde(ACEPTADO);
+    const d = depsCon(db, proveedor);
+    const original = await ventaFiscal(d);
+
+    const { comprobante } = await emitirNotaDebitoFiscal(
+      d,
+      {
+        comprobanteId: original.id,
+        concepto: "Interés por mora",
+        monto: 59,
+        tasaImpuesto: 0.18,
+        codigoModificacion: 3,
+        motivo: "Pago tardío",
+      },
+      EMISOR,
+    );
+
+    const nota = recibidos.at(-1);
+    expect(nota?.tipoEcf).toBe("33");
+    expect(nota?.ncf).toBe("E330000000001");
+    expect(nota?.fechaVencimientoSecuencia).toBe(hoyMasDias(400));
+    expect(nota?.referencia).toEqual({
+      ncfModificado: original.ncf,
+      fechaNcfModificado: original.fecha_emision,
+      codigoModificacion: 3,
+      razon: "Pago tardío",
+    });
+    expect(nota?.lineas).toEqual([
+      { descripcion: "Interés por mora", cantidad: 1, precioUnitario: 59, tasaImpuesto: 0.18, subtotal: 59 },
+    ]);
+    expect(nota?.pagos).toEqual([]);
+    expect([nota?.montoGravado, nota?.montoItbis, nota?.montoExento, nota?.total]).toEqual([50, 9, 0, 59]);
+
+    expect(comprobante.tipo_ecf).toBe("33");
+    expect(comprobante.ncf).toBe("E330000000001");
+    expect(comprobante.factura_id).toBe(original.factura_id);
+    expect(comprobante.estado_dgii).toBe("aceptado");
+    expect(comprobante.total).toBe(59);
+  });
+
+  const BASE = {
+    concepto: "Flete",
+    monto: 100,
+    tasaImpuesto: 0 as const,
+    codigoModificacion: 3 as const,
+    motivo: null,
+  };
+
+  it("un cargo exento no desglosa ITBIS", async () => {
+    const { proveedor, recibidos } = proveedorQueResponde(ACEPTADO);
+    const d = depsCon(db, proveedor);
+    const original = await ventaFiscal(d);
+
+    await emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: original.id }, EMISOR);
+
+    const nota = recibidos.at(-1);
+    expect([nota?.montoGravado, nota?.montoItbis, nota?.montoExento, nota?.total]).toEqual([0, 0, 100, 100]);
+  });
+
+  it("si la DGII rechaza la nota, su número queda en cola para anular", async () => {
+    const d = depsCon(db, crearProveedorQueRechazaDespues(1));
+    const original = await ventaFiscal(d);
+
+    await expect(emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: original.id }, EMISOR)).rejects.toBeInstanceOf(
+      ValidacionError,
+    );
+
+    expect((await d.anulacionRepo.listarPendientes()).map((p) => p.ncf)).toEqual(["E330000000001"]);
+  });
+
+  it("sin secuencia E33 vigente no consume ni transmite nada", async () => {
+    const { proveedor, recibidos } = proveedorQueResponde(ACEPTADO);
+    const d = depsCon(db, proveedor);
+    const original = await ventaFiscal(d, false);
+    const antes = recibidos.length;
+
+    await expect(emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: original.id }, EMISOR)).rejects.toThrow(/E33/);
+    expect(recibidos.length).toBe(antes);
+  });
+
+  it("exige los datos del emisor antes de consumir un número", async () => {
+    const d = depsCon(db, proveedorQueResponde(ACEPTADO).proveedor);
+    const original = await ventaFiscal(d);
+
+    await expect(
+      emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: original.id }, { ...EMISOR, rnc: "" }),
+    ).rejects.toBeInstanceOf(ValidacionError);
+    expect((await d.secuenciaRepo.obtenerVigente("33"))?.proximo_numero).toBe(1);
+  });
+
+  it.each([
+    ["monto cero", { monto: 0 }],
+    ["monto negativo", { monto: -5 }],
+    ["tres decimales", { monto: 10.123 }],
+    ["tasa no soportada", { tasaImpuesto: 0.1 as never }],
+    ["concepto vacío", { concepto: "  " }],
+  ])("rechaza %s sin consumir número", async (_nombre, cambio) => {
+    const { proveedor, recibidos } = proveedorQueResponde(ACEPTADO);
+    const d = depsCon(db, proveedor);
+    const original = await ventaFiscal(d);
+    const antes = recibidos.length;
+
+    await expect(
+      emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: original.id, ...cambio }, EMISOR),
+    ).rejects.toBeInstanceOf(ValidacionError);
+    expect(recibidos.length).toBe(antes);
+  });
+
+  it("no permite una nota de débito sobre un comprobante que no tiene validez fiscal", async () => {
+    const d = depsCon(db, proveedorQueResponde({ estado: "en_proceso", trackId: "T1" }).proveedor);
+    const original = await ventaFiscal(d);
+
+    await expect(emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: original.id }, EMISOR)).rejects.toThrow(
+      /validez fiscal/,
+    );
+  });
+
+  it("no permite una nota de débito sobre otra nota", async () => {
+    const d = depsCon(db, proveedorQueResponde(ACEPTADO).proveedor);
+    const original = await ventaFiscal(d);
+    const { comprobante: nota } = await emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: original.id }, EMISOR);
+
+    await expect(emitirNotaDebitoFiscal(d, { ...BASE, comprobanteId: nota.id }, EMISOR)).rejects.toThrow(
+      /E31 o un E32/,
+    );
+  });
+});
 
 describe("reconciliarComprobantesPendientes", () => {
   let db: SqlDriver;

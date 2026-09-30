@@ -56,6 +56,13 @@ export {
   type ResultadoDevolucionFiscal,
 } from "./fiscal/devolucion-fiscal.js";
 export {
+  emitirNotaDebitoFiscal,
+  TASAS_NOTA_DEBITO,
+  type NotaDebitoInput,
+  type NotaDebitoFiscalDeps,
+  type ResultadoNotaDebitoFiscal,
+} from "./fiscal/nota-debito-fiscal.js";
+export {
   crearClienteAuth,
   iniciarSesionGoogleWeb,
   iniciarSesionGoogleDesktop,
