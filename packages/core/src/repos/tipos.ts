@@ -341,6 +341,8 @@ export interface Negocio extends Auditoria {
   razon_social: string | null;
   rnc: string | null;
   direccion: string | null;
+  municipio: string | null;
+  provincia: string | null;
   telefono: string | null;
   correo: string | null;
   logo_ruta: string | null;

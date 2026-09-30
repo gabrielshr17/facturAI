@@ -631,4 +631,12 @@ export const migrations: Migration[] = [
       DROP TABLE IF EXISTS devolucion_enlace_respaldo;
     `,
   },
+  {
+    id: 17,
+    nombre: "negocio_ubicacion",
+    sql: /* sql */ `
+      ALTER TABLE negocio ADD COLUMN municipio TEXT;
+      ALTER TABLE negocio ADD COLUMN provincia TEXT;
+    `,
+  },
 ];

@@ -1,6 +1,6 @@
 import type { ReciboDatos } from "./recibo.js";
 import type { CotizacionImpresionDatos } from "./cotizacion.js";
-import { datosComprador, descripcionLinea, encabezadoFiscal } from "./representacion.js";
+import { datosComprador, descripcionLinea, encabezadoFiscal, lineasDireccionEmisor } from "./representacion.js";
 
 /**
  * Generador de comandos ESC/POS crudos para impresoras térmicas (§ hardware,
@@ -151,7 +151,7 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
     b.linea(negocio.razon_social);
   }
   if (negocio.rnc) b.linea(`RNC: ${negocio.rnc}`);
-  if (negocio.direccion) b.linea(negocio.direccion);
+  for (const l of lineasDireccionEmisor(negocio)) b.linea(l);
   if (negocio.telefono) b.linea(`Tel: ${negocio.telefono}`);
   b.alinear("izq").separador(ancho);
 

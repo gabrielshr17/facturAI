@@ -17,6 +17,8 @@ const VACIO: NegocioInput = {
   razon_social: "",
   rnc: "",
   direccion: "",
+  municipio: "",
+  provincia: "",
   telefono: "",
   correo: "",
   ancho_impresora_default: 80,
@@ -46,6 +48,8 @@ export function Configuracion() {
           razon_social: n.razon_social ?? "",
           rnc: n.rnc ?? "",
           direccion: n.direccion ?? "",
+          municipio: n.municipio ?? "",
+          provincia: n.provincia ?? "",
           telefono: n.telefono ?? "",
           correo: n.correo ?? "",
           ancho_impresora_default: n.ancho_impresora_default as 58 | 80,
@@ -150,6 +154,22 @@ export function Configuracion() {
               style={s.input}
               value={form.direccion ?? ""}
               onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={s.label}>Municipio</label>
+            <input
+              style={s.input}
+              value={form.municipio ?? ""}
+              onChange={(e) => setForm({ ...form, municipio: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={s.label}>Provincia</label>
+            <input
+              style={s.input}
+              value={form.provincia ?? ""}
+              onChange={(e) => setForm({ ...form, provincia: e.target.value })}
             />
           </div>
         </div>

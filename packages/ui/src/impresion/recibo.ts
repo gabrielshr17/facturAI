@@ -1,7 +1,7 @@
 import type { Factura, FacturaLinea, Cliente, Negocio } from "@sfr/core";
 import { generarEscPos } from "./escpos.js";
 import { svgQr } from "./qr.js";
-import { datosComprador, descripcionLinea, encabezadoFiscal } from "./representacion.js";
+import { datosComprador, descripcionLinea, encabezadoFiscal, lineasDireccionEmisor } from "./representacion.js";
 import {
   hayImpresoraTermicaDisponible,
   obtenerImpresoraSeleccionada,
@@ -43,7 +43,7 @@ export interface ComprobanteRecibo {
 
 export interface ReciboDatos {
   negocio: Pick<Negocio, "nombre_comercial" | "rnc" | "direccion" | "telefono" | "ancho_impresora_default"> &
-    Partial<Pick<Negocio, "razon_social">>;
+    Partial<Pick<Negocio, "razon_social" | "municipio" | "provincia">>;
   factura: Pick<
     Factura,
     | "numero_interno"
@@ -137,7 +137,9 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
   <div class="centro">
     ${comprobante && negocio.razon_social && negocio.razon_social !== negocio.nombre_comercial ? `${escapeHtml(negocio.razon_social)}<br/>` : ""}
     ${negocio.rnc ? `RNC: ${escapeHtml(negocio.rnc)}<br/>` : ""}
-    ${negocio.direccion ? `${escapeHtml(negocio.direccion)}<br/>` : ""}
+    ${lineasDireccionEmisor(negocio)
+      .map((l) => `${escapeHtml(l)}<br/>`)
+      .join("")}
     ${negocio.telefono ? `Tel: ${escapeHtml(negocio.telefono)}` : ""}
   </div>
   <hr/>
@@ -212,7 +214,7 @@ function generarTextoRecibo(datos: ReciboDatos): string[] {
     out.push(negocio.razon_social);
   }
   if (negocio.rnc) out.push(`RNC: ${negocio.rnc}`);
-  if (negocio.direccion) out.push(negocio.direccion);
+  out.push(...lineasDireccionEmisor(negocio));
   if (negocio.telefono) out.push(`Tel: ${negocio.telefono}`);
   out.push(separador);
 

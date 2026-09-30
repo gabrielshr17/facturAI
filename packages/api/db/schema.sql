@@ -18,6 +18,8 @@ CREATE TABLE negocio (
   razon_social             TEXT,
   rnc                      TEXT,
   direccion                TEXT,
+  municipio                TEXT,
+  provincia                TEXT,
   telefono                 TEXT,
   correo                   TEXT,
   logo_ruta                TEXT,

@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { ComprobanteRecibo, ReciboDatos } from "./recibo.js";
-import { datosComprador, descripcionLinea, encabezadoFiscal } from "./representacion.js";
+import { datosComprador, descripcionLinea, encabezadoFiscal, lineasDireccionEmisor } from "./representacion.js";
 import { modulosQr } from "./qr.js";
 
 /**
@@ -36,6 +36,8 @@ interface NegocioPdf {
   razon_social?: string | null;
   rnc: string | null;
   direccion: string | null;
+  municipio?: string | null;
+  provincia?: string | null;
   telefono: string | null;
 }
 
@@ -91,7 +93,7 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
       ? datos.negocio.razon_social
       : null,
     datos.negocio.rnc ? `RNC: ${datos.negocio.rnc}` : null,
-    datos.negocio.direccion,
+    ...lineasDireccionEmisor(datos.negocio),
     datos.negocio.telefono ? `Tel: ${datos.negocio.telefono}` : null,
   ].filter((l): l is string => !!l);
   for (const l of lineasNegocio) {

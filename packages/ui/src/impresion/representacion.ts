@@ -56,6 +56,18 @@ function referenciaDesdeXml(xml: string | null): ComprobanteRecibo["referencia"]
   return ncfModificado && descripcion ? { ncfModificado, codigoModificacion: descripcion } : null;
 }
 
+export function lineasDireccionEmisor(negocio: {
+  direccion?: string | null;
+  municipio?: string | null;
+  provincia?: string | null;
+}): string[] {
+  return [
+    negocio.direccion,
+    negocio.municipio ? `Municipio: ${negocio.municipio}` : null,
+    negocio.provincia ? `Provincia: ${negocio.provincia}` : null,
+  ].filter((l): l is string => !!l);
+}
+
 /** Datos de la RI a partir del comprobante guardado (venta nueva o reimpresión). */
 export async function comprobanteParaRecibo(
   comprobante: ComprobanteFiscal,
