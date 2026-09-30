@@ -95,7 +95,7 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 ## Necesita al usuario (no se avanza sin él)
 
 - Hosting + dominio con SSL para las URL públicas (cuenta de Render/Fly/Railway).
-- ISC de alcoholes (vinos del catálogo): código, tasa, grados, cantidad referencia — del contable.
+- ISC de alcoholes: decidido NO construirlo (se compra a un distribuidor; ver docs/investigacion-fiscal.md). Pedir al contador que lo confirme.
 - Política offline: mantener "sin conexión no hay venta fiscal" o adoptar contingencia DGII de 72 h.
 - OK para aplicar el esquema a Supabase (F3).
 - Certificado .p12 y acceso OFV (ver `packages/api/README.md`).

@@ -17,7 +17,12 @@ contador aún no ha confirmado. **Nada de esto sustituye la confirmación del co
   el ISC), `CantidadReferencia`, `GradosAlcohol`, `PrecioUnitarioReferencia` (PVP) y los montos de ISC específico y
   ad valorem; los totales llevan `MontoImpuestoAdicional`. Los selectivos **sí forman parte de la base imponible del
   ITBIS**, lo que cambia el cálculo actual (hoy el ITBIS se extrae del precio).
-- **Sin construir:** afecta el cálculo de cada venta de alcohol. Necesita que el contador confirme cómo se compone el
+- **Decisión (2026-09-30): no se construye.** Las notas del Formato e-CF limitan los campos del ISC específico y el precio de lista
+  al productor, fabricante o importador. El negocio compra el vino a un distribuidor, así que el ISC ya viene dentro del
+  precio de compra y los vinos se facturan con el ITBIS normal. Falta la confirmación del contador; si resultara que
+  debe desglosarlo, construirlo opt-in por producto (vino sin categoría ISC = facturación actual) y arrastrarlo en
+  devoluciones y notas de crédito.
+- **Si se construyera:** afecta el cálculo de cada venta de alcohol. Necesita que el contador confirme cómo se compone el
   precio de góndola (ISC + ITBIS incluidos), la categoría y el código de cada producto.
 
 Fuentes: Norma General 06-19 (DGII); "Cambios en el ISC: alcohol, tabaco y vapeadores con la Ley 30-26"
