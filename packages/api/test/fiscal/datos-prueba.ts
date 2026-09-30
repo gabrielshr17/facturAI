@@ -82,3 +82,14 @@ export function notaDebitoPrueba(cambios: Partial<ComprobanteATransmitir> = {}):
     ...cambios,
   });
 }
+
+export function gubernamentalPrueba(cambios: Partial<ComprobanteATransmitir> = {}): ComprobanteATransmitir {
+  return consumoPrueba({
+    ncf: "E450000000001",
+    tipoEcf: "45",
+    receptorDocumentoTipo: "rnc",
+    receptorDocumentoNumero: "401000001",
+    receptorNombre: "MINISTERIO EJEMPLO",
+    ...cambios,
+  });
+}

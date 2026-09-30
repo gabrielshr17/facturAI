@@ -8,6 +8,7 @@ export interface PerfilEcf {
   indicadorNotaCredito: boolean;
   formasPago: boolean;
   compradorOpcional: boolean;
+  compradorIdentificado: boolean;
   exigeReferencia: boolean;
 }
 
@@ -17,6 +18,7 @@ const PERFILES: Partial<Record<TipoEcfEmitible, PerfilEcf>> = {
     indicadorNotaCredito: false,
     formasPago: true,
     compradorOpcional: false,
+    compradorIdentificado: true,
     exigeReferencia: false,
   },
   "32": {
@@ -24,6 +26,7 @@ const PERFILES: Partial<Record<TipoEcfEmitible, PerfilEcf>> = {
     indicadorNotaCredito: false,
     formasPago: true,
     compradorOpcional: false,
+    compradorIdentificado: false,
     exigeReferencia: false,
   },
   "33": {
@@ -31,6 +34,7 @@ const PERFILES: Partial<Record<TipoEcfEmitible, PerfilEcf>> = {
     indicadorNotaCredito: false,
     formasPago: false,
     compradorOpcional: true,
+    compradorIdentificado: false,
     exigeReferencia: true,
   },
   "34": {
@@ -38,7 +42,16 @@ const PERFILES: Partial<Record<TipoEcfEmitible, PerfilEcf>> = {
     indicadorNotaCredito: true,
     formasPago: false,
     compradorOpcional: true,
+    compradorIdentificado: false,
     exigeReferencia: true,
+  },
+  "45": {
+    vencimientoSecuencia: true,
+    indicadorNotaCredito: false,
+    formasPago: true,
+    compradorOpcional: false,
+    compradorIdentificado: true,
+    exigeReferencia: false,
   },
 };
 

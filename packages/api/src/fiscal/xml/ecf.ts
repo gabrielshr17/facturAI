@@ -57,10 +57,8 @@ function validar(doc: ComprobanteATransmitir, perfil: PerfilEcf): void {
   if (!texto(doc.emisor.rnc) || !texto(doc.emisor.razonSocial) || !texto(doc.emisor.direccion)) {
     throw new DocumentoFiscalInvalidoError("Faltan datos del emisor (RNC, razón social o dirección).");
   }
-  if (doc.tipoEcf === "31") {
-    if (!texto(doc.receptorDocumentoNumero) || !texto(doc.receptorNombre)) {
-      throw new DocumentoFiscalInvalidoError("El E31 requiere RNC y razón social del comprador.");
-    }
+  if (perfil.compradorIdentificado && (!texto(doc.receptorDocumentoNumero) || !texto(doc.receptorNombre))) {
+    throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} requiere RNC y razón social del comprador.`);
   }
   if (perfil.vencimientoSecuencia && !doc.fechaVencimientoSecuencia) {
     throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} requiere la fecha de vencimiento de la secuencia.`);
@@ -184,7 +182,10 @@ export function construirXmlEcf(doc: ComprobanteATransmitir, fechaHoraFirma: Dat
   validar(doc, perfil);
   const { nodo: nodoTotales, hayGravado } = totales(doc);
   return documentoXml("ECF", [
-    ["Encabezado", [["Version", "1.0"], idDoc(doc, perfil, hayGravado), emisor(doc), comprador(doc, perfil), nodoTotales]],
+    [
+      "Encabezado",
+      [["Version", "1.0"], idDoc(doc, perfil, hayGravado), emisor(doc), comprador(doc, perfil), nodoTotales],
+    ],
     detalles(doc),
     informacionReferencia(doc),
     ["FechaHoraFirma", fechaHoraDgii(fechaHoraFirma)],

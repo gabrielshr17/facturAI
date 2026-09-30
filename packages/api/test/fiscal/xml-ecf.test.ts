@@ -3,7 +3,13 @@ import { construirXmlEcf } from "../../src/fiscal/xml/ecf.js";
 import { cargarCertificado, firmarXml } from "../../src/fiscal/firma.js";
 import { certificadoPrueba, CLAVE_P12_PRUEBA } from "./certificado-prueba.js";
 import { erroresContraXsd } from "./xsd.js";
-import { consumoPrueba, creditoFiscalPrueba, notaCreditoPrueba, notaDebitoPrueba } from "./datos-prueba.js";
+import {
+  consumoPrueba,
+  creditoFiscalPrueba,
+  notaCreditoPrueba,
+  notaDebitoPrueba,
+  gubernamentalPrueba,
+} from "./datos-prueba.js";
 
 const FIRMA = new Date("2026-10-01T18:31:05.000Z");
 
@@ -246,6 +252,31 @@ describe("XML e-CF 33 (nota de débito)", () => {
 
   it("se niega a construir una nota de débito sin vencimiento de secuencia", () => {
     expect(() => construirXmlEcf(notaDebitoPrueba({ fechaVencimientoSecuencia: null }), FIRMA)).toThrow(/vencimiento/i);
+  });
+});
+
+describe("XML e-CF 45 (gubernamental)", () => {
+  it("cumple el XSD oficial con comprador, vencimiento de secuencia y ITBIS normal", async () => {
+    const xml = construirXmlEcf(gubernamentalPrueba(), FIRMA);
+
+    expect(valorDe(xml, "TipoeCF")).toBe("45");
+    expect(valorDe(xml, "FechaVencimientoSecuencia")).toBe("31-12-2027");
+    expect(valorDe(xml, "RNCComprador")).toBe("401000001");
+    expect(valorDe(xml, "RazonSocialComprador")).toBe("MINISTERIO EJEMPLO");
+    expect(valorDe(xml, "TotalITBIS")).toBe("36.00");
+    expect(xml).toContain("<TablaFormasPago>");
+    expect(await erroresContraXsd(firmado(xml), "ecf-45")).toEqual([]);
+  });
+
+  it("se niega a construir un E45 sin RNC o sin razón social del comprador", () => {
+    expect(() => construirXmlEcf(gubernamentalPrueba({ receptorDocumentoNumero: null }), FIRMA)).toThrow(/RNC/);
+    expect(() => construirXmlEcf(gubernamentalPrueba({ receptorNombre: null }), FIRMA)).toThrow(/razón social/);
+  });
+
+  it("se niega a construir un E45 sin vencimiento de secuencia", () => {
+    expect(() => construirXmlEcf(gubernamentalPrueba({ fechaVencimientoSecuencia: null }), FIRMA)).toThrow(
+      /vencimiento/i,
+    );
   });
 });
 
