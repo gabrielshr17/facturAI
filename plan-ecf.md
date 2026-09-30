@@ -82,7 +82,9 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
       botón en Consultar facturas y RI con "e-NCF modificado" + código de modificación en palabras.
       **Falta:** reimprimir una nota ya guardada y la RI de E34 al devolver (hoy solo se imprime la E33 recién
       emitida); configurar la secuencia E33 en Configuración (verificar que la lista de tipos la ofrezca).
-- [ ] H3. E45, E44, E46 (ventas especiales, desde el modal de cobro).
+- [x] H3a. E45 (gubernamental): XML, cobro (exige RNC y razón social), entrega al comprador y selección en el modal de cobro.
+- [ ] H3b. E44 y E46 (sin ITBIS). **Bloqueado:** requieren un modo de ticket exonerado de ITBIS (hoy un ticket siempre
+      calcula ITBIS); decidir con el contador. E46 además usa ITBIS a tasa 0% (ITBIS3) y datos de embarque.
 - [ ] H4. E41, E43, E47 (gastos y compras emitidos al proveedor, flujo nuevo en Compras).
 - [ ] H5. Transversal: secuencias por tipo en Configuración, generador/`set-pruebas` para los tipos nuevos.
 
@@ -110,3 +112,6 @@ Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1
 - 2026-09-30: H1–H2 (perfiles por tipo y nota de débito E33). El paquete `@sfr/ui` ahora tiene vitest. Decisiones:
   la nota de débito usa siempre código de modificación 3 (corrige montos); "corrige texto" no aplica a un cargo
   monetario.
+- 2026-09-30 (tarde): H3a (E45). La nota de débito solo admite E31/E32 como comprobante original; si hace falta sobre un
+  E45, ampliar `TIPOS_MODIFICABLES` en core y `admiteNotaDebito` en la UI. La lista de secuencias de Configuración ya
+  ofrece todos los tipos, incluido E33.
