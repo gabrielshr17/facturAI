@@ -5,7 +5,11 @@ import {
   type Compra,
   type CompraLinea,
   type ComprobanteArchivo,
+  type ComprobanteFiscal,
   type ImpuestoTipo,
+  type Negocio,
+  ETIQUETA_TIPO_ECF,
+  emisorDesdeNegocio,
 } from "@sfr/core";
 import { Truck, Star, Sparkles } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
@@ -14,6 +18,9 @@ import { analizarComprobante, type DatosExtraidosComprobante } from "../data/cha
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { filtrarNumero } from "../utilidades/numero.js";
 import { mensajeError } from "../utilidades/errores.js";
+import { ComprobantesProveedores, type EcfParaCompra } from "../componentes/ComprobantesProveedores.js";
+import { ModalComprobanteCompra } from "../componentes/ModalComprobanteCompra.js";
+import { marcarEcfRecibidoImportado } from "../data/fiscalCliente.js";
 
 interface LineaLocal {
   producto_id: string | null;
@@ -42,7 +49,18 @@ function leerArchivoComoBase64(file: File): Promise<string> {
 
 /** Compras (§ Compras e inventario, con archivado): registrar una compra y consultar el historial. */
 export function Compras() {
-  const { compra: repo, proveedor: proveedores, producto: productos, comprobanteArchivo: archivos } = useRepos();
+  const {
+    compra: repo,
+    proveedor: proveedores,
+    producto: productos,
+    comprobanteArchivo: archivos,
+    comprobanteFiscal,
+    negocio: negocioRepo,
+    api,
+    modoFiscal,
+  } = useRepos();
+  const [ecfOrigenId, setEcfOrigenId] = useState<string | null>(null);
+  const [recargarRecibidos, setRecargarRecibidos] = useState(0);
 
   // --- Formulario de nueva compra --------------------------------------
   const [fecha, setFecha] = useState(hoyIso());
@@ -81,6 +99,9 @@ export function Compras() {
   const [lineasSel, setLineasSel] = useState<CompraLinea[]>([]);
   const [archivosSel, setArchivosSel] = useState<ComprobanteArchivo[]>([]);
   const [proveedoresPorId, setProveedoresPorId] = useState<Record<string, Proveedor>>({});
+  const [comprobanteSel, setComprobanteSel] = useState<ComprobanteFiscal | null | undefined>(undefined);
+  const [mostrarEmitir, setMostrarEmitir] = useState(false);
+  const [negocio, setNegocio] = useState<Negocio | null>(null);
 
   const proveedorRef = useRef<HTMLInputElement>(null);
   const busquedaProductoRef = useRef<HTMLInputElement>(null);
@@ -118,9 +139,28 @@ export function Compras() {
 
   useEffect(() => {
     if (!seleccionadaId) return;
-    void repo.obtenerLineas(seleccionadaId).then(setLineasSel);
-    void archivos.obtenerPorCompra(seleccionadaId).then(setArchivosSel);
-  }, [repo, archivos, seleccionadaId]);
+    let vigente = true;
+    setLineasSel([]);
+    setArchivosSel([]);
+    setComprobanteSel(undefined);
+    void repo.obtenerLineas(seleccionadaId).then((x) => vigente && setLineasSel(x));
+    void archivos.obtenerPorCompra(seleccionadaId).then((x) => vigente && setArchivosSel(x));
+    void comprobanteFiscal.obtenerPorCompra(seleccionadaId).then((x) => vigente && setComprobanteSel(x ?? null));
+    return () => {
+      vigente = false;
+    };
+  }, [repo, archivos, comprobanteFiscal, seleccionadaId]);
+
+  useEffect(() => {
+    void negocioRepo.obtener().then((n) => setNegocio(n ?? null));
+  }, [negocioRepo]);
+
+  async function recargarTrasEmitir() {
+    if (seleccionadaId) {
+      setComprobanteSel((await comprobanteFiscal.obtenerPorCompra(seleccionadaId)) ?? null);
+    }
+    await cargarHistorial();
+  }
 
   async function buscarProveedor(q: string) {
     setProveedorQ(q);
@@ -199,7 +239,7 @@ export function Compras() {
     setAnalizando(true);
     try {
       const base64 = await leerArchivoComoBase64(archivo);
-      const datos = await analizarComprobante({ data: base64, tipoMime: archivo.type || "image/jpeg" });
+      const datos = await analizarComprobante(api, { data: base64, tipoMime: archivo.type || "image/jpeg" });
       setDatosIA(datos);
       // Solo se rellenan campos que mapean 1:1 al formulario. Los renglones
       // de la compra NO se generan automáticamente — la herramienta solo lee
@@ -216,7 +256,35 @@ export function Compras() {
     }
   }
 
+  /** Pasa al formulario un e-CF recibido de un proveedor: el usuario revisa y guarda como cualquier compra. */
+  async function usarEcfEnCompra(ecf: EcfParaCompra) {
+    setError(null);
+    setMensaje(null);
+    try {
+      const { recibido, items } = ecf;
+      const conocido = (await proveedores.listar()).find((p) => p.rnc === recibido.rncEmisor);
+      const proveedor =
+        conocido ??
+        (await proveedores.crear({
+          nombre: recibido.razonSocialEmisor || `RNC ${recibido.rncEmisor}`,
+          rnc: recibido.rncEmisor,
+        }));
+      const [dia, mes, anio] = recibido.fechaEmision.split("-");
+      if (dia && mes && anio) setFecha(`${anio}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`);
+      setProveedorSel(proveedor);
+      setNcfProveedor(recibido.encf);
+      setTieneComprobanteFiscal(true);
+      setNotas(`e-CF ${recibido.encf} recibido de ${recibido.razonSocialEmisor || recibido.rncEmisor}`);
+      setLineas(items.map((i) => ({ producto_id: null, ...i })));
+      setEcfOrigenId(ecf.id);
+      setMensaje("Revisa los artículos (puedes enlazarlos a productos del catálogo) y guarda la compra.");
+    } catch (e) {
+      setError(mensajeError(e));
+    }
+  }
+
   function limpiarFormulario() {
+    setEcfOrigenId(null);
     setFecha(hoyIso());
     setProveedorSel(null);
     setNcfProveedor("");
@@ -268,6 +336,14 @@ export function Compras() {
         });
       }
 
+      if (ecfOrigenId) {
+        try {
+          await marcarEcfRecibidoImportado(api, ecfOrigenId);
+        } catch (e) {
+          console.warn("La compra se guardó, pero no se pudo marcar el e-CF como registrado", e);
+        }
+        setRecargarRecibidos((n) => n + 1);
+      }
       setMensaje("Compra registrada.");
       limpiarFormulario();
       await cargarHistorial();
@@ -282,6 +358,12 @@ export function Compras() {
 
   return (
     <div>
+      {modoFiscal === "dgii" && (
+        <ComprobantesProveedores
+          onUsarEnCompra={(ecf) => void usarEcfEnCompra(ecf)}
+          recargarSeñal={recargarRecibidos}
+        />
+      )}
       <div style={{ ...s.tarjeta, marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <Truck size={18} /> Nueva compra
@@ -731,6 +813,28 @@ export function Compras() {
               <span>RD$ {money(seleccionada.total)}</span>
             </div>
 
+            {comprobanteSel && (
+              <p style={{ margin: "12px 0 0", fontSize: 13 }}>
+                <strong>{ETIQUETA_TIPO_ECF[comprobanteSel.tipo_ecf]}</strong>
+                <br />
+                NCF: {comprobanteSel.ncf}
+                <br />
+                DGII: {ESTADO_DGII_COMPRA[comprobanteSel.estado_dgii]}
+              </p>
+            )}
+            {comprobanteSel === null &&
+              lineasSel.length > 0 &&
+              !seleccionada.ncf_proveedor &&
+              modoFiscal === "dgii" && (
+                <button
+                  type="button"
+                  style={{ ...s.botonSecundario, marginTop: 12, minHeight: 44, width: "100%" }}
+                  onClick={() => setMostrarEmitir(true)}
+                >
+                  Emitir comprobante fiscal
+                </button>
+              )}
+
             {archivosSel.length > 0 && (
               <div style={{ marginTop: 12 }}>
                 <label style={s.label}>Comprobante adjunto</label>
@@ -750,6 +854,25 @@ export function Compras() {
           </div>
         )}
       </div>
+
+      {mostrarEmitir && seleccionada && (
+        <ModalComprobanteCompra
+          compra={seleccionada}
+          lineas={lineasSel}
+          proveedor={seleccionada.proveedor_id ? (proveedoresPorId[seleccionada.proveedor_id] ?? null) : null}
+          emisor={emisorDesdeNegocio(negocio)}
+          onCerrar={() => setMostrarEmitir(false)}
+          onEmitida={() => void recargarTrasEmitir()}
+        />
+      )}
     </div>
   );
 }
+
+const ESTADO_DGII_COMPRA: Record<ComprobanteFiscal["estado_dgii"], string> = {
+  pendiente: "en proceso de validación",
+  aceptado: "aceptado",
+  aceptado_condicional: "aceptado condicional",
+  rechazado: "rechazado",
+  contingencia: "contingencia",
+};

@@ -6,15 +6,20 @@ import {
   type Cliente,
   type ComprobanteFiscal,
   type Negocio,
+  type EstadoDgii,
   ETIQUETA_TIPO_ECF,
+  emisorDesdeNegocio,
   normalizar,
 } from "@sfr/core";
 import { Receipt, ClipboardList } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
+import { ejecutarCicloFiscal } from "../data/seguimientoFiscal.js";
+import { comprobanteParaRecibo, datosReciboNotaGuardada } from "../impresion/representacion.js";
 import { imprimirRecibo } from "../impresion/recibo.js";
 import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
 import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
+import { ModalNotaDebito } from "../componentes/ModalNotaDebito.js";
 import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { useEsAngosto } from "../hooks/useBreakpoint.js";
@@ -42,7 +47,23 @@ const TIPOS: { valor: "" | "normal" | "fiscal"; etiqueta: string }[] = [
 
 /** Consulta de facturas ya cobradas: filtrar, ver detalle y reimprimir. */
 function FacturasCobradas() {
-  const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo } = useRepos();
+  const repos = useRepos();
+  const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo, secuenciaNcf, modoFiscal } = repos;
+  const [consultandoDgii, setConsultandoDgii] = useState(false);
+  const [avisoDgii, setAvisoDgii] = useState<string | null>(null);
+
+  async function consultarDgiiAhora() {
+    setConsultandoDgii(true);
+    setAvisoDgii(null);
+    try {
+      await ejecutarCicloFiscal(repos);
+      await cargar();
+    } catch (e) {
+      setAvisoDgii(mensajeError(e));
+    } finally {
+      setConsultandoDgii(false);
+    }
+  }
   const { elegir } = useAlertas();
   const esAngosto = useEsAngosto();
 
@@ -60,6 +81,9 @@ function FacturasCobradas() {
   const [pagosSel, setPagosSel] = useState<Pago[]>([]);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [mostrarDevolucion, setMostrarDevolucion] = useState(false);
+  const [mostrarNotaDebito, setMostrarNotaDebito] = useState(false);
+  const [notasSel, setNotasSel] = useState<ComprobanteFiscal[]>([]);
+  const notaDebitoOcupada = useRef(false);
 
   const seleccionada = filas.find((f) => f.factura.id === seleccionadaId) ?? null;
 
@@ -72,7 +96,9 @@ function FacturasCobradas() {
     },
     Escape: () => {
       if (mostrarDevolucion) setMostrarDevolucion(false);
-      else setSeleccionadaId(null);
+      else if (mostrarNotaDebito) {
+        if (!notaDebitoOcupada.current) setMostrarNotaDebito(false);
+      } else setSeleccionadaId(null);
     },
   });
 
@@ -114,7 +140,13 @@ function FacturasCobradas() {
     if (!seleccionadaId) return;
     void repo.obtenerLineas(seleccionadaId).then(setLineasSel);
     void repo.obtenerPagos(seleccionadaId).then(setPagosSel);
-  }, [repo, seleccionadaId]);
+    let vigente = true;
+    void comprobanteFiscal.listarNotasPorFactura(seleccionadaId).then((n) => vigente && setNotasSel(n));
+    return () => {
+      vigente = false;
+      setNotasSel([]);
+    };
+  }, [repo, comprobanteFiscal, seleccionadaId]);
 
   async function recargarDespuesDeDevolucion() {
     if (seleccionadaId) await repo.obtenerLineas(seleccionadaId).then(setLineasSel);
@@ -138,6 +170,27 @@ function FacturasCobradas() {
     ancho_impresora_default: 80,
   };
 
+  async function reimprimirNota(fila: FilaFactura, nota: ComprobanteFiscal) {
+    const salida = await elegir(
+      "¿Cómo quieres reimprimir esta nota?",
+      [
+        { valor: "imprimir", etiqueta: "Imprimir" },
+        { valor: "pdf", etiqueta: "Guardar PDF" },
+      ],
+      { titulo: "Reimprimir nota" },
+    );
+    if (!salida) return;
+    const datos = await datosReciboNotaGuardada({
+      nota,
+      factura: fila.factura,
+      cliente: fila.cliente,
+      negocio: negocio ?? negocioReciboDefault,
+      secuencias: secuenciaNcf,
+    });
+    if (salida === "imprimir") imprimirRecibo(datos);
+    else guardarPdf(generarPdfRecibo(datos), `Nota-${nota.ncf}.pdf`);
+  }
+
   async function reimprimir(fila: FilaFactura) {
     const salida = await elegir(
       "¿Cómo quieres reimprimir esta factura?",
@@ -155,13 +208,7 @@ function FacturasCobradas() {
       lineas: lineasSel,
       pagos: pagosSel,
       cliente: fila.cliente,
-      comprobante: fila.comprobante
-        ? {
-            ncf: fila.comprobante.ncf,
-            tipoEcfEtiqueta: ETIQUETA_TIPO_ECF[fila.comprobante.tipo_ecf],
-            codigoSeguridad: fila.comprobante.codigo_seguridad,
-          }
-        : null,
+      comprobante: fila.comprobante ? await comprobanteParaRecibo(fila.comprobante, secuenciaNcf) : null,
     };
     if (salida === "imprimir") {
       imprimirRecibo(datosRecibo);
@@ -307,7 +354,55 @@ function FacturasCobradas() {
                 {ETIQUETA_TIPO_ECF[seleccionada.comprobante.tipo_ecf]}
                 <br />
                 NCF: {seleccionada.comprobante.ncf}
+                <br />
+                <span style={{ color: ESTADO_DGII[seleccionada.comprobante.estado_dgii].color }}>
+                  DGII: {ESTADO_DGII[seleccionada.comprobante.estado_dgii].etiqueta}
+                  {seleccionada.comprobante.motivo_rechazo ? ` — ${seleccionada.comprobante.motivo_rechazo}` : ""}
+                </span>
+                {seleccionada.comprobante.estado_dgii === "rechazado" && (
+                  <span style={{ display: "block", fontWeight: 400, color: c.gris, fontSize: 13 }}>
+                    No tiene validez fiscal. Revísalo con tu contador antes de volver a facturar esta venta.
+                  </span>
+                )}
+                {seleccionada.comprobante.estado_dgii === "pendiente" && modoFiscal === "dgii" && (
+                  <button
+                    type="button"
+                    style={{ ...s.botonSecundario, marginTop: 8, minHeight: 44 }}
+                    disabled={consultandoDgii}
+                    onClick={() => void consultarDgiiAhora()}
+                  >
+                    {consultandoDgii ? "Consultando…" : "Consultar estado en la DGII"}
+                  </button>
+                )}
+                {avisoDgii && (
+                  <span role="alert" style={{ display: "block", color: c.rojo, fontWeight: 400, fontSize: 13 }}>
+                    {avisoDgii}
+                  </span>
+                )}
               </p>
+            )}
+
+            {notasSel.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <label style={s.label}>Notas de esta venta</label>
+                {notasSel.map((n) => (
+                  <div
+                    key={n.id}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
+                  >
+                    <span style={{ fontSize: 13 }}>
+                      {ETIQUETA_TIPO_ECF[n.tipo_ecf]} · {n.ncf} · RD$ {money(n.total)}
+                    </span>
+                    <button
+                      type="button"
+                      style={{ ...s.botonSecundario, minHeight: 44 }}
+                      onClick={() => void reimprimirNota(seleccionada, n)}
+                    >
+                      Reimprimir
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
 
             <table style={{ ...s.tabla, marginTop: 8 }}>
@@ -357,6 +452,11 @@ function FacturasCobradas() {
               <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => setMostrarDevolucion(true)}>
                 Devolver
               </button>
+              {admiteNotaDebito(seleccionada.comprobante) && modoFiscal === "dgii" && (
+                <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => setMostrarNotaDebito(true)}>
+                  Nota de débito
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -366,18 +466,52 @@ function FacturasCobradas() {
         <ModalDevolucion
           factura={seleccionada.factura}
           lineas={lineasSel}
-          rncEmisor={negocio?.rnc ?? null}
+          emisor={emisorDesdeNegocio(negocio)}
           onCerrar={() => setMostrarDevolucion(false)}
           onCompletada={() => void recargarDespuesDeDevolucion()}
+        />
+      )}
+
+      {mostrarNotaDebito && seleccionada?.comprobante && (
+        <ModalNotaDebito
+          comprobante={seleccionada.comprobante}
+          factura={seleccionada.factura}
+          cliente={seleccionada.cliente}
+          emisor={emisorDesdeNegocio(negocio)}
+          negocioRecibo={negocio ?? negocioReciboDefault}
+          onCerrar={() => setMostrarNotaDebito(false)}
+          onEmitida={() => {
+            void cargar();
+            void comprobanteFiscal.listarNotasPorFactura(seleccionada.factura.id).then(setNotasSel);
+          }}
+          onOcupado={(ocupado) => {
+            notaDebitoOcupada.current = ocupado;
+          }}
         />
       )}
     </div>
   );
 }
 
+function admiteNotaDebito(comprobante: ComprobanteFiscal | null): boolean {
+  return (
+    !!comprobante &&
+    (comprobante.tipo_ecf === "31" || comprobante.tipo_ecf === "32" || comprobante.tipo_ecf === "45") &&
+    (comprobante.estado_dgii === "aceptado" || comprobante.estado_dgii === "aceptado_condicional")
+  );
+}
+
 /** Envuelve facturas cobradas y cotizaciones (§ ConsultaCotizaciones) en una sola pantalla con
  *  pestañas — evita sumar un décimo ítem al menú lateral, que rompería el esquema de atajos
  *  Alt+1..9 (§ AppShell). */
+const ESTADO_DGII: Record<EstadoDgii, { etiqueta: string; color: string }> = {
+  pendiente: { etiqueta: "en proceso de validación", color: c.amarillo },
+  aceptado: { etiqueta: "aceptado", color: c.verde },
+  aceptado_condicional: { etiqueta: "aceptado condicional", color: c.verde },
+  rechazado: { etiqueta: "rechazado", color: c.rojo },
+  contingencia: { etiqueta: "contingencia", color: c.amarillo },
+};
+
 export function ConsultaFacturas() {
   const [tab, setTab] = useState<"facturas" | "cotizaciones">("facturas");
 

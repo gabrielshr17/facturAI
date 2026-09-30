@@ -1,18 +1,22 @@
 import type { FacturaRepo } from "../repos/factura-repo.js";
 import type { SecuenciaNcfRepo } from "../repos/secuencia-ncf-repo.js";
 import type { ComprobanteFiscalRepo } from "../repos/comprobante-fiscal-repo.js";
+import type { NcfAnulacionRepo } from "../repos/ncf-anulacion-repo.js";
 import type { DevolucionInput, DevolucionRepo } from "../repos/devolucion-repo.js";
-import type { ProveedorFiscal } from "./proveedor.js";
+import type { EmisorFiscal, ProveedorFiscal } from "./proveedor.js";
 import { formatearNcf } from "../dominio/ecf.js";
 import { ValidacionError } from "../repos/producto-repo.js";
 import type { Devolucion, ComprobanteFiscal } from "../repos/tipos.js";
 import { MSG } from "../dominio/mensajes.js";
+import { now } from "../ids.js";
+import { estadoDgiiDe, transmitirNcfConsumido, validarEmisor } from "./transmision.js";
 
 export interface DevolucionConFiscalDeps {
   devolucionRepo: DevolucionRepo;
   facturaRepo: FacturaRepo;
   secuenciaRepo: SecuenciaNcfRepo;
   comprobanteRepo: ComprobanteFiscalRepo;
+  anulacionRepo: NcfAnulacionRepo;
   proveedorFiscal: ProveedorFiscal;
 }
 
@@ -21,19 +25,23 @@ export interface ResultadoDevolucionFiscal {
   comprobante: ComprobanteFiscal;
 }
 
+const CODIGO_ANULA_NCF = 1;
+const CODIGO_CORRIGE_MONTOS = 3;
+
 /**
  * Devuelve artículos de una venta que tiene comprobante fiscal (§6, §Ventas):
  * exige emitir primero una Nota de Crédito (E34) referenciando el NCF
  * original, con la misma política de "no contingencia" que el cobro fiscal
  * — si la DGII no acepta la NC, no se completa la devolución (nada se
- * restituye a inventario, ningún NCF de NC queda a medias).
+ * restituye a inventario) y su número queda en cola para anular.
  */
 export async function registrarDevolucionConFiscal(
   deps: DevolucionConFiscalDeps,
   input: DevolucionInput,
-  rncEmisor: string | null,
+  emisorInput: EmisorFiscal | null,
 ): Promise<ResultadoDevolucionFiscal> {
-  const { devolucionRepo, facturaRepo, secuenciaRepo, comprobanteRepo, proveedorFiscal } = deps;
+  const { devolucionRepo, facturaRepo, secuenciaRepo, comprobanteRepo } = deps;
+  const emisor = validarEmisor(emisorInput);
 
   const factura = await facturaRepo.obtener(input.facturaId);
   if (!factura) throw new Error(MSG.facturaNoExiste);
@@ -62,38 +70,40 @@ export async function registrarDevolucionConFiscal(
 
   const numero = await secuenciaRepo.consumirSiguiente(secuencia.id);
   const ncf = formatearNcf("34", numero);
+  const esDevolucionTotal = Math.abs(preparada.total - comprobanteOriginal.total) < 0.005;
 
-  let resultadoTransmision;
-  try {
-    resultadoTransmision = await proveedorFiscal.transmitir({
+  const resultadoTransmision = await transmitirNcfConsumido(
+    deps,
+    {
       ncf,
       tipoEcf: "34",
-      rncEmisor,
+      emisor,
+      fechaEmision: now(),
+      fechaVencimientoSecuencia: null,
       receptorDocumentoTipo: comprobanteOriginal.receptor_documento_tipo,
       receptorDocumentoNumero: comprobanteOriginal.receptor_documento_numero,
+      receptorNombre: null,
+      lineas: preparada.lineas.map((l) => ({
+        descripcion: l.descripcion,
+        cantidad: l.cantidad,
+        precioUnitario: l.precioUnitario,
+        tasaImpuesto: l.tasaImpuesto,
+        subtotal: l.subtotal,
+      })),
+      pagos: [],
       montoGravado: preparada.subtotalGravado,
       montoExento: preparada.subtotalExento,
       montoItbis: preparada.totalItbis,
       total: preparada.total,
-    });
-  } catch {
-    throw new ValidacionError([
-      {
-        campo: "fiscal",
-        mensaje:
-          "No se pudo transmitir la Nota de Crédito a la DGII (sin conexión). No se permite procesar la devolución fiscal sin conexión.",
+      referencia: {
+        ncfModificado: comprobanteOriginal.ncf,
+        fechaNcfModificado: comprobanteOriginal.fecha_emision,
+        codigoModificacion: esDevolucionTotal ? CODIGO_ANULA_NCF : CODIGO_CORRIGE_MONTOS,
+        razon: input.motivo?.trim() || null,
       },
-    ]);
-  }
-
-  if (resultadoTransmision.estado !== "aceptado") {
-    throw new ValidacionError([
-      {
-        campo: "fiscal",
-        mensaje: `La DGII rechazó la Nota de Crédito: ${resultadoTransmision.motivoRechazo ?? "sin detalle"}.`,
-      },
-    ]);
-  }
+    },
+    "la Nota de Crédito",
+  );
 
   const devolucion = await devolucionRepo.crear(input);
 
@@ -102,16 +112,19 @@ export async function registrarDevolucionConFiscal(
     tipoEcf: "34",
     ncf,
     secuenciaId: secuencia.id,
-    rncEmisor,
+    rncEmisor: emisor.rnc,
     receptorDocumentoTipo: comprobanteOriginal.receptor_documento_tipo,
     receptorDocumentoNumero: comprobanteOriginal.receptor_documento_numero,
     montoGravado: preparada.subtotalGravado,
     montoExento: preparada.subtotalExento,
     montoItbis: preparada.totalItbis,
     total: preparada.total,
-    estadoDgii: "aceptado",
+    estadoDgii: estadoDgiiDe(resultadoTransmision.estado),
     trackIdDgii: resultadoTransmision.trackId ?? null,
     codigoSeguridad: resultadoTransmision.codigoSeguridad ?? null,
+    qrUrl: resultadoTransmision.qrUrl ?? null,
+    fechaFirma: resultadoTransmision.fechaFirma ?? null,
+    xmlFirmado: resultadoTransmision.xmlFirmado ?? null,
   });
 
   await devolucionRepo.marcarComprobante(devolucion.id, comprobante.id);

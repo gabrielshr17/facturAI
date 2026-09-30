@@ -1,5 +1,12 @@
 import { useState, type CSSProperties } from "react";
-import { type MetodoPago, type TipoEcf, ETIQUETA_TIPO_ECF, tipoEcfSugerido, procesarCobro } from "@sfr/core";
+import {
+  type MetodoPago,
+  type TipoEcf,
+  ETIQUETA_TIPO_ECF,
+  requiereCompradorIdentificado,
+  tipoEcfSugerido,
+  procesarCobro,
+} from "@sfr/core";
 import { CreditCard } from "lucide-react";
 import { s, c, sombra, money } from "../estilos.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
@@ -14,7 +21,7 @@ const METODOS: { valor: MetodoPago; etiqueta: string }[] = [
   { valor: "credito", etiqueta: "Crédito" },
 ];
 
-const TIPOS_ECF_DISPONIBLES: TipoEcf[] = ["32", "31"];
+const TIPOS_ECF_DISPONIBLES: TipoEcf[] = ["32", "31", "45"];
 
 interface FilaPago {
   metodo: MetodoPago;
@@ -25,6 +32,7 @@ export interface FiscalInput {
   tipoEcf: TipoEcf;
   receptorDocumentoTipo: "rnc" | "cedula" | null;
   receptorDocumentoNumero: string | null;
+  receptorNombre: string | null;
 }
 
 /** Qué hacer con el recibo al cerrar la venta: imprimirlo (térmica/GDI/navegador, § recibo.ts),
@@ -38,6 +46,7 @@ export interface ModalCobroProps {
   /** Para prellenar el documento del receptor si el ticket ya tiene cliente asignado. */
   clienteDocumentoTipo?: "rnc" | "cedula" | null;
   clienteDocumentoNumero?: string | null;
+  clienteNombre?: string | null;
   onCancelar: () => void;
   /** El padre hace el cobro real (repo.cobrar / cobrarConFiscal) e imprime/genera el PDF según `salida`. */
   onConfirmar: (
@@ -55,6 +64,7 @@ export function ModalCobro({
   notasIniciales,
   clienteDocumentoTipo,
   clienteDocumentoNumero,
+  clienteNombre,
   onCancelar,
   onConfirmar,
 }: ModalCobroProps) {
@@ -66,8 +76,10 @@ export function ModalCobro({
 
   const [emitirFiscal, setEmitirFiscal] = useState(false);
   const [tipoEcf, setTipoEcf] = useState<TipoEcf>(tipoEcfSugerido(clienteDocumentoTipo));
+  const compradorObligatorio = requiereCompradorIdentificado(tipoEcf);
   const [receptorTipo, setReceptorTipo] = useState<"rnc" | "cedula">(clienteDocumentoTipo ?? "rnc");
   const [receptorNumero, setReceptorNumero] = useState(clienteDocumentoNumero ?? "");
+  const [receptorNombre, setReceptorNombre] = useState(clienteNombre ?? "");
 
   useAtajosTeclado({
     Escape: onCancelar,
@@ -101,8 +113,12 @@ export function ModalCobro({
       setError(`Falta por pagar RD$ ${money(resultado.faltante)}.`);
       return;
     }
-    if (emitirFiscal && tipoEcf === "31" && !receptorNumero.trim()) {
-      setError("El Crédito Fiscal (E31) requiere el RNC del comprador.");
+    if (emitirFiscal && compradorObligatorio && !receptorNumero.trim()) {
+      setError(`El ${ETIQUETA_TIPO_ECF[tipoEcf]} requiere el RNC del comprador.`);
+      return;
+    }
+    if (emitirFiscal && compradorObligatorio && !receptorNombre.trim()) {
+      setError(`El ${ETIQUETA_TIPO_ECF[tipoEcf]} requiere la razón social del comprador.`);
       return;
     }
     const fiscal: FiscalInput | null = emitirFiscal
@@ -110,6 +126,7 @@ export function ModalCobro({
           tipoEcf,
           receptorDocumentoTipo: receptorNumero.trim() ? receptorTipo : null,
           receptorDocumentoNumero: receptorNumero.trim() || null,
+          receptorNombre: receptorNombre.trim() || null,
         }
       : null;
 
@@ -250,11 +267,22 @@ export function ModalCobro({
             </select>
             <input
               style={{ ...s.input, flex: 1 }}
-              placeholder={tipoEcf === "31" ? "RNC del comprador (obligatorio)" : "RNC/cédula (opcional)"}
+              placeholder={compradorObligatorio ? "RNC del comprador (obligatorio)" : "RNC/cédula (opcional)"}
               value={receptorNumero}
               onChange={(e) => setReceptorNumero(e.target.value)}
             />
           </div>
+        )}
+        {emitirFiscal && (compradorObligatorio || receptorNumero.trim() !== "") && (
+          <input
+            style={{ ...s.input, marginBottom: 8 }}
+            placeholder={
+              compradorObligatorio ? "Razón social del comprador (obligatoria)" : "Nombre del comprador (opcional)"
+            }
+            aria-label="Razón social del comprador"
+            value={receptorNombre}
+            onChange={(e) => setReceptorNombre(e.target.value)}
+          />
         )}
 
         <label style={s.label}>Notas</label>

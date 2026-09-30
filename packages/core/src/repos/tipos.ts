@@ -157,7 +157,7 @@ export interface CotizacionLinea extends Auditoria {
 
 export type ModoSecuencia = "ecf" | "ncf_papel" | "contingencia";
 export type EstadoSecuencia = "disponible" | "agotada" | "vencida";
-export type EstadoDgii = "pendiente" | "aceptado" | "rechazado" | "contingencia";
+export type EstadoDgii = "pendiente" | "aceptado" | "aceptado_condicional" | "rechazado" | "contingencia";
 
 export interface SecuenciaNcf extends Auditoria {
   id: string;
@@ -173,13 +173,15 @@ export interface SecuenciaNcf extends Auditoria {
 
 export interface ComprobanteFiscal extends Auditoria {
   id: string;
-  factura_id: string;
+  factura_id: string | null;
+  compra_id: string | null;
   tipo_ecf: TipoEcf;
   ncf: string;
   secuencia_id: string;
   rnc_emisor: string | null;
   receptor_documento_tipo: "rnc" | "cedula" | null;
   receptor_documento_numero: string | null;
+  receptor_nombre: string | null;
   fecha_emision: string;
   monto_gravado: number;
   monto_exento: number;
@@ -191,6 +193,26 @@ export interface ComprobanteFiscal extends Auditoria {
   xml_firmado_ruta: string | null;
   qr_url: string | null;
   fecha_transmision: string | null;
+  fecha_firma: string | null;
+  xml_firmado: string | null;
+  motivo_rechazo: string | null;
+  entrega_estado: EstadoEntrega;
+  entrega_detalle: string | null;
+  acuse_recibo_xml: string | null;
+}
+
+/** Entrega del e-CF aceptado al comprador cuando este es emisor electrónico. */
+export type EstadoEntrega = "no_aplica" | "pendiente" | "entregado" | "rechazado" | "no_electronico";
+
+export type EstadoNcfAnulacion = "pendiente" | "anulado" | "utilizado" | "revisado";
+
+export interface NcfAnulacion extends Auditoria {
+  id: string;
+  tipo_ecf: TipoEcf;
+  ncf: string;
+  motivo: string | null;
+  estado: EstadoNcfAnulacion;
+  ultimo_mensaje_dgii: string | null;
 }
 
 export type EstadoCorteCaja = "abierto" | "cerrado";
@@ -319,6 +341,8 @@ export interface Negocio extends Auditoria {
   razon_social: string | null;
   rnc: string | null;
   direccion: string | null;
+  municipio: string | null;
+  provincia: string | null;
   telefono: string | null;
   correo: string | null;
   logo_ruta: string | null;

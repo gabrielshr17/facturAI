@@ -1,5 +1,7 @@
 import type { Factura, FacturaLinea, Cliente, Negocio } from "@sfr/core";
 import { generarEscPos } from "./escpos.js";
+import { svgQr } from "./qr.js";
+import { datosComprador, descripcionLinea, encabezadoFiscal, lineasDireccionEmisor } from "./representacion.js";
 import {
   hayImpresoraTermicaDisponible,
   obtenerImpresoraSeleccionada,
@@ -24,8 +26,24 @@ import {
  *    la venta.
  */
 
+export interface ComprobanteRecibo {
+  ncf: string;
+  /** Denominación oficial del tipo (NOMBRE_TIPO_ECF de `@sfr/core`). */
+  tipoEcfEtiqueta: string;
+  /** Fecha ISO (AAAA-MM-DD); solo en los tipos donde la RI la exige. */
+  fechaVencimientoSecuencia?: string | null;
+  receptorDocumento?: string | null;
+  receptorNombre?: string | null;
+  codigoSeguridad?: string | null;
+  fechaFirma?: string | null;
+  /** URL de consulta del timbre en la DGII: se imprime como código QR. */
+  qrUrl?: string | null;
+  referencia?: { ncfModificado: string; codigoModificacion: string } | null;
+}
+
 export interface ReciboDatos {
-  negocio: Pick<Negocio, "nombre_comercial" | "rnc" | "direccion" | "telefono" | "ancho_impresora_default">;
+  negocio: Pick<Negocio, "nombre_comercial" | "rnc" | "direccion" | "telefono" | "ancho_impresora_default"> &
+    Partial<Pick<Negocio, "razon_social" | "municipio" | "provincia">>;
   factura: Pick<
     Factura,
     | "numero_interno"
@@ -38,11 +56,14 @@ export interface ReciboDatos {
     | "cambio"
     | "notas"
   >;
-  lineas: Pick<FacturaLinea, "descripcion" | "cantidad" | "precio_unitario" | "subtotal">[];
+  lineas: Pick<
+    FacturaLinea,
+    "descripcion" | "cantidad" | "precio_unitario" | "subtotal" | "tasa_impuesto" | "monto_itbis"
+  >[];
   pagos: { metodo: string; monto: number }[];
   cliente?: Pick<Cliente, "nombre" | "apellidos"> | null;
   /** Presente solo si la venta se emitió con comprobante fiscal (§6). */
-  comprobante?: { ncf: string; tipoEcfEtiqueta: string; codigoSeguridad?: string | null } | null;
+  comprobante?: ComprobanteRecibo | null;
 }
 
 const ETIQUETA_METODO: Record<string, string> = {
@@ -71,14 +92,19 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
     .map(
       (l) => `
       <tr>
-        <td colspan="4" class="desc">${escapeHtml(l.descripcion)}</td>
+        <td colspan="4" class="desc">${escapeHtml(descripcionLinea(l, !!comprobante))}</td>
       </tr>
       <tr>
         <td class="num">${cantidad(l.cantidad)}</td>
         <td class="num">x</td>
         <td class="num">${money(l.precio_unitario)}</td>
         <td class="num total">${money(l.subtotal)}</td>
-      </tr>`,
+      </tr>${
+        comprobante && l.monto_itbis > 0
+          ? `
+      <tr><td colspan="4" class="num">ITBIS ${money(l.monto_itbis)}</td></tr>`
+          : ""
+      }`,
     )
     .join("");
 
@@ -109,8 +135,11 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
 <body>
   <h1>${escapeHtml(negocio.nombre_comercial)}</h1>
   <div class="centro">
+    ${comprobante && negocio.razon_social && negocio.razon_social !== negocio.nombre_comercial ? `${escapeHtml(negocio.razon_social)}<br/>` : ""}
     ${negocio.rnc ? `RNC: ${escapeHtml(negocio.rnc)}<br/>` : ""}
-    ${negocio.direccion ? `${escapeHtml(negocio.direccion)}<br/>` : ""}
+    ${lineasDireccionEmisor(negocio)
+      .map((l) => `${escapeHtml(l)}<br/>`)
+      .join("")}
     ${negocio.telefono ? `Tel: ${escapeHtml(negocio.telefono)}` : ""}
   </div>
   <hr/>
@@ -119,9 +148,15 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
   ${
     comprobante
       ? `
-  <div class="centro" style="font-weight:bold; margin-top:4px;">${escapeHtml(comprobante.tipoEcfEtiqueta)}</div>
-  <div class="centro">NCF: ${escapeHtml(comprobante.ncf)}</div>
-  ${comprobante.codigoSeguridad ? `<div class="centro">Cód. seguridad: ${escapeHtml(comprobante.codigoSeguridad)}</div>` : ""}
+  ${encabezadoFiscal(comprobante)
+    .map(
+      (l, i) =>
+        `<div class="centro"${i === 0 ? ' style="font-weight:bold; margin-top:4px;"' : ""}>${escapeHtml(l)}</div>`,
+    )
+    .join("")}
+  ${datosComprador(comprobante)
+    .map((l) => `<div>${escapeHtml(l)}</div>`)
+    .join("")}
   `
       : ""
   }
@@ -137,10 +172,23 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
   <div class="linea"><span>Pagado</span><span>RD$ ${money(factura.monto_pagado)}</span></div>
   <div class="linea"><span>Cambio</span><span>RD$ ${money(factura.cambio)}</span></div>
   ${factura.notas ? `<hr/><div>Notas: ${escapeHtml(factura.notas)}</div>` : ""}
+  ${comprobante ? bloqueTimbreHtml(comprobante) : ""}
   <hr/>
   <div class="centro">¡Gracias por su compra!</div>
 </body>
 </html>`;
+}
+
+function bloqueTimbreHtml(comprobante: ComprobanteRecibo): string {
+  const partes: string[] = ["<hr/>"];
+  if (comprobante.qrUrl) partes.push(`<div class="centro">${svgQr(comprobante.qrUrl, 30)}</div>`);
+  if (comprobante.codigoSeguridad) {
+    partes.push(`<div class="centro">Código de seguridad: ${escapeHtml(comprobante.codigoSeguridad)}</div>`);
+  }
+  if (comprobante.fechaFirma) {
+    partes.push(`<div class="centro">Fecha de firma digital: ${escapeHtml(comprobante.fechaFirma)}</div>`);
+  }
+  return partes.join("\n  ");
 }
 
 function escapeHtml(s: string): string {
@@ -162,8 +210,11 @@ function generarTextoRecibo(datos: ReciboDatos): string[] {
   const out: string[] = [];
 
   out.push(negocio.nombre_comercial);
+  if (comprobante && negocio.razon_social && negocio.razon_social !== negocio.nombre_comercial) {
+    out.push(negocio.razon_social);
+  }
   if (negocio.rnc) out.push(`RNC: ${negocio.rnc}`);
-  if (negocio.direccion) out.push(negocio.direccion);
+  out.push(...lineasDireccionEmisor(negocio));
   if (negocio.telefono) out.push(`Tel: ${negocio.telefono}`);
   out.push(separador);
 
@@ -176,15 +227,14 @@ function generarTextoRecibo(datos: ReciboDatos): string[] {
   if (cliente) out.push(`Cliente: ${cliente.nombre} ${cliente.apellidos ?? ""}`.trim());
 
   if (comprobante) {
-    out.push(comprobante.tipoEcfEtiqueta);
-    out.push(`NCF: ${comprobante.ncf}`);
-    if (comprobante.codigoSeguridad) out.push(`Cód. seguridad: ${comprobante.codigoSeguridad}`);
+    out.push(...encabezadoFiscal(comprobante), ...datosComprador(comprobante));
   }
 
   out.push(separador);
   for (const l of lineas) {
-    out.push(l.descripcion);
+    out.push(descripcionLinea(l, !!comprobante));
     out.push(columnasTexto(`${cantidad(l.cantidad)} x ${money(l.precio_unitario)}`, money(l.subtotal)));
+    if (comprobante && l.monto_itbis > 0) out.push(columnasTexto("", `ITBIS ${money(l.monto_itbis)}`));
   }
   out.push(separador);
 
@@ -201,6 +251,11 @@ function generarTextoRecibo(datos: ReciboDatos): string[] {
   if (factura.notas) {
     out.push(separador);
     out.push(`Notas: ${factura.notas}`);
+  }
+  if (comprobante?.codigoSeguridad) {
+    out.push(separador);
+    out.push(`Código de seguridad: ${comprobante.codigoSeguridad}`);
+    if (comprobante.fechaFirma) out.push(`Fecha de firma digital: ${comprobante.fechaFirma}`);
   }
   out.push(separador);
   out.push("¡Gracias por su compra!");

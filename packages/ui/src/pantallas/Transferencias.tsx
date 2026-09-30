@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Landmark, LogIn, RefreshCw, Check, X } from "lucide-react";
 import { useAuth } from "../contexto/Auth.js";
+import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { mensajeError } from "../utilidades/errores.js";
 import {
@@ -29,6 +30,7 @@ const COLOR_ESTADO: Record<NotificacionTransferencia["estadoConfirmacion"], { fo
  */
 export function Transferencias() {
   const { disponible, sesion, cargando: cargandoSesion, iniciarSesionGoogle } = useAuth();
+  const { api } = useRepos();
   const [transferencias, setTransferencias] = useState<NotificacionTransferencia[]>([]);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,13 +41,13 @@ export function Transferencias() {
     setCargando(true);
     setError(null);
     try {
-      setTransferencias(await obtenerTransferenciasRecientes(sesion.accessToken));
+      setTransferencias(await obtenerTransferenciasRecientes(api));
     } catch (e) {
       setError(mensajeError(e));
     } finally {
       setCargando(false);
     }
-  }, [sesion]);
+  }, [sesion, api]);
 
   useEffect(() => {
     void cargar();
@@ -56,7 +58,8 @@ export function Transferencias() {
     setEnCurso(id);
     setError(null);
     try {
-      const actualizada = tipo === "confirmar" ? await confirmarTransferencia(sesion.accessToken, id) : await descartarTransferencia(sesion.accessToken, id);
+      const actualizada =
+        tipo === "confirmar" ? await confirmarTransferencia(api, id) : await descartarTransferencia(api, id);
       setTransferencias((prev) => prev.map((t) => (t.id === id ? actualizada : t)));
     } catch (e) {
       setError(mensajeError(e));
@@ -69,8 +72,8 @@ export function Transferencias() {
     return (
       <div style={s.tarjeta}>
         <p style={{ margin: 0, color: c.gris }}>
-          Esta pantalla requiere el modo multi-caja/multiusuario (Sign in with Google), que no está configurado en
-          esta instalación.
+          Esta pantalla requiere el modo multi-caja/multiusuario (Sign in with Google), que no está configurado en esta
+          instalación.
         </p>
       </div>
     );
@@ -90,7 +93,10 @@ export function Transferencias() {
         <p style={{ marginTop: 0, color: c.gris }}>
           Inicia sesión para ver las transferencias recibidas en las cuentas del negocio.
         </p>
-        <button style={{ ...s.boton, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => void iniciarSesionGoogle()}>
+        <button
+          style={{ ...s.boton, display: "inline-flex", alignItems: "center", gap: 6 }}
+          onClick={() => void iniciarSesionGoogle()}
+        >
           <LogIn size={14} aria-hidden="true" /> Iniciar sesión con Google
         </button>
       </div>
@@ -155,7 +161,13 @@ export function Transferencias() {
                     {t.estadoConfirmacion === "pendiente" && (
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
-                          style={{ ...s.botonSecundario, padding: "6px 10px", display: "inline-flex", alignItems: "center", gap: 4 }}
+                          style={{
+                            ...s.botonSecundario,
+                            padding: "6px 10px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
                           disabled={enCurso === t.id}
                           onClick={() => void accion(t.id, "confirmar")}
                           aria-label="Confirmar transferencia"

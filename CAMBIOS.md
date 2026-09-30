@@ -1,5 +1,48 @@
 # Cambios sin publicar todavía
 
+## Facturación electrónica real con la DGII (lista para conectar el certificado)
+
+Las facturas con comprobante fiscal ya se pueden **firmar y enviar de verdad a la DGII**. Mientras
+no esté configurado el certificado digital de la empresa, todo sigue funcionando como antes con el
+simulador; al configurarlo (ver `packages/api/README.md`), las ventas fiscales pasan por la DGII.
+
+- **Consumo (E32) menor a RD$250,000**: se envía el resumen y la respuesta es inmediata.
+- **Crédito fiscal (E31) y consumo de RD$250,000 o más**: la DGII puede tardar en validar. La venta
+  se cobra igual y el comprobante queda "en proceso de validación"; la app consulta su estado sola
+  cada pocos minutos y lo muestra en Consultar facturas.
+- **Nuevo campo en Cobrar**: la **razón social del comprador**, obligatoria para crédito fiscal.
+- **Consumo de RD$250,000 o más** ahora exige RNC o cédula del comprador, como pide la DGII.
+- **El recibo trae el código QR** de la DGII, el código de seguridad y la fecha de firma digital
+  (impresora térmica, PDF e impresión normal).
+- **Números de comprobante que se pierden** (sin conexión o rechazo de la DGII) se anulan
+  automáticamente ante la DGII, en vez de quedar como huecos en la secuencia.
+- Antes de emitir se exige que el negocio tenga **RNC, razón social y dirección** en Configuración.
+
+### Recepción de comprobantes de proveedores y panel fiscal
+
+- **Comprobantes de proveedores** (en Compras): las facturas electrónicas que los proveedores envían a
+  la empresa llegan solas. Desde ahí se **aprueban o rechazan** ante la DGII (y se le avisa al
+  proveedor) y con **Registrar compra** se pasan al formulario de compra con proveedor, NCF y
+  artículos ya llenos, para revisar y guardar.
+- **Facturación electrónica** (en Configuración): muestra si el servicio está activo, en qué ambiente
+  y cuándo vence el certificado (avisa 30 días antes). La lista **Por resolver** reúne los
+  comprobantes en validación, los rechazados por la DGII, los que un comprador no recibió y los
+  números de comprobante que quedaron sin venta, con un botón para **sincronizar con la DGII ahora**.
+- **Llave de la caja**: cada caja se autoriza con su propia llave para emitir comprobantes, sin
+  depender de iniciar sesión con Google.
+- Las facturas de crédito fiscal aceptadas se **entregan automáticamente** al comprador cuando este
+  también es emisor electrónico.
+- En **Consultar facturas**, un comprobante en validación se puede consultar en el momento, y los
+  rechazados indican que no tienen validez fiscal.
+
+### Factura impresa según la DGII
+
+- El tipo de comprobante sale con su **nombre oficial** (ej. "Factura de Crédito Fiscal Electrónica"),
+  junto al e-NCF y su fecha de vencimiento.
+- Aparecen la **razón social** del negocio y del comprador con su RNC, la marca **"E"** en los
+  artículos exentos y el **ITBIS de cada línea**.
+- En el PDF, el código QR respeta la distancia mínima al borde que pide la DGII.
+
 ## Ganancia: el % ahora es lo que uno espera
 
 **Costo 100 con 20% de ganancia = precio 120.** Antes daba **141.60**: el sistema sacaba

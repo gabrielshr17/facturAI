@@ -1,28 +1,41 @@
 import { useState, type CSSProperties } from "react";
-import { type FacturaLinea, type Factura, calcularLinea, registrarDevolucionConFiscal } from "@sfr/core";
+import {
+  type FacturaLinea,
+  type Factura,
+  type ComprobanteFiscal,
+  type EmisorFiscal,
+  calcularLinea,
+  registrarDevolucionConFiscal,
+} from "@sfr/core";
 import { Undo2 } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
 import { s, c, sombra, money } from "../estilos.js";
 import { filtrarNumero } from "../utilidades/numero.js";
 import { mensajeError } from "../utilidades/errores.js";
+import { datosReciboNotaGuardada } from "../impresion/representacion.js";
+import { imprimirRecibo } from "../impresion/recibo.js";
+import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
 
 export interface ModalDevolucionProps {
   factura: Factura;
   lineas: FacturaLinea[];
-  rncEmisor: string | null;
+  emisor: EmisorFiscal | null;
   onCerrar: () => void;
   onCompletada: () => void;
 }
 
 /** Devolver artículos de una venta ya cobrada (§ Ventas). Si la venta es fiscal, exige emitir una Nota de Crédito (E34). */
-export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onCompletada }: ModalDevolucionProps) {
+export function ModalDevolucion({ factura, lineas, emisor, onCerrar, onCompletada }: ModalDevolucionProps) {
   const {
     devolucion: devolucionRepo,
     factura: facturaRepo,
     secuenciaNcf,
     comprobanteFiscal,
+    ncfAnulacion,
     proveedorFiscal,
+    negocio: negocioRepo,
   } = useRepos();
+  const [nota, setNota] = useState<ComprobanteFiscal | null>(null);
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
   const [motivo, setMotivo] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -58,17 +71,19 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
         lineas: lineasARetornar.map((x) => ({ facturaLineaId: x.linea.id, cantidad: x.cantidad })),
       };
       if (factura.tipo === "fiscal") {
-        await registrarDevolucionConFiscal(
+        const resultado = await registrarDevolucionConFiscal(
           {
             devolucionRepo,
             facturaRepo,
             secuenciaRepo: secuenciaNcf,
             comprobanteRepo: comprobanteFiscal,
+            anulacionRepo: ncfAnulacion,
             proveedorFiscal,
           },
           input,
-          rncEmisor,
+          emisor,
         );
+        setNota(resultado.comprobante);
       } else {
         await devolucionRepo.crear(input);
       }
@@ -78,6 +93,30 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
       setError(mensajeError(e));
     } finally {
       setGuardando(false);
+    }
+  }
+
+  async function imprimirNota(salida: "imprimir" | "pdf") {
+    if (!nota) return;
+    try {
+      const n = await negocioRepo.obtener();
+      const datos = await datosReciboNotaGuardada({
+        nota,
+        factura,
+        cliente: null,
+        negocio: n ?? {
+          nombre_comercial: "Mi Negocio",
+          rnc: null,
+          direccion: null,
+          telefono: null,
+          ancho_impresora_default: 80,
+        },
+        secuencias: secuenciaNcf,
+      });
+      if (salida === "imprimir") imprimirRecibo(datos);
+      else guardarPdf(generarPdfRecibo(datos), `Nota-${nota.ncf}.pdf`);
+    } catch (e) {
+      setError(mensajeError(e));
     }
   }
 
@@ -144,6 +183,16 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
         )}
 
         <div style={s.formFooter}>
+          {nota && (
+            <>
+              <button style={s.boton} onClick={() => void imprimirNota("imprimir")}>
+                Imprimir nota
+              </button>
+              <button style={s.botonSecundario} onClick={() => void imprimirNota("pdf")}>
+                Guardar PDF
+              </button>
+            </>
+          )}
           {!mensaje && (
             <button style={s.boton} disabled={guardando} onClick={confirmar}>
               Confirmar devolución

@@ -6,13 +6,22 @@ import {
   crearFacturaRepo,
   crearSecuenciaNcfRepo,
   crearComprobanteFiscalRepo,
+  crearNcfAnulacionRepo,
   crearProveedorFiscalSimulado,
   cobrarConFiscal,
   formatearNcf,
   tipoEcfSugerido,
   ValidacionError,
   type ProveedorFiscal,
+  type EmisorFiscal,
 } from "../src/index.js";
+
+const EMISOR: EmisorFiscal = {
+  rnc: "131880738",
+  razonSocial: "SUPLIDORA MAROHI SRL",
+  nombreComercial: "Suplidora Marohi",
+  direccion: "Calle Principal #1, Santo Domingo",
+};
 
 async function nuevaDb(): Promise<SqlDriver> {
   const db = createNodeSqliteDriver();
@@ -103,6 +112,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
       facturaRepo: crearFacturaRepo(db),
       secuenciaRepo: crearSecuenciaNcfRepo(db),
       comprobanteRepo: crearComprobanteFiscalRepo(db),
+      anulacionRepo: crearNcfAnulacionRepo(db),
       proveedorFiscal: proveedor,
     };
   }
@@ -127,7 +137,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
     const { factura, comprobante, cambio } = await cobrarConFiscal(d, t.id, {
       pagos: [{ metodo: "efectivo", monto: 100 }],
       tipoEcf: "32",
-      rncEmisor: "101023122",
+      emisor: EMISOR,
     });
 
     expect(factura.estado).toBe("cobrada");
@@ -144,7 +154,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
     const t = await ticketCon100(d.facturaRepo);
 
     await expect(
-      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 100 }], tipoEcf: "31", rncEmisor: "101023122" }),
+      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 100 }], tipoEcf: "31", emisor: EMISOR }),
     ).rejects.toBeInstanceOf(ValidacionError);
 
     const { comprobante } = await cobrarConFiscal(d, t.id, {
@@ -152,7 +162,8 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
       tipoEcf: "31",
       receptorDocumentoTipo: "rnc",
       receptorDocumentoNumero: "101023122",
-      rncEmisor: "101023122",
+      receptorNombre: "CLIENTE EJEMPLO SRL",
+      emisor: EMISOR,
     });
     expect(comprobante.ncf).toBe("E310000000001");
   });
@@ -167,7 +178,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
         tipoEcf: "31",
         receptorDocumentoTipo: "rnc",
         receptorDocumentoNumero: "111111111",
-        rncEmisor: "101023122",
+        emisor: EMISOR,
       }),
     ).rejects.toBeInstanceOf(ValidacionError);
   });
@@ -176,7 +187,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
     const d = deps();
     const t = await ticketCon100(d.facturaRepo);
     await expect(
-      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 100 }], tipoEcf: "32", rncEmisor: null }),
+      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 100 }], tipoEcf: "32", emisor: EMISOR }),
     ).rejects.toBeInstanceOf(ValidacionError);
     // El ticket sigue abierto: no se tocó nada.
     expect((await d.facturaRepo.obtener(t.id))?.estado).toBe("abierta");
@@ -188,7 +199,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
     const t = await ticketCon100(d.facturaRepo);
 
     await expect(
-      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 10 }], tipoEcf: "32", rncEmisor: null }),
+      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 10 }], tipoEcf: "32", emisor: EMISOR }),
     ).rejects.toBeInstanceOf(ValidacionError);
 
     const vigente = await d.secuenciaRepo.obtenerVigente("32");
@@ -210,7 +221,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
       cobrarConFiscal({ ...d, proveedorFiscal: proveedorQueRechaza }, t.id, {
         pagos: [{ metodo: "efectivo", monto: 100 }],
         tipoEcf: "32",
-        rncEmisor: "101023122",
+        emisor: EMISOR,
       }),
     ).rejects.toBeInstanceOf(ValidacionError);
 

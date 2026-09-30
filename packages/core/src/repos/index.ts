@@ -28,6 +28,7 @@ export {
   type CrearComprobanteInput,
   type ComprobanteFiscalRepo,
 } from "./comprobante-fiscal-repo.js";
+export { crearNcfAnulacionRepo, type RegistrarNcfAnulacionInput, type NcfAnulacionRepo } from "./ncf-anulacion-repo.js";
 export {
   crearCorteCajaRepo,
   type ResumenPeriodoVentas,

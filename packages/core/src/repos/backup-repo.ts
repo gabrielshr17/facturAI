@@ -17,11 +17,11 @@ const TABLAS = [
   "factura_linea",
   "pago",
   "secuencia_ncf",
+  "proveedor",
+  "compra",
   "comprobante_fiscal",
   "corte_caja",
   "movimiento_inventario",
-  "proveedor",
-  "compra",
   "compra_linea",
   "comprobante_archivo",
   "bitacora_accion",
@@ -30,6 +30,7 @@ const TABLAS = [
   "promocion",
   "cotizacion",
   "cotizacion_linea",
+  "ncf_anulacion",
 ] as const;
 
 export interface RespaldoCompleto {

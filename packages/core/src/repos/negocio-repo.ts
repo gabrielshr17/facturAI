@@ -13,6 +13,8 @@ export interface NegocioInput {
   razon_social?: string | null;
   rnc?: string | null;
   direccion?: string | null;
+  municipio?: string | null;
+  provincia?: string | null;
   telefono?: string | null;
   correo?: string | null;
   regimen?: string | null;
@@ -38,7 +40,7 @@ export function validarNegocio(input: NegocioInput): ErrorValidacion[] {
   return errores;
 }
 
-const COLS = `id, nombre_comercial, razon_social, rnc, direccion, telefono, correo,
+const COLS = `id, nombre_comercial, razon_social, rnc, direccion, municipio, provincia, telefono, correo,
   logo_ruta, regimen, ancho_impresora_default, redondeo_centavo, inventario_activo,
   created_at, updated_at, deleted_at`;
 
@@ -64,6 +66,8 @@ export function crearNegocioRepo(db: SqlDriver) {
           razon_social: input.razon_social ?? null,
           rnc: input.rnc ?? null,
           direccion: input.direccion ?? null,
+          municipio: input.municipio ?? null,
+          provincia: input.provincia ?? null,
           telefono: input.telefono ?? null,
           correo: input.correo ?? null,
           logo_ruta: null,
@@ -75,12 +79,14 @@ export function crearNegocioRepo(db: SqlDriver) {
           updated_at: ts,
           deleted_at: null,
         };
-        await db.run(`INSERT INTO negocio (${COLS}) VALUES (${Array(15).fill("?").join(",")})`, [
+        await db.run(`INSERT INTO negocio (${COLS}) VALUES (${Array(17).fill("?").join(",")})`, [
           n.id,
           n.nombre_comercial,
           n.razon_social,
           n.rnc,
           n.direccion,
+          n.municipio,
+          n.provincia,
           n.telefono,
           n.correo,
           n.logo_ruta,
@@ -96,7 +102,7 @@ export function crearNegocioRepo(db: SqlDriver) {
       }
 
       await db.run(
-        `UPDATE negocio SET nombre_comercial=?, razon_social=?, rnc=?, direccion=?, telefono=?,
+        `UPDATE negocio SET nombre_comercial=?, razon_social=?, rnc=?, direccion=?, municipio=?, provincia=?, telefono=?,
            correo=?, regimen=?, ancho_impresora_default=?, redondeo_centavo=?, inventario_activo=?,
            updated_at=?
          WHERE id=?`,
@@ -105,6 +111,8 @@ export function crearNegocioRepo(db: SqlDriver) {
           input.razon_social ?? actual.razon_social,
           input.rnc ?? actual.rnc,
           input.direccion ?? actual.direccion,
+          input.municipio ?? actual.municipio,
+          input.provincia ?? actual.provincia,
           input.telefono ?? actual.telefono,
           input.correo ?? actual.correo,
           input.regimen ?? actual.regimen,

@@ -1,5 +1,6 @@
 import type { ReciboDatos } from "./recibo.js";
 import type { CotizacionImpresionDatos } from "./cotizacion.js";
+import { datosComprador, descripcionLinea, encabezadoFiscal, lineasDireccionEmisor } from "./representacion.js";
 
 /**
  * Generador de comandos ESC/POS crudos para impresoras térmicas (§ hardware,
@@ -103,6 +104,17 @@ class ConstructorEscPos {
     return this.linea(izq + " ".repeat(espacio) + der);
   }
 
+  /** Código QR nativo (GS ( k, modelo 2, corrección M). `modulo` es el tamaño de cada punto (1–16). */
+  qr(datos: string, modulo = 6): this {
+    const contenido = [...new TextEncoder().encode(datos)];
+    const largo = contenido.length + 3;
+    return this.bytes([GS, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00])
+      .bytes([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, modulo])
+      .bytes([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, 0x31])
+      .bytes([GS, 0x28, 0x6b, largo & 0xff, (largo >> 8) & 0xff, 0x31, 0x50, 0x30, ...contenido])
+      .bytes([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30]);
+  }
+
   cortar(): this {
     return this.bytes([GS, 0x56, 1]);
   }
@@ -135,8 +147,11 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
   // El nombre del negocio va a tamaño real doble (alto Y ancho) — es una sola línea corta, así que
   // se lo puede permitir sin arriesgar el conteo de caracteres de las columnas de más abajo.
   b.alinear("centro").tamano("grande").negrita(true).linea(negocio.nombre_comercial).negrita(false).tamano("alto");
+  if (comprobante && negocio.razon_social && negocio.razon_social !== negocio.nombre_comercial) {
+    b.linea(negocio.razon_social);
+  }
   if (negocio.rnc) b.linea(`RNC: ${negocio.rnc}`);
-  if (negocio.direccion) b.linea(negocio.direccion);
+  for (const l of lineasDireccionEmisor(negocio)) b.linea(l);
   if (negocio.telefono) b.linea(`Tel: ${negocio.telefono}`);
   b.alinear("izq").separador(ancho);
 
@@ -148,16 +163,18 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
   if (cliente) b.linea(`Cliente: ${cliente.nombre} ${cliente.apellidos ?? ""}`.trim());
 
   if (comprobante) {
-    b.alinear("centro").negrita(true).linea(comprobante.tipoEcfEtiqueta).negrita(false);
-    b.linea(`NCF: ${comprobante.ncf}`);
-    if (comprobante.codigoSeguridad) b.linea(`Cód. seguridad: ${comprobante.codigoSeguridad}`);
+    const [tipo, ...resto] = encabezadoFiscal(comprobante);
+    b.alinear("centro").negrita(true).linea(tipo).negrita(false);
+    for (const l of resto) b.linea(l);
     b.alinear("izq");
+    for (const l of datosComprador(comprobante)) b.linea(l);
   }
 
   b.separador(ancho);
   for (const l of lineas) {
-    b.linea(l.descripcion);
+    b.linea(descripcionLinea(l, !!comprobante));
     b.columnas(`${cantidad(l.cantidad)} x ${money(l.precio_unitario)}`, money(l.subtotal), ancho);
+    if (comprobante && l.monto_itbis > 0) b.columnas("", `ITBIS ${money(l.monto_itbis)}`, ancho);
   }
   b.separador(ancho);
 
@@ -182,6 +199,14 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
 
   if (factura.notas) {
     b.separador(ancho).linea(`Notas: ${factura.notas}`);
+  }
+
+  if (comprobante?.qrUrl || comprobante?.codigoSeguridad) {
+    b.separador(ancho).alinear("centro");
+    if (comprobante.qrUrl) b.qr(comprobante.qrUrl).saltos(1);
+    if (comprobante.codigoSeguridad) b.linea(`Codigo de seguridad: ${comprobante.codigoSeguridad}`);
+    if (comprobante.fechaFirma) b.linea(`Fecha firma digital: ${comprobante.fechaFirma}`);
+    b.alinear("izq");
   }
 
   b.separador(ancho).alinear("centro").linea("¡Gracias por su compra!");
