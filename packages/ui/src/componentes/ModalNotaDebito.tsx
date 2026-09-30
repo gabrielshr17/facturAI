@@ -35,7 +35,6 @@ const TASAS: { valor: NotaDebitoInput["tasaImpuesto"]; etiqueta: string }[] = [
 
 const CODIGO_CORRIGE_MONTOS = 3;
 
-/** Cargo adicional sobre un comprobante ya aceptado (intereses por mora, flete, ajustes al alza): emite una Nota de Débito (E33). */
 export function ModalNotaDebito({
   comprobante,
   factura,

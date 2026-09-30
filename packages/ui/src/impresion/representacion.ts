@@ -88,7 +88,6 @@ export interface DatosNotaDebito {
   secuencias: Pick<SecuenciaNcfRepo, "obtener">;
 }
 
-/** Recibo de una nota de débito: un solo cargo, sin pagos, que referencia el comprobante que modifica. */
 export async function datosReciboNotaDebito(datos: DatosNotaDebito): Promise<ReciboDatos> {
   const { nota } = datos;
   return {

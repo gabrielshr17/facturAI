@@ -439,7 +439,6 @@ function FacturasCobradas() {
   );
 }
 
-/** Solo un E31, E32 o E45 con validez fiscal puede recibir una nota de débito (la regla definitiva vive en @sfr/core). */
 function admiteNotaDebito(comprobante: ComprobanteFiscal | null): boolean {
   return (
     !!comprobante &&

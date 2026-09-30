@@ -72,12 +72,6 @@ function desglose(monto: number, tasa: number): { gravado: number; exento: numbe
   return { gravado, exento: 0, itbis: redondear2(monto - gravado) };
 }
 
-/**
- * Emite una Nota de Débito (E33) que aumenta el valor de un comprobante ya
- * aceptado (intereses, flete, ajustes al alza). Mismo orden y política que
- * la nota de crédito: todo se valida antes de consumir el NCF, y si la DGII
- * no lo acepta el número queda en cola para anular.
- */
 export async function emitirNotaDebitoFiscal(
   deps: NotaDebitoFiscalDeps,
   input: NotaDebitoInput,
