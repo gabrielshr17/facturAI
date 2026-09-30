@@ -1167,13 +1167,7 @@ export function Ventas() {
         lineas: lineasUltima,
         pagos: pagosUltima,
         cliente: clienteUltima ?? null,
-        comprobante: comprobanteUltimo
-          ? {
-              ncf: comprobanteUltimo.ncf,
-              tipoEcfEtiqueta: comprobanteUltimo.tipo_ecf === "31" ? "Crédito Fiscal (E31)" : "Consumo (E32)",
-              codigoSeguridad: comprobanteUltimo.codigo_seguridad,
-            }
-          : null,
+        comprobante: comprobanteUltimo ? await comprobanteParaRecibo(comprobanteUltimo, secuenciaNcf) : null,
       };
       if (salida === "imprimir") {
         imprimirRecibo(datosRecibo);
