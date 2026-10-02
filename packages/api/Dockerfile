@@ -19,4 +19,4 @@ ENV NODE_ENV=production
 ENV PORT=3001
 EXPOSE 3001
 USER node
-CMD ["pnpm", "exec", "tsx", "src/server.ts"]
+CMD ["./node_modules/.bin/tsx", "src/server.ts"]
