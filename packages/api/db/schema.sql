@@ -339,7 +339,7 @@ CREATE INDEX ix_comprobante_archivo_compra ON comprobante_archivo(compra_id);
 -- guarda una fila aquí pendiente de que alguien la confirme/descarte desde la app — mismo
 -- espíritu que comprobante_archivo (estado_revision/identificado_por), pero para transferencias
 -- entrantes en vez de comprobantes de compra.
-CREATE TABLE notificacion_transferencia (
+CREATE TABLE IF NOT EXISTS notificacion_transferencia (
   id                   TEXT PRIMARY KEY,
   monto                NUMERIC(12,2),
   fecha                DATE,
@@ -354,7 +354,7 @@ CREATE TABLE notificacion_transferencia (
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at           TIMESTAMPTZ
 );
-CREATE INDEX ix_notificacion_transferencia_estado ON notificacion_transferencia(estado_confirmacion);
+CREATE INDEX IF NOT EXISTS ix_notificacion_transferencia_estado ON notificacion_transferencia(estado_confirmacion);
 
 -- Bitácora (pendiente en el modo local, ver plan.md §"Caja y auditoría") ----
 CREATE TABLE bitacora_accion (
