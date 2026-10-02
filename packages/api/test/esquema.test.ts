@@ -100,3 +100,24 @@ describe("db/schema.sql (Postgres) no expone datos por la API pública de Supaba
     expect(politicas.rows).toEqual([]);
   }, 60_000);
 });
+
+describe("db/schema.sql con la tabla notificacion_transferencia ya creada en el proyecto", () => {
+  it("se aplica sin errores y conserva las filas existentes", async () => {
+    const pg = new PGlite();
+    await pg.exec(
+      `CREATE TABLE notificacion_transferencia (
+         id TEXT PRIMARY KEY, monto NUMERIC(12,2), fecha DATE, banco_origen TEXT, remitente TEXT, referencia TEXT,
+         correo_snippet TEXT NOT NULL, estado_confirmacion TEXT NOT NULL DEFAULT 'pendiente',
+         identificado_por TEXT NOT NULL DEFAULT 'chatbot', datos_extraidos_json JSONB,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), deleted_at TIMESTAMPTZ);
+       CREATE INDEX ix_notificacion_transferencia_estado ON notificacion_transferencia(estado_confirmacion);
+       INSERT INTO notificacion_transferencia (id, correo_snippet) VALUES ('t1', 'previa');`,
+    );
+
+    await pg.exec(readFileSync(RUTA_ESQUEMA, "utf8"));
+
+    const { rows } = await pg.query<{ id: string }>("SELECT id FROM notificacion_transferencia");
+    await pg.close();
+    expect(rows).toEqual([{ id: "t1" }]);
+  }, 60_000);
+});

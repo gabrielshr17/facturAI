@@ -90,6 +90,7 @@ Cualquiera puede enviar un XML a `/fe/recepcion/api/ecf`. Por eso:
    Debe terminar sin errores. Crea las 28 tablas, incluidas las de llaves de caja y e-CF recibidos.
 4. Verifica en Table Editor que las tablas salen con el candado de RLS activado. El esquema activa RLS en todas
    y no crea políticas: la llave anónima no lee nada, y solo el backend (llave de servicio) accede.
+   `notificacion_transferencia` ya existe en el proyecto real: el esquema la omite si está (`IF NOT EXISTS`).
 5. Corre el esquema **una sola vez** sobre un proyecto vacío: no es idempotente. Si hay que repetirlo, usa un
    proyecto nuevo o elimina las tablas antes.
 
