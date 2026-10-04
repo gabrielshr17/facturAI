@@ -21,7 +21,7 @@ function obtenerCliente(): GoogleGenAI {
   return cliente;
 }
 
-const MODELO = "gemini-2.5-flash";
+const MODELO = "gemini-3.8-flash";
 
 export interface DatosExtraidosTransferencia {
   monto: number | null;
