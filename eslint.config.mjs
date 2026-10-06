@@ -14,6 +14,7 @@ export default tseslint.config(
       "**/src-tauri/target/**",
       "**/src-tauri/gen/**",
       "**/*.d.ts",
+      "handoff-fiscal/**",
     ],
   },
   js.configs.recommended,
