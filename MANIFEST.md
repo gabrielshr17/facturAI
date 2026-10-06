@@ -1,0 +1,186 @@
+# Manifiesto
+
+Origen: `gabrielshr17/facturAI`, rama `master`, commit `a075174`. Rango comparado: antes del módulo fiscal (`68fddf5^`) hasta `a075174`.
+
+- **Nuevos** (125 archivos, carpeta `archivos-nuevos/`): no existían antes. Se copian respetando la ruta.
+- **Modificados** (44 archivos): ya existían y se cambiaron. Vienen como parche (`cambios-en-archivos-compartidos.patch`) y completos en `archivos-modificados-completos/`.
+- **No incluidos a propósito:** `pnpm-lock.yaml` (regenerar con `pnpm install`), `COMPROBANTES-RECIBIDOS.md` (plan de otra función, lectura de recibos de compra), cualquier `.env`, certificados y los PDF de la DGII (se descargan; ver PLAN.md).
+- Los 15 XSD aparecen dos veces a propósito: `packages/api/xsd/` (los que usa el código, con dos parches de sintaxis) y `docs/dgii/xsd/` (copia de referencia tal como los publica la DGII).
+
+## Cómo usar este manifiesto para saber si ya está construido en el destino
+Recorre las dos listas y comprueba que cada ruta exista en el destino. Para los modificados, mira además que contengan lo que el parche añade (busca en el parche los nombres de funciones y migraciones nuevas).
+
+## Archivos nuevos (125)
+
+- `.dockerignore`
+- `docs/dgii/xsd/ACECF v.1.0.xsd`
+- `docs/dgii/xsd/ANECF v.1.0.xsd`
+- `docs/dgii/xsd/ARECF v1.0.xsd`
+- `docs/dgii/xsd/e-CF 31 v.1.0.xsd`
+- `docs/dgii/xsd/e-CF 32 v.1.0.xsd`
+- `docs/dgii/xsd/e-CF 33 v.1.0.xsd`
+- `docs/dgii/xsd/e-CF 34 v.1.0.xsd`
+- `docs/dgii/xsd/e-CF 41 v.1.0.xsd`
+- `docs/dgii/xsd/e-CF 43 v.1.0.xsd`
+- `docs/dgii/xsd/e-CF 44 v.1.0.xsd`
+- `docs/dgii/xsd/e-CF 45 v.1.0.xsd`
+- `docs/dgii/xsd/e-CF 46 v.1.0.xsd`
+- `docs/dgii/xsd/e-CF 47 v.1.0.xsd`
+- `docs/dgii/xsd/RFCE 32 v.1.0.xsd`
+- `docs/dgii/xsd/Semilla v.1.0.xsd`
+- `docs/investigacion-fiscal.md`
+- `packages/api/DESPLIEGUE.md`
+- `packages/api/Dockerfile`
+- `packages/api/scripts/caja-key.ts`
+- `packages/api/scripts/set-pruebas.ts`
+- `packages/api/src/fiscal/ambiente.ts`
+- `packages/api/src/fiscal/certificacion/argumentos.ts`
+- `packages/api/src/fiscal/certificacion/certificado-efimero.ts`
+- `packages/api/src/fiscal/certificacion/esquema.ts`
+- `packages/api/src/fiscal/certificacion/generador.ts`
+- `packages/api/src/fiscal/certificacion/set-pruebas.ts`
+- `packages/api/src/fiscal/certificacion/validar-xsd.ts`
+- `packages/api/src/fiscal/codigo-seguridad.ts`
+- `packages/api/src/fiscal/dgii-cliente.ts`
+- `packages/api/src/fiscal/entrega.ts`
+- `packages/api/src/fiscal/errores.ts`
+- `packages/api/src/fiscal/firma.ts`
+- `packages/api/src/fiscal/formato.ts`
+- `packages/api/src/fiscal/iniciar.ts`
+- `packages/api/src/fiscal/qr.ts`
+- `packages/api/src/fiscal/recepcion/almacen.ts`
+- `packages/api/src/fiscal/recepcion/autenticacion.ts`
+- `packages/api/src/fiscal/recepcion/raices.ts`
+- `packages/api/src/fiscal/servicio-emision.ts`
+- `packages/api/src/fiscal/servicio-entrega.ts`
+- `packages/api/src/fiscal/servicio-recibidos.ts`
+- `packages/api/src/fiscal/verificacion.ts`
+- `packages/api/src/fiscal/xml/acecf.ts`
+- `packages/api/src/fiscal/xml/anecf.ts`
+- `packages/api/src/fiscal/xml/arecf.ts`
+- `packages/api/src/fiscal/xml/ecf.ts`
+- `packages/api/src/fiscal/xml/nodo.ts`
+- `packages/api/src/fiscal/xml/perfiles.ts`
+- `packages/api/src/fiscal/xml/rfce.ts`
+- `packages/api/src/fiscal/xml/totales.ts`
+- `packages/api/src/routes/recepcion.ts`
+- `packages/api/src/routes/recibidos.ts`
+- `packages/api/test/auth.test.ts`
+- `packages/api/test/esquema.test.ts`
+- `packages/api/test/fiscal/almacen-memoria.ts`
+- `packages/api/test/fiscal/argumentos-set-pruebas.test.ts`
+- `packages/api/test/fiscal/certificado-prueba.ts`
+- `packages/api/test/fiscal/datos-prueba.ts`
+- `packages/api/test/fiscal/dgii-cliente.test.ts`
+- `packages/api/test/fiscal/dgii-cliente-extra.test.ts`
+- `packages/api/test/fiscal/dgii-falso.ts`
+- `packages/api/test/fiscal/entrega.test.ts`
+- `packages/api/test/fiscal/firma.test.ts`
+- `packages/api/test/fiscal/generador.test.ts`
+- `packages/api/test/fiscal/iniciar.test.ts`
+- `packages/api/test/fiscal/qr.test.ts`
+- `packages/api/test/fiscal/recepcion.test.ts`
+- `packages/api/test/fiscal/rutas.test.ts`
+- `packages/api/test/fiscal/rutas-recibidos.test.ts`
+- `packages/api/test/fiscal/servicio-emision.test.ts`
+- `packages/api/test/fiscal/servicio-entrega.test.ts`
+- `packages/api/test/fiscal/servicio-recibidos.test.ts`
+- `packages/api/test/fiscal/set-pruebas.test.ts`
+- `packages/api/test/fiscal/verificacion.test.ts`
+- `packages/api/test/fiscal/xml-acuse-aprobacion.test.ts`
+- `packages/api/test/fiscal/xml-ecf.test.ts`
+- `packages/api/test/fiscal/xml-rfce-anecf.test.ts`
+- `packages/api/test/fiscal/xsd.ts`
+- `packages/api/test/health.test.ts`
+- `packages/api/xsd/acecf.xsd`
+- `packages/api/xsd/anecf.xsd`
+- `packages/api/xsd/arecf.xsd`
+- `packages/api/xsd/ecf-31.xsd`
+- `packages/api/xsd/ecf-32.xsd`
+- `packages/api/xsd/ecf-33.xsd`
+- `packages/api/xsd/ecf-34.xsd`
+- `packages/api/xsd/ecf-41.xsd`
+- `packages/api/xsd/ecf-43.xsd`
+- `packages/api/xsd/ecf-44.xsd`
+- `packages/api/xsd/ecf-45.xsd`
+- `packages/api/xsd/ecf-46.xsd`
+- `packages/api/xsd/ecf-47.xsd`
+- `packages/api/xsd/README.md`
+- `packages/api/xsd/rfce-32.xsd`
+- `packages/core/src/fiscal/comprobante-compra.ts`
+- `packages/core/src/fiscal/nota-debito-fiscal.ts`
+- `packages/core/src/fiscal/seguimiento.ts`
+- `packages/core/src/fiscal/transmision.ts`
+- `packages/core/src/repos/ncf-anulacion-repo.ts`
+- `packages/core/test/comprobante-compra.test.ts`
+- `packages/core/test/fiscal-dgii.test.ts`
+- `packages/core/test/fiscal-entrega.test.ts`
+- `packages/core/test/fiscal-revision.test.ts`
+- `packages/core/test/migracion-comprobante-compra.test.ts`
+- `packages/core/test/negocio-ubicacion.test.ts`
+- `packages/core/test/representacion-impresa.test.ts`
+- `packages/ui/src/componentes/ComprobantesProveedores.tsx`
+- `packages/ui/src/componentes/ModalComprobanteCompra.tsx`
+- `packages/ui/src/componentes/ModalNotaDebito.tsx`
+- `packages/ui/src/componentes/SeccionFacturacionElectronica.tsx`
+- `packages/ui/src/componentes/SeccionRevisionFiscal.tsx`
+- `packages/ui/src/data/apiClient.ts`
+- `packages/ui/src/data/comprobanteCompra.ts`
+- `packages/ui/src/data/fiscalCliente.ts`
+- `packages/ui/src/data/llaveCaja.ts`
+- `packages/ui/src/data/seguimientoFiscal.ts`
+- `packages/ui/src/impresion/qr.ts`
+- `packages/ui/src/impresion/representacion.ts`
+- `packages/ui/test/comprobanteCompra.test.ts`
+- `packages/ui/test/direccionEmisor.test.ts`
+- `packages/ui/test/notaGuardada.test.ts`
+- `packages/ui/test/representacion.test.ts`
+- `packages/ui/vitest.config.ts`
+- `plan-ecf.md`
+
+## Archivos modificados (44) — fusionar, no sobrescribir
+
+- `.gitignore`
+- `CAMBIOS.md`
+- `packages/api/.env.example`
+- `packages/api/db/schema.sql`
+- `packages/api/package.json`
+- `packages/api/README.md`
+- `packages/api/src/config.ts`
+- `packages/api/src/plugins/auth.ts`
+- `packages/api/src/routes/fiscal.ts`
+- `packages/api/src/routes/health.ts`
+- `packages/api/src/server.ts`
+- `packages/api/tsconfig.json`
+- `packages/core/src/db/migrations.ts`
+- `packages/core/src/dominio/ecf.ts`
+- `packages/core/src/dominio/index.ts`
+- `packages/core/src/dominio/mensajes.ts`
+- `packages/core/src/fiscal/cobro-fiscal.ts`
+- `packages/core/src/fiscal/devolucion-fiscal.ts`
+- `packages/core/src/fiscal/proveedor.ts`
+- `packages/core/src/index.ts`
+- `packages/core/src/repos/backup-repo.ts`
+- `packages/core/src/repos/compra-repo.ts`
+- `packages/core/src/repos/comprobante-fiscal-repo.ts`
+- `packages/core/src/repos/index.ts`
+- `packages/core/src/repos/negocio-repo.ts`
+- `packages/core/src/repos/secuencia-ncf-repo.ts`
+- `packages/core/src/repos/tipos.ts`
+- `packages/core/test/devolucion.test.ts`
+- `packages/core/test/fiscal.test.ts`
+- `packages/ui/package.json`
+- `packages/ui/src/componentes/ChatBot.tsx`
+- `packages/ui/src/componentes/ModalCobro.tsx`
+- `packages/ui/src/componentes/ModalDevolucion.tsx`
+- `packages/ui/src/data/chatbotCliente.ts`
+- `packages/ui/src/data/contexto.tsx`
+- `packages/ui/src/data/transferenciasCliente.ts`
+- `packages/ui/src/impresion/escpos.ts`
+- `packages/ui/src/impresion/pdf.ts`
+- `packages/ui/src/impresion/recibo.ts`
+- `packages/ui/src/pantallas/Compras.tsx`
+- `packages/ui/src/pantallas/Configuracion.tsx`
+- `packages/ui/src/pantallas/ConsultaFacturas.tsx`
+- `packages/ui/src/pantallas/Transferencias.tsx`
+- `packages/ui/src/pantallas/Ventas.tsx`

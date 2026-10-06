@@ -1,0 +1,642 @@
+/**
+ * Migraciones del esquema.
+ *
+ * Cada migración tiene un `id` incremental y su SQL. El migrador las aplica en
+ * orden y registra las aplicadas en `_migracion`. El SQL usa tipos SQLite
+ * (TEXT/REAL/INTEGER); en Postgres (Fase 2) se mapean vía la capa de sync.
+ *
+ * Convenciones (ver plan.md):
+ *  - PK `id TEXT` = UUID generado en el cliente.
+ *  - Todas las tablas sincronizables: `created_at`, `updated_at`, `deleted_at`.
+ *  - Montos como REAL con redondeo a 2 decimales en la capa de dominio.
+ *
+ * Fase 0 crea SOLO las tablas del MVP. El resto del modelo (fiscal, compras,
+ * inventario, corte, bitácora) se añade en migraciones de Fase 2.
+ */
+export interface Migration {
+  id: number;
+  nombre: string;
+  sql: string;
+}
+
+export const migrations: Migration[] = [
+  {
+    id: 1,
+    nombre: "mvp_inicial",
+    sql: /* sql */ `
+      -- Configuración / acceso -------------------------------------------------
+      CREATE TABLE negocio (
+        id                       TEXT PRIMARY KEY,
+        nombre_comercial         TEXT NOT NULL,
+        razon_social             TEXT,
+        rnc                      TEXT,
+        direccion                TEXT,
+        telefono                 TEXT,
+        correo                   TEXT,
+        logo_ruta                TEXT,
+        regimen                  TEXT,
+        ancho_impresora_default  INTEGER NOT NULL DEFAULT 80,  -- 58 | 80
+        redondeo_centavo         INTEGER NOT NULL DEFAULT 1,    -- bool
+        inventario_activo        INTEGER NOT NULL DEFAULT 0,    -- bool (MVP: off)
+        created_at               TEXT NOT NULL,
+        updated_at               TEXT NOT NULL,
+        deleted_at               TEXT
+      );
+
+      CREATE TABLE usuario (
+        id             TEXT PRIMARY KEY,
+        nombre         TEXT NOT NULL,
+        rol            TEXT NOT NULL DEFAULT 'admin',  -- admin | cajero
+        pin_hash       TEXT,
+        activo         INTEGER NOT NULL DEFAULT 1,
+        permisos_json  TEXT,
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL,
+        deleted_at     TEXT
+      );
+
+      CREATE TABLE caja (
+        id          TEXT PRIMARY KEY,
+        nombre      TEXT NOT NULL,
+        ubicacion   TEXT,
+        activa      INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL,
+        deleted_at  TEXT
+      );
+
+      -- Catálogo ---------------------------------------------------------------
+      CREATE TABLE departamento (
+        id          TEXT PRIMARY KEY,
+        nombre      TEXT NOT NULL,
+        activo      INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL,
+        deleted_at  TEXT
+      );
+
+      CREATE TABLE producto (
+        id                     TEXT PRIMARY KEY,
+        codigo_barra           TEXT,
+        descripcion            TEXT NOT NULL,
+        tipo_venta             TEXT NOT NULL DEFAULT 'unidad', -- unidad|granel|paquete|kit
+        unidad_medida          TEXT,
+        costo                  REAL NOT NULL DEFAULT 0,
+        pct_ganancia           REAL NOT NULL DEFAULT 0,
+        precio_venta           REAL NOT NULL DEFAULT 0,
+        precio_mayoreo         REAL,
+        departamento_id        TEXT REFERENCES departamento(id),
+        impuesto_tipo          TEXT NOT NULL DEFAULT 'itbis18', -- itbis18|itbis16|exento|otro
+        tasa_impuesto          REAL NOT NULL DEFAULT 0.18,
+        existencia             REAL,        -- NULL si inventario off (MVP)
+        politica_sin_existencia TEXT NOT NULL DEFAULT 'advertir', -- bloquear|advertir
+        activo                 INTEGER NOT NULL DEFAULT 1,
+        created_at             TEXT NOT NULL,
+        updated_at             TEXT NOT NULL,
+        deleted_at             TEXT
+      );
+      -- Único solo cuando el código de barra existe (permite varios NULL).
+      CREATE UNIQUE INDEX ux_producto_codigo_barra
+        ON producto(codigo_barra) WHERE codigo_barra IS NOT NULL AND deleted_at IS NULL;
+
+      -- Clientes ---------------------------------------------------------------
+      CREATE TABLE cliente (
+        id               TEXT PRIMARY KEY,
+        nombre           TEXT NOT NULL,
+        apellidos        TEXT,
+        telefono         TEXT,
+        correo           TEXT,
+        direccion        TEXT,
+        comentarios      TEXT,
+        aplica_credito   INTEGER NOT NULL DEFAULT 0,
+        limite_credito   REAL NOT NULL DEFAULT 0,
+        saldo_credito    REAL NOT NULL DEFAULT 0,
+        documento_tipo   TEXT,   -- rnc | cedula | NULL
+        documento_numero TEXT,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL,
+        deleted_at       TEXT
+      );
+
+      -- Ventas -----------------------------------------------------------------
+      CREATE TABLE factura (
+        id                TEXT PRIMARY KEY,
+        numero_interno    INTEGER,
+        fecha_hora        TEXT NOT NULL,
+        cliente_id        TEXT REFERENCES cliente(id),
+        caja_id           TEXT REFERENCES caja(id),
+        usuario_id        TEXT REFERENCES usuario(id),
+        tipo              TEXT NOT NULL DEFAULT 'normal', -- normal | fiscal (fiscal en Fase 2)
+        subtotal_gravado  REAL NOT NULL DEFAULT 0,
+        subtotal_exento   REAL NOT NULL DEFAULT 0,
+        total_itbis       REAL NOT NULL DEFAULT 0,
+        total             REAL NOT NULL DEFAULT 0,
+        monto_pagado      REAL NOT NULL DEFAULT 0,
+        cambio            REAL NOT NULL DEFAULT 0,
+        notas             TEXT,
+        estado            TEXT NOT NULL DEFAULT 'abierta', -- abierta|cobrada|anulada
+        created_at        TEXT NOT NULL,
+        updated_at        TEXT NOT NULL,
+        deleted_at        TEXT
+      );
+
+      CREATE TABLE factura_linea (
+        id              TEXT PRIMARY KEY,
+        factura_id      TEXT NOT NULL REFERENCES factura(id),
+        producto_id     TEXT REFERENCES producto(id), -- NULL si no registrado
+        descripcion     TEXT NOT NULL,
+        cantidad        REAL NOT NULL DEFAULT 1,
+        precio_unitario REAL NOT NULL DEFAULT 0,
+        es_mayoreo      INTEGER NOT NULL DEFAULT 0,
+        impuesto_tipo   TEXT NOT NULL DEFAULT 'itbis18',
+        tasa_impuesto   REAL NOT NULL DEFAULT 0.18,
+        monto_itbis     REAL NOT NULL DEFAULT 0,
+        subtotal        REAL NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        deleted_at      TEXT
+      );
+      CREATE INDEX ix_factura_linea_factura ON factura_linea(factura_id);
+
+      CREATE TABLE pago (
+        id          TEXT PRIMARY KEY,
+        factura_id  TEXT NOT NULL REFERENCES factura(id),
+        metodo      TEXT NOT NULL, -- efectivo|transferencia|credito|tarjeta
+        monto       REAL NOT NULL DEFAULT 0,
+        referencia  TEXT,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL,
+        deleted_at  TEXT
+      );
+      CREATE INDEX ix_pago_factura ON pago(factura_id);
+    `,
+  },
+  {
+    id: 2,
+    nombre: "fiscal_ecf",
+    sql: /* sql */ `
+      -- Secuencias autorizadas por la DGII, por tipo de e-CF -------------------
+      CREATE TABLE secuencia_ncf (
+        id              TEXT PRIMARY KEY,
+        tipo_ecf        TEXT NOT NULL, -- '31'|'32'|'33'|'34'|'41'|'43'|'44'|'45'|'46'|'47'
+        prefijo         TEXT NOT NULL, -- 'E31', 'E32', ...
+        modo            TEXT NOT NULL DEFAULT 'ecf', -- ecf|ncf_papel|contingencia
+        rango_desde     INTEGER NOT NULL,
+        rango_hasta     INTEGER NOT NULL,
+        proximo_numero  INTEGER NOT NULL,
+        vencimiento     TEXT NOT NULL, -- fecha ISO (date)
+        estado          TEXT NOT NULL DEFAULT 'disponible', -- disponible|agotada|vencida
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        deleted_at      TEXT
+      );
+
+      -- Comprobantes fiscales emitidos, uno por factura marcada fiscal --------
+      CREATE TABLE comprobante_fiscal (
+        id                       TEXT PRIMARY KEY,
+        factura_id               TEXT NOT NULL REFERENCES factura(id),
+        tipo_ecf                 TEXT NOT NULL,
+        ncf                      TEXT NOT NULL,
+        secuencia_id             TEXT NOT NULL REFERENCES secuencia_ncf(id),
+        rnc_emisor               TEXT,
+        receptor_documento_tipo  TEXT,   -- rnc | cedula | NULL
+        receptor_documento_numero TEXT,
+        fecha_emision            TEXT NOT NULL,
+        monto_gravado            REAL NOT NULL DEFAULT 0,
+        monto_exento             REAL NOT NULL DEFAULT 0,
+        monto_itbis              REAL NOT NULL DEFAULT 0,
+        total                    REAL NOT NULL DEFAULT 0,
+        estado_dgii              TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|aceptado|rechazado|contingencia
+        track_id_dgii            TEXT,
+        codigo_seguridad         TEXT,
+        xml_firmado_ruta         TEXT,
+        qr_url                   TEXT,
+        fecha_transmision        TEXT,
+        created_at               TEXT NOT NULL,
+        updated_at               TEXT NOT NULL,
+        deleted_at               TEXT
+      );
+      CREATE UNIQUE INDEX ux_comprobante_fiscal_ncf ON comprobante_fiscal(ncf);
+      CREATE INDEX ix_comprobante_fiscal_factura ON comprobante_fiscal(factura_id);
+
+      -- Enlace desde la factura a su comprobante fiscal (NULL si es normal) ---
+      ALTER TABLE factura ADD COLUMN comprobante_id TEXT REFERENCES comprobante_fiscal(id);
+    `,
+  },
+  {
+    id: 3,
+    nombre: "corte_caja",
+    sql: /* sql */ `
+      -- Corte de caja: cierre de un período, con efectivo esperado vs contado --
+      CREATE TABLE corte_caja (
+        id                   TEXT PRIMARY KEY,
+        caja_id              TEXT REFERENCES caja(id),
+        usuario_id           TEXT REFERENCES usuario(id),
+        fecha_apertura       TEXT NOT NULL, -- inicio del período cubierto (fecha, inclusive)
+        fecha_cierre         TEXT NOT NULL, -- fin del período cubierto (fecha, inclusive)
+        monto_inicial        REAL NOT NULL DEFAULT 0, -- fondo de caja al abrir
+        total_ventas         REAL NOT NULL DEFAULT 0,
+        total_itbis           REAL NOT NULL DEFAULT 0,
+        total_efectivo       REAL NOT NULL DEFAULT 0,
+        total_tarjeta        REAL NOT NULL DEFAULT 0,
+        total_transferencia  REAL NOT NULL DEFAULT 0,
+        total_credito        REAL NOT NULL DEFAULT 0,
+        efectivo_esperado    REAL NOT NULL DEFAULT 0, -- monto_inicial + total_efectivo
+        efectivo_contado     REAL NOT NULL DEFAULT 0, -- ingresado manualmente al cerrar
+        diferencia           REAL NOT NULL DEFAULT 0, -- efectivo_contado - efectivo_esperado
+        estado               TEXT NOT NULL DEFAULT 'cerrado', -- abierto|cerrado
+        created_at           TEXT NOT NULL,
+        updated_at           TEXT NOT NULL,
+        deleted_at           TEXT
+      );
+      CREATE INDEX ix_corte_caja_fecha_cierre ON corte_caja(fecha_cierre);
+    `,
+  },
+  {
+    id: 4,
+    nombre: "movimiento_inventario",
+    sql: /* sql */ `
+      -- Historial de existencia (§ Inventario). Con inventario off no se genera nada.
+      CREATE TABLE movimiento_inventario (
+        id              TEXT PRIMARY KEY,
+        producto_id     TEXT NOT NULL REFERENCES producto(id),
+        tipo            TEXT NOT NULL, -- entrada|salida|ajuste|venta|compra
+        cantidad        REAL NOT NULL, -- delta con signo (positivo entra, negativo sale)
+        costo           REAL,
+        referencia_tipo TEXT,
+        referencia_id   TEXT,
+        fecha           TEXT NOT NULL,
+        usuario_id      TEXT REFERENCES usuario(id),
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        deleted_at      TEXT
+      );
+      CREATE INDEX ix_movimiento_inventario_producto ON movimiento_inventario(producto_id);
+    `,
+  },
+  {
+    id: 5,
+    nombre: "compras",
+    sql: /* sql */ `
+      -- Compras e inventario (con archivado) ----------------------------------
+      CREATE TABLE proveedor (
+        id          TEXT PRIMARY KEY,
+        nombre      TEXT NOT NULL,
+        rnc         TEXT,
+        telefono    TEXT,
+        correo      TEXT,
+        direccion   TEXT,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL,
+        deleted_at  TEXT
+      );
+
+      -- Se registra SIEMPRE (inventario on u off): historial de costo y llegada.
+      CREATE TABLE compra (
+        id                        TEXT PRIMARY KEY,
+        fecha                     TEXT NOT NULL,
+        proveedor_id              TEXT REFERENCES proveedor(id),
+        subtotal                  REAL NOT NULL DEFAULT 0,
+        itbis                     REAL NOT NULL DEFAULT 0,
+        total                     REAL NOT NULL DEFAULT 0,
+        ncf_proveedor             TEXT,
+        tiene_comprobante_fiscal  INTEGER NOT NULL DEFAULT 0,
+        mes_ano_contable          TEXT NOT NULL, -- 'AAAA-MM'
+        estado_clasificacion      TEXT NOT NULL DEFAULT 'sin_fiscal', -- con_fiscal|sin_fiscal|pendiente_revision
+        origen                    TEXT NOT NULL DEFAULT 'manual', -- manual|chatbot (Fase 3)
+        notas                     TEXT,
+        created_at                TEXT NOT NULL,
+        updated_at                TEXT NOT NULL,
+        deleted_at                TEXT
+      );
+      CREATE INDEX ix_compra_fecha ON compra(fecha);
+      CREATE INDEX ix_compra_mes_ano ON compra(mes_ano_contable);
+
+      CREATE TABLE compra_linea (
+        id              TEXT PRIMARY KEY,
+        compra_id       TEXT NOT NULL REFERENCES compra(id),
+        producto_id     TEXT REFERENCES producto(id), -- NULL si es un producto nuevo/no registrado
+        descripcion     TEXT NOT NULL,
+        cantidad        REAL NOT NULL DEFAULT 1,
+        costo_unitario  REAL NOT NULL DEFAULT 0,
+        impuesto_tipo   TEXT NOT NULL DEFAULT 'itbis18',
+        tasa_impuesto   REAL NOT NULL DEFAULT 0.18,
+        monto_itbis     REAL NOT NULL DEFAULT 0,
+        subtotal        REAL NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        deleted_at      TEXT
+      );
+      CREATE INDEX ix_compra_linea_compra ON compra_linea(compra_id);
+
+      -- Archivo del comprobante (foto/PDF), guardado inline como base64: en modo
+      -- 100% local (SQLite) no hay Storage todavía (llega con el backend en
+      -- Fase 2 avanzada). "identificado_por"/"datos_extraidos_json" quedan listos
+      -- para cuando el chatbot con visión (Fase 3) archive automáticamente.
+      CREATE TABLE comprobante_archivo (
+        id                    TEXT PRIMARY KEY,
+        compra_id             TEXT REFERENCES compra(id),
+        nombre_archivo        TEXT NOT NULL,
+        tipo_mime             TEXT NOT NULL,
+        contenido_base64      TEXT NOT NULL,
+        mes_ano               TEXT NOT NULL, -- 'AAAA-MM'
+        tiene_fiscal          INTEGER NOT NULL DEFAULT 0,
+        estado_revision       TEXT NOT NULL DEFAULT 'confirmado_usuario', -- auto|confirmado_usuario|pendiente
+        identificado_por      TEXT NOT NULL DEFAULT 'usuario', -- chatbot|usuario
+        datos_extraidos_json  TEXT,
+        created_at            TEXT NOT NULL,
+        updated_at            TEXT NOT NULL,
+        deleted_at            TEXT
+      );
+      CREATE INDEX ix_comprobante_archivo_compra ON comprobante_archivo(compra_id);
+    `,
+  },
+  {
+    id: 6,
+    nombre: "bitacora",
+    sql: /* sql */ `
+      -- Bitácora de acciones (§ Caja y auditoría): registro de quién y cuándo
+      -- para acciones sensibles (eliminar, cobrar, comprar, cerrar caja, ajustar
+      -- existencia). Requisito de seguridad (sección 8 del prompt original).
+      CREATE TABLE bitacora_accion (
+        id          TEXT PRIMARY KEY,
+        usuario_id  TEXT REFERENCES usuario(id),
+        origen      TEXT NOT NULL DEFAULT 'app', -- app|chatbot (chatbot en Fase 3)
+        accion      TEXT NOT NULL, -- ej. 'eliminar', 'cobrar', 'registrar_compra'
+        entidad     TEXT NOT NULL, -- ej. 'producto', 'factura', 'compra'
+        entidad_id  TEXT,
+        resumen     TEXT,
+        confirmada  INTEGER NOT NULL DEFAULT 1, -- bool
+        timestamp   TEXT NOT NULL
+      );
+      CREATE INDEX ix_bitacora_accion_entidad ON bitacora_accion(entidad, entidad_id);
+      CREATE INDEX ix_bitacora_accion_timestamp ON bitacora_accion(timestamp);
+    `,
+  },
+  {
+    id: 7,
+    nombre: "devoluciones",
+    sql: /* sql */ `
+      -- Devoluciones (§ Ventas): devolver artículos de una venta ya cobrada.
+      -- Si la venta original fue fiscal, se exige una Nota de Crédito (E34)
+      -- referenciando el NCF original antes de completar la devolución.
+      CREATE TABLE devolucion (
+        id              TEXT PRIMARY KEY,
+        factura_id      TEXT NOT NULL REFERENCES factura(id),
+        fecha           TEXT NOT NULL,
+        motivo          TEXT,
+        subtotal        REAL NOT NULL DEFAULT 0,
+        itbis           REAL NOT NULL DEFAULT 0,
+        total           REAL NOT NULL DEFAULT 0,
+        comprobante_id  TEXT REFERENCES comprobante_fiscal(id), -- NC E34, NULL si venta no fiscal
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        deleted_at      TEXT
+      );
+      CREATE INDEX ix_devolucion_factura ON devolucion(factura_id);
+
+      CREATE TABLE devolucion_linea (
+        id                TEXT PRIMARY KEY,
+        devolucion_id     TEXT NOT NULL REFERENCES devolucion(id),
+        factura_linea_id  TEXT NOT NULL REFERENCES factura_linea(id),
+        producto_id       TEXT REFERENCES producto(id),
+        descripcion       TEXT NOT NULL,
+        cantidad          REAL NOT NULL,
+        precio_unitario   REAL NOT NULL,
+        impuesto_tipo     TEXT NOT NULL,
+        tasa_impuesto     REAL NOT NULL,
+        monto_itbis       REAL NOT NULL,
+        subtotal          REAL NOT NULL,
+        created_at        TEXT NOT NULL,
+        updated_at        TEXT NOT NULL,
+        deleted_at        TEXT
+      );
+      CREATE INDEX ix_devolucion_linea_devolucion ON devolucion_linea(devolucion_id);
+      CREATE INDEX ix_devolucion_linea_factura_linea ON devolucion_linea(factura_linea_id);
+    `,
+  },
+  {
+    id: 8,
+    nombre: "promociones",
+    sql: /* sql */ `
+      -- Promociones (§ Fase 3): descuento por producto o departamento, con
+      -- vigencia. Se aplica automáticamente al agregar el producto a un
+      -- ticket en Ventas (ajusta el precio unitario de esa línea).
+      CREATE TABLE promocion (
+        id               TEXT PRIMARY KEY,
+        nombre           TEXT NOT NULL,
+        tipo             TEXT NOT NULL, -- porcentaje|monto_fijo
+        valor            REAL NOT NULL,
+        aplica_a         TEXT NOT NULL DEFAULT 'producto', -- producto|departamento|todo
+        producto_id      TEXT REFERENCES producto(id),
+        departamento_id  TEXT REFERENCES departamento(id),
+        fecha_inicio     TEXT NOT NULL, -- fecha ISO (date)
+        fecha_fin        TEXT NOT NULL, -- fecha ISO (date)
+        activa           INTEGER NOT NULL DEFAULT 1,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL,
+        deleted_at       TEXT
+      );
+      CREATE INDEX ix_promocion_producto ON promocion(producto_id);
+      CREATE INDEX ix_promocion_departamento ON promocion(departamento_id);
+      CREATE INDEX ix_promocion_vigencia ON promocion(fecha_inicio, fecha_fin);
+    `,
+  },
+  {
+    id: 9,
+    nombre: "producto_favorito",
+    sql: /* sql */ `
+      -- Favoritos (§ Ventas): productos marcados por el usuario para que
+      -- aparezcan primero al buscar, sin tener que escribir tanto.
+      ALTER TABLE producto ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0;
+      CREATE INDEX ix_producto_favorito ON producto(favorito);
+    `,
+  },
+  {
+    id: 10,
+    nombre: "cotizaciones",
+    sql: /* sql */ `
+      -- Cotizaciones (§ Ventas): precio ofrecido a un cliente antes de la venta.
+      -- A propósito NO es una factura: sin pagos, sin comprobante fiscal, sin
+      -- afectar existencia. "estado" solo distingue vigente/anulada/convertida —
+      -- "vencida" se calcula al mostrarla comparando fecha_vencimiento con hoy,
+      -- no se guarda (evita tener que correr un job para mantenerlo al día).
+      CREATE TABLE cotizacion (
+        id                TEXT PRIMARY KEY,
+        numero_interno    INTEGER,
+        fecha_hora        TEXT NOT NULL,
+        fecha_vencimiento TEXT NOT NULL, -- fecha ISO (date)
+        cliente_id        TEXT REFERENCES cliente(id),
+        usuario_id        TEXT REFERENCES usuario(id),
+        subtotal_gravado  REAL NOT NULL DEFAULT 0,
+        subtotal_exento   REAL NOT NULL DEFAULT 0,
+        total_itbis       REAL NOT NULL DEFAULT 0,
+        total             REAL NOT NULL DEFAULT 0,
+        notas             TEXT,
+        estado            TEXT NOT NULL DEFAULT 'vigente', -- vigente|convertida|anulada
+        factura_id        TEXT REFERENCES factura(id), -- si se convirtió en venta
+        created_at        TEXT NOT NULL,
+        updated_at        TEXT NOT NULL,
+        deleted_at        TEXT
+      );
+      CREATE INDEX ix_cotizacion_fecha ON cotizacion(fecha_hora);
+
+      CREATE TABLE cotizacion_linea (
+        id              TEXT PRIMARY KEY,
+        cotizacion_id   TEXT NOT NULL REFERENCES cotizacion(id),
+        producto_id     TEXT REFERENCES producto(id),
+        descripcion     TEXT NOT NULL,
+        cantidad        REAL NOT NULL DEFAULT 1,
+        precio_unitario REAL NOT NULL DEFAULT 0,
+        impuesto_tipo   TEXT NOT NULL DEFAULT 'itbis18',
+        tasa_impuesto   REAL NOT NULL DEFAULT 0.18,
+        monto_itbis     REAL NOT NULL DEFAULT 0,
+        subtotal        REAL NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        deleted_at      TEXT
+      );
+      CREATE INDEX ix_cotizacion_linea_cotizacion ON cotizacion_linea(cotizacion_id);
+    `,
+  },
+  {
+    id: 11,
+    nombre: "ecf_dgii",
+    sql: /* sql */ `
+      -- Integración directa con la DGII: lo que devuelve la emisión real.
+      ALTER TABLE comprobante_fiscal ADD COLUMN fecha_firma TEXT;
+      ALTER TABLE comprobante_fiscal ADD COLUMN xml_firmado TEXT;
+      ALTER TABLE comprobante_fiscal ADD COLUMN motivo_rechazo TEXT;
+      CREATE INDEX ix_comprobante_fiscal_estado ON comprobante_fiscal(estado_dgii);
+
+      -- e-NCF consumidos que no llegaron a un comprobante válido (sin conexión
+      -- o rechazados): se anulan ante la DGII (ANECF) en lote.
+      CREATE TABLE ncf_anulacion (
+        id                  TEXT PRIMARY KEY,
+        tipo_ecf            TEXT NOT NULL,
+        ncf                 TEXT NOT NULL,
+        motivo              TEXT,
+        estado              TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|anulado|utilizado|revisado
+        ultimo_mensaje_dgii TEXT,
+        created_at          TEXT NOT NULL,
+        updated_at          TEXT NOT NULL,
+        deleted_at          TEXT
+      );
+      CREATE UNIQUE INDEX ux_ncf_anulacion_ncf ON ncf_anulacion(ncf);
+      CREATE INDEX ix_ncf_anulacion_estado ON ncf_anulacion(estado);
+    `,
+  },
+  {
+    id: 12,
+    nombre: "ecf_entrega_receptor",
+    sql: /* sql */ `
+      -- Entrega del e-CF aceptado al comprador electrónico (estándar emisor-receptor DGII).
+      ALTER TABLE comprobante_fiscal ADD COLUMN entrega_estado TEXT NOT NULL DEFAULT 'no_aplica'; -- no_aplica|pendiente|entregado|rechazado|no_electronico
+      ALTER TABLE comprobante_fiscal ADD COLUMN entrega_detalle TEXT;
+      ALTER TABLE comprobante_fiscal ADD COLUMN acuse_recibo_xml TEXT;
+      CREATE INDEX ix_comprobante_fiscal_entrega ON comprobante_fiscal(entrega_estado);
+    `,
+  },
+  {
+    id: 13,
+    nombre: "comprobante_receptor_nombre",
+    sql: /* sql */ `
+      -- Razón social del comprador: la representación impresa la exige (E31) y el comprador puede
+      -- no estar en el catálogo de clientes.
+      ALTER TABLE comprobante_fiscal ADD COLUMN receptor_nombre TEXT;
+    `,
+  },
+  {
+    id: 14,
+    nombre: "comprobante_de_compra_respaldo",
+    sql: /* sql */ `
+      -- El driver de escritorio ejecuta cada sentencia por separado y sin transacción, así que
+      -- reconstruir comprobante_fiscal se hace en tres migraciones que se pueden repetir sin daño.
+      -- Esta copia la tabla y suelta los enlaces que la referencian para poder reemplazarla.
+      CREATE TABLE IF NOT EXISTS comprobante_fiscal_respaldo AS SELECT * FROM comprobante_fiscal;
+      CREATE TABLE IF NOT EXISTS factura_enlace_respaldo AS SELECT id, comprobante_id FROM factura WHERE comprobante_id IS NOT NULL;
+      CREATE TABLE IF NOT EXISTS devolucion_enlace_respaldo AS SELECT id, comprobante_id FROM devolucion WHERE comprobante_id IS NOT NULL;
+      UPDATE factura SET comprobante_id = NULL WHERE comprobante_id IS NOT NULL;
+      UPDATE devolucion SET comprobante_id = NULL WHERE comprobante_id IS NOT NULL;
+    `,
+  },
+  {
+    id: 15,
+    nombre: "comprobante_de_compra_tabla",
+    sql: /* sql */ `
+      DROP TABLE IF EXISTS comprobante_fiscal;
+      CREATE TABLE comprobante_fiscal (
+        id                       TEXT PRIMARY KEY,
+        factura_id               TEXT REFERENCES factura(id),
+        compra_id                TEXT REFERENCES compra(id),
+        tipo_ecf                 TEXT NOT NULL,
+        ncf                      TEXT NOT NULL,
+        secuencia_id             TEXT NOT NULL REFERENCES secuencia_ncf(id),
+        rnc_emisor               TEXT,
+        receptor_documento_tipo  TEXT,
+        receptor_documento_numero TEXT,
+        receptor_nombre          TEXT,
+        fecha_emision            TEXT NOT NULL,
+        monto_gravado            REAL NOT NULL DEFAULT 0,
+        monto_exento             REAL NOT NULL DEFAULT 0,
+        monto_itbis              REAL NOT NULL DEFAULT 0,
+        total                    REAL NOT NULL DEFAULT 0,
+        estado_dgii              TEXT NOT NULL DEFAULT 'pendiente',
+        track_id_dgii            TEXT,
+        codigo_seguridad         TEXT,
+        xml_firmado_ruta         TEXT,
+        qr_url                   TEXT,
+        fecha_transmision        TEXT,
+        fecha_firma              TEXT,
+        xml_firmado              TEXT,
+        motivo_rechazo           TEXT,
+        entrega_estado           TEXT NOT NULL DEFAULT 'no_aplica',
+        entrega_detalle          TEXT,
+        acuse_recibo_xml         TEXT,
+        created_at               TEXT NOT NULL,
+        updated_at               TEXT NOT NULL,
+        deleted_at               TEXT,
+        CHECK (factura_id IS NOT NULL OR compra_id IS NOT NULL)
+      );
+      CREATE UNIQUE INDEX ux_comprobante_fiscal_ncf ON comprobante_fiscal(ncf);
+      CREATE UNIQUE INDEX ux_comprobante_fiscal_compra ON comprobante_fiscal(compra_id) WHERE compra_id IS NOT NULL AND deleted_at IS NULL;
+      CREATE INDEX ix_comprobante_fiscal_factura ON comprobante_fiscal(factura_id);
+      CREATE INDEX ix_comprobante_fiscal_compra ON comprobante_fiscal(compra_id);
+      CREATE INDEX ix_comprobante_fiscal_estado ON comprobante_fiscal(estado_dgii);
+      CREATE INDEX ix_comprobante_fiscal_entrega ON comprobante_fiscal(entrega_estado);
+    `,
+  },
+  {
+    id: 16,
+    nombre: "comprobante_de_compra_restaurar",
+    sql: /* sql */ `
+      INSERT OR IGNORE INTO comprobante_fiscal (
+        id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
+        receptor_documento_numero, receptor_nombre, fecha_emision, monto_gravado, monto_exento,
+        monto_itbis, total, estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url,
+        fecha_transmision, fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle,
+        acuse_recibo_xml, created_at, updated_at, deleted_at
+      )
+      SELECT
+        id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
+        receptor_documento_numero, receptor_nombre, fecha_emision, monto_gravado, monto_exento,
+        monto_itbis, total, estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url,
+        fecha_transmision, fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle,
+        acuse_recibo_xml, created_at, updated_at, deleted_at
+      FROM comprobante_fiscal_respaldo;
+      UPDATE factura SET comprobante_id = (SELECT e.comprobante_id FROM factura_enlace_respaldo e WHERE e.id = factura.id) WHERE id IN (SELECT id FROM factura_enlace_respaldo);
+      UPDATE devolucion SET comprobante_id = (SELECT e.comprobante_id FROM devolucion_enlace_respaldo e WHERE e.id = devolucion.id) WHERE id IN (SELECT id FROM devolucion_enlace_respaldo);
+      DROP TABLE IF EXISTS comprobante_fiscal_respaldo;
+      DROP TABLE IF EXISTS factura_enlace_respaldo;
+      DROP TABLE IF EXISTS devolucion_enlace_respaldo;
+    `,
+  },
+  {
+    id: 17,
+    nombre: "negocio_ubicacion",
+    sql: /* sql */ `
+      ALTER TABLE negocio ADD COLUMN municipio TEXT;
+      ALTER TABLE negocio ADD COLUMN provincia TEXT;
+    `,
+  },
+];

@@ -1,0 +1,4123 @@
+diff --git a/.gitignore b/.gitignore
+index 5c7be5c..2afdd6d 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -24,3 +24,9 @@ productDatabase/
+ 
+ # Salida local de herramientas de automatización de browser (screenshots, sesiones)
+ .playwright-mcp/
++
++# Certificado digital e-CF (DGII): nunca versionar
++*.p12
++*.pfx
++
++docs/dgii/pdf/
+diff --git a/CAMBIOS.md b/CAMBIOS.md
+index 86ee883..140e01e 100644
+--- a/CAMBIOS.md
++++ b/CAMBIOS.md
+@@ -1,5 +1,48 @@
+ # Cambios sin publicar todavía
+ 
++## Facturación electrónica real con la DGII (lista para conectar el certificado)
++
++Las facturas con comprobante fiscal ya se pueden **firmar y enviar de verdad a la DGII**. Mientras
++no esté configurado el certificado digital de la empresa, todo sigue funcionando como antes con el
++simulador; al configurarlo (ver `packages/api/README.md`), las ventas fiscales pasan por la DGII.
++
++- **Consumo (E32) menor a RD$250,000**: se envía el resumen y la respuesta es inmediata.
++- **Crédito fiscal (E31) y consumo de RD$250,000 o más**: la DGII puede tardar en validar. La venta
++  se cobra igual y el comprobante queda "en proceso de validación"; la app consulta su estado sola
++  cada pocos minutos y lo muestra en Consultar facturas.
++- **Nuevo campo en Cobrar**: la **razón social del comprador**, obligatoria para crédito fiscal.
++- **Consumo de RD$250,000 o más** ahora exige RNC o cédula del comprador, como pide la DGII.
++- **El recibo trae el código QR** de la DGII, el código de seguridad y la fecha de firma digital
++  (impresora térmica, PDF e impresión normal).
++- **Números de comprobante que se pierden** (sin conexión o rechazo de la DGII) se anulan
++  automáticamente ante la DGII, en vez de quedar como huecos en la secuencia.
++- Antes de emitir se exige que el negocio tenga **RNC, razón social y dirección** en Configuración.
++
++### Recepción de comprobantes de proveedores y panel fiscal
++
++- **Comprobantes de proveedores** (en Compras): las facturas electrónicas que los proveedores envían a
++  la empresa llegan solas. Desde ahí se **aprueban o rechazan** ante la DGII (y se le avisa al
++  proveedor) y con **Registrar compra** se pasan al formulario de compra con proveedor, NCF y
++  artículos ya llenos, para revisar y guardar.
++- **Facturación electrónica** (en Configuración): muestra si el servicio está activo, en qué ambiente
++  y cuándo vence el certificado (avisa 30 días antes). La lista **Por resolver** reúne los
++  comprobantes en validación, los rechazados por la DGII, los que un comprador no recibió y los
++  números de comprobante que quedaron sin venta, con un botón para **sincronizar con la DGII ahora**.
++- **Llave de la caja**: cada caja se autoriza con su propia llave para emitir comprobantes, sin
++  depender de iniciar sesión con Google.
++- Las facturas de crédito fiscal aceptadas se **entregan automáticamente** al comprador cuando este
++  también es emisor electrónico.
++- En **Consultar facturas**, un comprobante en validación se puede consultar en el momento, y los
++  rechazados indican que no tienen validez fiscal.
++
++### Factura impresa según la DGII
++
++- El tipo de comprobante sale con su **nombre oficial** (ej. "Factura de Crédito Fiscal Electrónica"),
++  junto al e-NCF y su fecha de vencimiento.
++- Aparecen la **razón social** del negocio y del comprador con su RNC, la marca **"E"** en los
++  artículos exentos y el **ITBIS de cada línea**.
++- En el PDF, el código QR respeta la distancia mínima al borde que pide la DGII.
++
+ ## Ganancia: el % ahora es lo que uno espera
+ 
+ **Costo 100 con 20% de ganancia = precio 120.** Antes daba **141.60**: el sistema sacaba
+diff --git a/packages/api/.env.example b/packages/api/.env.example
+index 8fc2cd2..43f04ca 100644
+--- a/packages/api/.env.example
++++ b/packages/api/.env.example
+@@ -28,3 +28,21 @@ TRANSFERENCIAS_POLL_INTERVALO_MS=
+ # Extracción de monto/fecha/banco/referencia del correo de transferencia (Gemini, no Claude —
+ # es independiente de ANTHROPIC_API_KEY de arriba). Sin esto, el sondeo tampoco arranca.
+ GEMINI_API_KEY=
++
++# Facturación electrónica e-CF (DGII, "Software de Desarrollo Propio"). Sin P12, /fiscal/* responde 503.
++# DGII_AMBIENTE: testecf (pre-certificación / set de pruebas), certecf (certificación), ecf (producción).
++DGII_AMBIENTE=testecf
++# Ruta ABSOLUTA al certificado digital de la empresa (.p12/.pfx) y su contraseña. Nunca versionar el archivo.
++DGII_P12_PATH=
++DGII_P12_PASSWORD=
++# RNC de la empresa: el API no firma comprobantes de ningún otro emisor, y el SN del .p12 debe corresponder.
++DGII_RNC_EMISOR=
++# Correos de Google (separados por coma) que pueden emitir comprobantes además de las llaves de caja
++# (pnpm --filter @sfr/api caja-key emitir "Caja 1"). Requiere la tabla caja_api_key en Postgres (ver plan-ecf.md F).
++API_CORREOS_PERMITIDOS=
++# Alternativa a DGII_P12_PATH para hostings sin archivos: el .p12 en base64 (una sola línea).
++# PowerShell: [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\ruta\empresa.p12"))
++DGII_P12_BASE64=
++# Autoridades certificadoras aceptadas para documentos que nos envían (bundle PEM). La DGII entrega el
++# certificado raíz en el portal de certificación (paso 8, "Descargar certificado raíz").
++DGII_CA_RAICES_PATH=
+diff --git a/packages/api/README.md b/packages/api/README.md
+index 36acb79..19b0d7b 100644
+--- a/packages/api/README.md
++++ b/packages/api/README.md
+@@ -19,15 +19,17 @@ negocio (`db/schema.sql`) siguen sin conectar**:
+   (`supabase.auth.getUser(token)`) — 401 si el token es inválido/expiró. Sin
+   esas variables, sigue el modo scaffold: todas las solicitudes pasan como
+   usuario de desarrollo fijo (`dev-local`).
+-- `POST /fiscal/transmitir` (§ Módulo fiscal): responde `501` siempre. Sigue
+-  pendiente la decisión "PAC certificado vs. integración directa a la DGII"
+-  (ver `plan.md`, "Decisiones aún pendientes"). El cliente hoy usa
+-  `crearProveedorFiscalSimulado()` de `@sfr/core` para desarrollo.
++- `/fiscal/*` (§ Módulo fiscal e-CF): integración **directa** con la DGII
++  ("Software de Desarrollo Propio"). Firma con el `.p12` de la empresa y
++  transmite; no guarda comprobantes (la fuente de verdad sigue siendo el
++  SQLite del cliente). Sin `DGII_P12_PATH`/`DGII_P12_PASSWORD` responde `503`.
++  Ver "Facturación electrónica (e-CF)" más abajo.
+ - `db/schema.sql`: traducción a Postgres de las migraciones SQLite de
+-  `@sfr/core` — **desactualizada**, le faltan tablas agregadas después
+-  (cotización, devolución, promoción, favoritos). No se ha corrido contra el
+-  Postgres del proyecto: hace falta ponerla al día con
+-  `packages/core/src/db/migrations.ts` antes de ejecutarla.
++  `@sfr/core` más las tablas propias del servidor (`caja_api_key`,
++  `ecf_recibido`, `aprobacion_comercial_recibida`, con RLS activado).
++  `test/esquema.test.ts` la ejecuta en Postgres real (PGlite) y falla si una
++  migración SQLite agrega una tabla o columna que aquí falte. **Todavía no se
++  ha aplicado al Postgres del proyecto** (requiere OK explícito).
+ - `sync-rules.yaml`: reglas de PowerSync de referencia (bucket único,
+   asumiendo negocio single-tenant); se sube al dashboard de PowerSync cuando
+   haya un proyecto.
+@@ -71,15 +73,63 @@ Este paquete no corre 24/7 en ningún hosting todavía — el poller solo lee
+ correo mientras el proceso está vivo. Un plan gratuito de Render/Railway/
+ Fly.io alcanza para el volumen de un negocio pequeño.
+ 
++## Facturación electrónica (e-CF)
++
++Todo el código vive en `src/fiscal/`:
++
++| Archivo | Qué hace |
++|---|---|
++| `xml/ecf.ts` | XML e-CF 31/32/34 (validado contra los XSD oficiales en `test/fiscal/xsd/`) |
++| `xml/rfce.ts` | Resumen de factura de consumo (E32 < RD$250,000) |
++| `xml/anecf.ts` | Anulación de e-NCF no utilizados |
++| `firma.ts` | Lee el `.p12` y firma XMLDSig (RSA-SHA256, C14N, firma envuelta) |
++| `codigo-seguridad.ts` / `qr.ts` | Código de seguridad (6 primeros caracteres del SignatureValue) y URL del QR |
++| `dgii-cliente.ts` | Semilla → token (en caché), recepción e-CF, recepción RFCE, consulta por trackId, anulación |
++| `servicio-emision.ts` | Decide RFCE vs. e-CF completo, firma, envía y arma el resultado |
++
++Rutas: `GET /fiscal/estado`, `POST /fiscal/comprobantes`,
++`GET /fiscal/comprobantes/:trackId`, `POST /fiscal/anulaciones`.
++
++Errores: `400` documento inválido, `502` la DGII rechazó la solicitud,
++`503` DGII caída o módulo sin configurar, `500` inesperado.
++
++### Cuando llegue el certificado (.p12) y el acceso a la OFV
++
++1. Guardar el `.p12` **fuera del repo** (ej. `C:\facturai\certificado\empresa.p12`).
++   `*.p12`/`*.pfx` están en `.gitignore` igual.
++2. En `packages/api/.env`:
++   ```
++   DGII_AMBIENTE=testecf
++   DGII_P12_PATH=C:\facturai\certificado\empresa.p12
++   DGII_P12_PASSWORD=<la contraseña que dio la certificadora>
++   ```
++3. `pnpm --filter @sfr/api dev` → el log debe decir
++   `Facturación electrónica activa (DGII testecf)`, y `GET /fiscal/estado`
++   devuelve `disponible: true` con la fecha de vencimiento del certificado.
++4. En el cliente (`packages/web/.env` o `packages/desktop/.env`):
++   `VITE_FISCAL_MODO=dgii` y `VITE_API_URL=<url del backend>`. Sin eso, la
++   app sigue usando el simulador (no envía nada a la DGII).
++5. En Configuración de la app: RNC, **razón social** y dirección del negocio
++   exactamente como están en la DGII, y las secuencias e-NCF autorizadas
++   (E31/E32/E34) con su vencimiento.
++6. Set de pruebas: emitir desde la app en `testecf`. Al aprobarlo, pasar a
++   `DGII_AMBIENTE=certecf` y finalmente `ecf` (producción).
++
++Verificado sin certificado real: contra `testecf`, la DGII entrega la
++semilla, recibe la semilla firmada y la rechaza solo por
++`"Tipo de certificado no admitido"` (el de prueba es autofirmado).
++
++Pendiente de confirmar con la DGII durante la certificación: si piden
++exponer servicios de **recepción** (e-CF de proveedores y aprobación
++comercial) en una URL pública — hoy no están implementados.
++
+ ## Qué falta para el resto de Fase 2
+ 
+-1. Poner `db/schema.sql` al día con las migraciones SQLite actuales y
+-   correrlo contra el Postgres del proyecto Supabase.
++1. Aplicar `db/schema.sql` al Postgres del proyecto Supabase (ya está al
++   día y probado; las tablas ya existentes como `notificacion_transferencia`
++   hay que omitirlas o aplicar solo lo nuevo).
+ 2. Crear un proyecto de **PowerSync**, apuntarlo a ese Postgres, subir
+    `sync-rules.yaml`, y copiar `POWERSYNC_URL` a `.env`.
+-3. Implementar `POST /fiscal/transmitir` una vez decidido PAC vs. DGII
+-   directo (certificado digital, custodia de credenciales, etc. — ver
+-   `plan.md`).
+ 
+ ## Correr en local (modo scaffold, sin credenciales)
+ 
+diff --git a/packages/api/db/schema.sql b/packages/api/db/schema.sql
+index 296f6c4..808dec6 100644
+--- a/packages/api/db/schema.sql
++++ b/packages/api/db/schema.sql
+@@ -18,6 +18,8 @@ CREATE TABLE negocio (
+   razon_social             TEXT,
+   rnc                      TEXT,
+   direccion                TEXT,
++  municipio                TEXT,
++  provincia                TEXT,
+   telefono                 TEXT,
+   correo                   TEXT,
+   logo_ruta                TEXT,
+@@ -175,30 +177,44 @@ CREATE TABLE secuencia_ncf (
+ 
+ CREATE TABLE comprobante_fiscal (
+   id                        TEXT PRIMARY KEY,
+-  factura_id                TEXT NOT NULL REFERENCES factura(id),
++  factura_id                TEXT REFERENCES factura(id),
++  compra_id                 TEXT, -- FK agregada más abajo (compra se crea después); E41/E43/E47 se emiten sobre una compra
+   tipo_ecf                  TEXT NOT NULL,
+   ncf                       TEXT NOT NULL,
+   secuencia_id              TEXT NOT NULL REFERENCES secuencia_ncf(id),
+   rnc_emisor                TEXT,
+   receptor_documento_tipo   TEXT,
+   receptor_documento_numero TEXT,
++  receptor_nombre           TEXT,
+   fecha_emision             TIMESTAMPTZ NOT NULL,
+   monto_gravado             NUMERIC(12,2) NOT NULL DEFAULT 0,
+   monto_exento              NUMERIC(12,2) NOT NULL DEFAULT 0,
+   monto_itbis               NUMERIC(12,2) NOT NULL DEFAULT 0,
+   total                     NUMERIC(12,2) NOT NULL DEFAULT 0,
+-  estado_dgii               TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|aceptado|rechazado|contingencia
++  estado_dgii               TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|aceptado|aceptado_condicional|rechazado|contingencia
+   track_id_dgii             TEXT,
+   codigo_seguridad          TEXT,
+   xml_firmado_ruta          TEXT,
+   qr_url                    TEXT,
+   fecha_transmision         TIMESTAMPTZ,
++  fecha_firma               TEXT, -- formato DGII dd-MM-AAAA HH:mm:ss, tal como va en el XML/QR
++  xml_firmado               TEXT,
++  motivo_rechazo            TEXT,
++  entrega_estado            TEXT NOT NULL DEFAULT 'no_aplica', -- no_aplica|pendiente|entregado|rechazado|no_electronico
++  entrega_detalle           TEXT,
++  acuse_recibo_xml          TEXT,
+   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+   updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+-  deleted_at                TIMESTAMPTZ
++  deleted_at                TIMESTAMPTZ,
++  CHECK (factura_id IS NOT NULL OR compra_id IS NOT NULL)
+ );
+ CREATE UNIQUE INDEX ux_comprobante_fiscal_ncf ON comprobante_fiscal(ncf);
+ CREATE INDEX ix_comprobante_fiscal_factura ON comprobante_fiscal(factura_id);
++CREATE INDEX ix_comprobante_fiscal_compra ON comprobante_fiscal(compra_id);
++CREATE UNIQUE INDEX ux_comprobante_fiscal_compra ON comprobante_fiscal(compra_id)
++  WHERE compra_id IS NOT NULL AND deleted_at IS NULL;
++CREATE INDEX ix_comprobante_fiscal_estado ON comprobante_fiscal(estado_dgii);
++CREATE INDEX ix_comprobante_fiscal_entrega ON comprobante_fiscal(entrega_estado);
+ 
+ ALTER TABLE factura ADD CONSTRAINT fk_factura_comprobante
+   FOREIGN KEY (comprobante_id) REFERENCES comprobante_fiscal(id);
+@@ -277,6 +293,9 @@ CREATE TABLE compra (
+ CREATE INDEX ix_compra_fecha ON compra(fecha);
+ CREATE INDEX ix_compra_mes_ano ON compra(mes_ano_contable);
+ 
++ALTER TABLE comprobante_fiscal ADD CONSTRAINT fk_comprobante_compra
++  FOREIGN KEY (compra_id) REFERENCES compra(id);
++
+ CREATE TABLE compra_linea (
+   id             TEXT PRIMARY KEY,
+   compra_id      TEXT NOT NULL REFERENCES compra(id),
+@@ -320,7 +339,7 @@ CREATE INDEX ix_comprobante_archivo_compra ON comprobante_archivo(compra_id);
+ -- guarda una fila aquí pendiente de que alguien la confirme/descarte desde la app — mismo
+ -- espíritu que comprobante_archivo (estado_revision/identificado_por), pero para transferencias
+ -- entrantes en vez de comprobantes de compra.
+-CREATE TABLE notificacion_transferencia (
++CREATE TABLE IF NOT EXISTS notificacion_transferencia (
+   id                   TEXT PRIMARY KEY,
+   monto                NUMERIC(12,2),
+   fecha                DATE,
+@@ -335,7 +354,7 @@ CREATE TABLE notificacion_transferencia (
+   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+   deleted_at           TIMESTAMPTZ
+ );
+-CREATE INDEX ix_notificacion_transferencia_estado ON notificacion_transferencia(estado_confirmacion);
++CREATE INDEX IF NOT EXISTS ix_notificacion_transferencia_estado ON notificacion_transferencia(estado_confirmacion);
+ 
+ -- Bitácora (pendiente en el modo local, ver plan.md §"Caja y auditoría") ----
+ CREATE TABLE bitacora_accion (
+@@ -350,3 +369,181 @@ CREATE TABLE bitacora_accion (
+   timestamp   TIMESTAMPTZ NOT NULL DEFAULT now()
+ );
+ CREATE INDEX ix_bitacora_accion_entidad ON bitacora_accion(entidad, entidad_id);
++
++
++-- Favoritos (migración 9) ----------------------------------------------------
++ALTER TABLE producto ADD COLUMN favorito BOOLEAN NOT NULL DEFAULT false;
++CREATE INDEX ix_producto_favorito ON producto(favorito);
++
++-- Devoluciones (migración 7) -------------------------------------------------
++CREATE TABLE devolucion (
++  id              TEXT PRIMARY KEY,
++  factura_id      TEXT NOT NULL REFERENCES factura(id),
++  fecha           TIMESTAMPTZ NOT NULL,
++  motivo          TEXT,
++  subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0,
++  itbis           NUMERIC(12,2) NOT NULL DEFAULT 0,
++  total           NUMERIC(12,2) NOT NULL DEFAULT 0,
++  comprobante_id  TEXT REFERENCES comprobante_fiscal(id), -- NC E34, NULL si la venta no fue fiscal
++  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
++  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
++  deleted_at      TIMESTAMPTZ
++);
++CREATE INDEX ix_devolucion_factura ON devolucion(factura_id);
++
++CREATE TABLE devolucion_linea (
++  id                TEXT PRIMARY KEY,
++  devolucion_id     TEXT NOT NULL REFERENCES devolucion(id),
++  factura_linea_id  TEXT NOT NULL REFERENCES factura_linea(id),
++  producto_id       TEXT REFERENCES producto(id),
++  descripcion       TEXT NOT NULL,
++  cantidad          NUMERIC(14,4) NOT NULL,
++  precio_unitario   NUMERIC(12,2) NOT NULL,
++  impuesto_tipo     TEXT NOT NULL,
++  tasa_impuesto     NUMERIC(5,4) NOT NULL,
++  monto_itbis       NUMERIC(12,2) NOT NULL,
++  subtotal          NUMERIC(12,2) NOT NULL,
++  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
++  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
++  deleted_at        TIMESTAMPTZ
++);
++CREATE INDEX ix_devolucion_linea_devolucion ON devolucion_linea(devolucion_id);
++CREATE INDEX ix_devolucion_linea_factura_linea ON devolucion_linea(factura_linea_id);
++
++-- Promociones (migración 8) --------------------------------------------------
++CREATE TABLE promocion (
++  id               TEXT PRIMARY KEY,
++  nombre           TEXT NOT NULL,
++  tipo             TEXT NOT NULL, -- porcentaje|monto_fijo
++  valor            NUMERIC(12,2) NOT NULL,
++  aplica_a         TEXT NOT NULL DEFAULT 'producto', -- producto|departamento|todo
++  producto_id      TEXT REFERENCES producto(id),
++  departamento_id  TEXT REFERENCES departamento(id),
++  fecha_inicio     DATE NOT NULL,
++  fecha_fin        DATE NOT NULL,
++  activa           BOOLEAN NOT NULL DEFAULT true,
++  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
++  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
++  deleted_at       TIMESTAMPTZ
++);
++CREATE INDEX ix_promocion_producto ON promocion(producto_id);
++CREATE INDEX ix_promocion_departamento ON promocion(departamento_id);
++CREATE INDEX ix_promocion_vigencia ON promocion(fecha_inicio, fecha_fin);
++
++-- Cotizaciones (migración 10) ------------------------------------------------
++CREATE TABLE cotizacion (
++  id                TEXT PRIMARY KEY,
++  numero_interno    INTEGER,
++  fecha_hora        TIMESTAMPTZ NOT NULL,
++  fecha_vencimiento DATE NOT NULL,
++  cliente_id        TEXT REFERENCES cliente(id),
++  usuario_id        TEXT REFERENCES usuario(id),
++  subtotal_gravado  NUMERIC(12,2) NOT NULL DEFAULT 0,
++  subtotal_exento   NUMERIC(12,2) NOT NULL DEFAULT 0,
++  total_itbis       NUMERIC(12,2) NOT NULL DEFAULT 0,
++  total             NUMERIC(12,2) NOT NULL DEFAULT 0,
++  notas             TEXT,
++  estado            TEXT NOT NULL DEFAULT 'vigente', -- vigente|convertida|anulada
++  factura_id        TEXT REFERENCES factura(id),
++  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
++  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
++  deleted_at        TIMESTAMPTZ
++);
++CREATE INDEX ix_cotizacion_fecha ON cotizacion(fecha_hora);
++
++CREATE TABLE cotizacion_linea (
++  id              TEXT PRIMARY KEY,
++  cotizacion_id   TEXT NOT NULL REFERENCES cotizacion(id),
++  producto_id     TEXT REFERENCES producto(id),
++  descripcion     TEXT NOT NULL,
++  cantidad        NUMERIC(14,4) NOT NULL DEFAULT 1,
++  precio_unitario NUMERIC(12,2) NOT NULL DEFAULT 0,
++  impuesto_tipo   TEXT NOT NULL DEFAULT 'itbis18',
++  tasa_impuesto   NUMERIC(5,4) NOT NULL DEFAULT 0.18,
++  monto_itbis     NUMERIC(12,2) NOT NULL DEFAULT 0,
++  subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0,
++  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
++  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
++  deleted_at      TIMESTAMPTZ
++);
++CREATE INDEX ix_cotizacion_linea_cotizacion ON cotizacion_linea(cotizacion_id);
++
++-- e-NCF por anular ante la DGII (migración 11) -------------------------------
++CREATE TABLE ncf_anulacion (
++  id                  TEXT PRIMARY KEY,
++  tipo_ecf            TEXT NOT NULL,
++  ncf                 TEXT NOT NULL,
++  motivo              TEXT,
++  estado              TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|anulado|utilizado|revisado
++  ultimo_mensaje_dgii TEXT,
++  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
++  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
++  deleted_at          TIMESTAMPTZ
++);
++CREATE UNIQUE INDEX ux_ncf_anulacion_ncf ON ncf_anulacion(ncf);
++CREATE INDEX ix_ncf_anulacion_estado ON ncf_anulacion(estado);
++
++-- =============================================================================
++-- Tablas SOLO del servidor (no existen en el SQLite del cliente). RLS activado
++-- sin políticas: solo la service role del backend puede leerlas o escribirlas,
++-- nunca la anon key que viaja en la app.
++-- =============================================================================
++
++-- Llaves por caja para firmar e-CF (packages/api/scripts/caja-key.ts) ---------
++CREATE TABLE caja_api_key (
++  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  nombre      TEXT NOT NULL,
++  llave_hash  TEXT NOT NULL UNIQUE, -- SHA-256 hex; la llave en claro nunca se guarda
++  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
++  revocada_at TIMESTAMPTZ
++);
++ALTER TABLE caja_api_key ENABLE ROW LEVEL SECURITY;
++
++-- e-CF que otros contribuyentes nos emiten (servicio /fe/recepcion) ------------
++CREATE TABLE ecf_recibido (
++  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  tipo_ecf              TEXT NOT NULL,
++  encf                  TEXT NOT NULL,
++  rnc_emisor            TEXT NOT NULL,
++  razon_social_emisor   TEXT NOT NULL DEFAULT '',
++  rnc_comprador         TEXT,
++  fecha_emision         TEXT NOT NULL, -- dd-MM-AAAA tal como viene en el XML
++  monto_total           NUMERIC(14,2) NOT NULL,
++  total_itbis           NUMERIC(14,2) NOT NULL DEFAULT 0,
++  xml                   TEXT NOT NULL, -- XML firmado íntegro: se conserva tal cual (valor legal)
++  acuse_xml             TEXT NOT NULL, -- ARECF firmado que respondimos
++  estado_aprobacion     TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|enviando|aprobado|rechazado
++  motivo_aprobacion     TEXT,
++  aprobacion_xml        TEXT, -- ACECF firmado que emitimos
++  aprobacion_enviada_at TIMESTAMPTZ,
++  importado_at          TIMESTAMPTZ, -- cuándo se registró como compra en la app
++  created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
++);
++CREATE UNIQUE INDEX ux_ecf_recibido_emisor_encf ON ecf_recibido(rnc_emisor, encf);
++CREATE INDEX ix_ecf_recibido_estado ON ecf_recibido(estado_aprobacion);
++ALTER TABLE ecf_recibido ENABLE ROW LEVEL SECURITY;
++
++-- Aprobaciones/rechazos comerciales de e-CF que emitimos (servicio /fe/aprobacioncomercial)
++CREATE TABLE aprobacion_comercial_recibida (
++  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  rnc_emisor    TEXT NOT NULL,
++  rnc_comprador TEXT NOT NULL,
++  encf          TEXT NOT NULL,
++  aprobado      BOOLEAN NOT NULL,
++  motivo        TEXT,
++  xml           TEXT NOT NULL,
++  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
++);
++CREATE INDEX ix_aprobacion_comercial_encf ON aprobacion_comercial_recibida(encf);
++ALTER TABLE aprobacion_comercial_recibida ENABLE ROW LEVEL SECURITY;
++
++-- Sin RLS, la API pública de Supabase (llave anónima, que va en el cliente) leería estas tablas.
++-- Sin políticas solo el backend, con la llave de servicio, accede. El modo de sincronización
++-- multi-caja (Fase 2) deberá añadir políticas explícitas por usuario.
++DO $$
++DECLARE t TEXT;
++BEGIN
++  FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
++    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
++  END LOOP;
++END $$;
+diff --git a/packages/api/package.json b/packages/api/package.json
+index 824af37..63dc0f2 100644
+--- a/packages/api/package.json
++++ b/packages/api/package.json
+@@ -8,19 +8,29 @@
+     "build": "tsc",
+     "start": "node dist/server.js",
+     "test": "vitest run",
+-    "typecheck": "tsc --noEmit"
++    "typecheck": "tsc --noEmit",
++    "caja-key": "tsx --env-file-if-exists=.env scripts/caja-key.ts",
++    "set-pruebas": "tsx --env-file-if-exists=.env scripts/set-pruebas.ts"
+   },
+   "dependencies": {
+     "@anthropic-ai/sdk": "^0.114.0",
+     "@fastify/cors": "^10.0.1",
++    "@fastify/multipart": "^9.4.0",
+     "@google/genai": "^0.15.0",
+     "@sfr/core": "workspace:*",
+     "@supabase/supabase-js": "^2.115.0",
++    "@xmldom/xmldom": "^0.9.12",
++    "exceljs": "^4.4.0",
+     "fastify": "^5.2.0",
+-    "googleapis": "^144.0.0"
++    "googleapis": "^144.0.0",
++    "node-forge": "^1.4.0",
++    "xml-crypto": "^6.3.2",
++    "xmllint-wasm": "^5.3.0"
+   },
+   "devDependencies": {
++    "@electric-sql/pglite": "^0.5.8",
+     "@types/node": "^22.10.2",
++    "@types/node-forge": "^1.3.14",
+     "tsx": "^4.19.2",
+     "typescript": "^5.6.3",
+     "vitest": "^2.1.8"
+diff --git a/packages/api/src/config.ts b/packages/api/src/config.ts
+index 605ebf6..0a40394 100644
+--- a/packages/api/src/config.ts
++++ b/packages/api/src/config.ts
+@@ -1,3 +1,5 @@
++import { esAmbienteDgii, type AmbienteDgii } from "./fiscal/ambiente.js";
++
+ /**
+  * Configuración del backend (§ Multi-caja/multiusuario). Ninguna de estas
+  * variables está conectada todavía a un proyecto real: este paquete es un
+@@ -25,6 +27,29 @@ export interface ConfigApi {
+   gmailConfigurado: boolean;
+   /** Cada cuánto se sondea la casilla dedicada en busca de correos nuevos. */
+   transferenciasPollIntervaloMs: number;
++  /** Ambiente DGII (`testecf` pre-certificación, `certecf` certificación, `ecf` producción). */
++  dgiiAmbiente: AmbienteDgii;
++  /** Ruta al certificado digital .p12 de la empresa y su contraseña (§ Módulo fiscal e-CF). */
++  dgiiP12Ruta: string | null;
++  /** Alternativa a la ruta: el .p12 en base64, para hostings donde no se pueden subir archivos. */
++  dgiiP12Base64: string | null;
++  dgiiP12Clave: string | null;
++  /** true si hay certificado y contraseña para firmar. */
++  dgiiConfigurado: boolean;
++  /** RNC de la empresa: el API se niega a firmar comprobantes de cualquier otro emisor. */
++  dgiiRncEmisor: string | null;
++  /** Bundle PEM con las autoridades certificadoras aceptadas para documentos recibidos. */
++  dgiiCaRaicesRuta: string | null;
++  /** Correos de Google con permiso para emitir comprobantes (además de las llaves de caja). */
++  correosPermitidos: string[];
++}
++
++function ambienteDgii(valor: string | undefined): AmbienteDgii {
++  if (!valor) return "testecf";
++  if (!esAmbienteDgii(valor)) {
++    throw new Error(`DGII_AMBIENTE inválido: "${valor}". Valores permitidos: testecf, certecf, ecf.`);
++  }
++  return valor;
+ }
+ 
+ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
+@@ -33,6 +58,9 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
+   const gmailOAuthClientId = env.GMAIL_OAUTH_CLIENT_ID || null;
+   const gmailOAuthClientSecret = env.GMAIL_OAUTH_CLIENT_SECRET || null;
+   const gmailOAuthRefreshToken = env.GMAIL_OAUTH_REFRESH_TOKEN || null;
++  const dgiiP12Ruta = env.DGII_P12_PATH || null;
++  const dgiiP12Base64 = env.DGII_P12_BASE64?.replace(/\s+/g, "") || null;
++  const dgiiP12Clave = env.DGII_P12_PASSWORD || null;
+ 
+   return {
+     puerto: Number(env.PORT) || 3001,
+@@ -45,5 +73,16 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
+     gmailOAuthRefreshToken,
+     gmailConfigurado: Boolean(gmailOAuthClientId && gmailOAuthClientSecret && gmailOAuthRefreshToken),
+     transferenciasPollIntervaloMs: Number(env.TRANSFERENCIAS_POLL_INTERVALO_MS) || 5 * 60 * 1000,
++    dgiiAmbiente: ambienteDgii(env.DGII_AMBIENTE),
++    dgiiP12Ruta,
++    dgiiP12Base64,
++    dgiiP12Clave,
++    dgiiConfigurado: Boolean((dgiiP12Ruta || dgiiP12Base64) && dgiiP12Clave),
++    dgiiRncEmisor: env.DGII_RNC_EMISOR?.trim() || null,
++    dgiiCaRaicesRuta: env.DGII_CA_RAICES_PATH?.trim() || null,
++    correosPermitidos: (env.API_CORREOS_PERMITIDOS ?? "")
++      .split(",")
++      .map((c) => c.trim())
++      .filter(Boolean),
+   };
+ }
+diff --git a/packages/api/src/plugins/auth.ts b/packages/api/src/plugins/auth.ts
+index 523d585..229b042 100644
+--- a/packages/api/src/plugins/auth.ts
++++ b/packages/api/src/plugins/auth.ts
+@@ -1,10 +1,17 @@
+-import type { FastifyInstance } from "fastify";
++import { createHash } from "node:crypto";
++import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+ import { createClient } from "@supabase/supabase-js";
+-import { cargarConfig } from "../config.js";
++import type { ConfigApi } from "../config.js";
++import { obtenerClienteDb } from "../services/db.js";
++
++export type TipoUsuario = "caja" | "google" | "desarrollo";
+ 
+ export interface UsuarioAutenticado {
+   id: string;
+   correo: string | null;
++  tipo: TipoUsuario;
++  /** Puede pedir firmas con el certificado de la empresa (rutas `/fiscal/*`). */
++  permisoFiscal: boolean;
+ }
+ 
+ declare module "fastify" {
+@@ -13,52 +20,108 @@ declare module "fastify" {
+   }
+ }
+ 
+-/**
+- * Verifica el JWT de Supabase Auth (emitido tras Sign in with Google, § Fase 2)
+- * en el header `Authorization: Bearer <token>`.
+- *
+- * Sin `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`: cada solicitud pasa como un
+- * usuario de desarrollo fijo. Es lo esperado en modo 100% local/scaffold —
+- * NUNCA debe llegar así a producción (§ cargarConfig, supabaseConfigurado).
+- *
+- * Se llama con la instancia que representa el contexto "protegido" (§ server.ts: un
+- * `app.register(async (protegido) => ...)` que agrupa `/fiscal` y `/chatbot`), NUNCA con la
+- * instancia raíz — `/health` vive afuera de ese contexto a propósito, para "responder siempre"
+- * sin importar el token. Fastify resuelve la herencia de hooks por jerarquía real de
+- * `.register()` (quién es hijo de quién), no por el orden de las líneas en el archivo: agregar
+- * este hook sobre la raíz alcanzaría también a `/health`, sin importar en qué línea se llame.
+- */
+-export function registrarAuth(app: FastifyInstance): void {
+-  const config = cargarConfig();
+-  app.decorateRequest("usuario", null);
++export interface DependenciasAuth {
++  /** `desarrollo` deja pasar todo como usuario local: solo sin Supabase y fuera de producción. */
++  modo: "desarrollo" | "produccion";
++  correosPermitidos: string[];
++  verificarJwt: (token: string) => Promise<{ id: string; correo: string | null } | null>;
++  buscarCaja: (hashLlave: string) => Promise<{ id: string; nombre: string } | null>;
++}
+ 
+-  // `getUser(token)` valida el JWT contra Supabase (no solo decodifica) — así
+-  // un token expirado, revocado o de otro proyecto se rechaza aunque esté
+-  // bien formado. Un solo cliente para todo el proceso: crearlo por solicitud
+-  // no aporta nada (es sin estado) y sí un costo de inicialización repetido.
++export const CABECERA_LLAVE_CAJA = "x-caja-key";
++
++export function hashLlaveCaja(llave: string): string {
++  return createHash("sha256").update(llave, "utf8").digest("hex");
++}
++
++export function dependenciasAuthDesdeConfig(config: ConfigApi, entorno = process.env.NODE_ENV): DependenciasAuth {
+   const supabase = config.supabaseConfigurado
+     ? createClient(config.supabaseUrl!, config.supabaseServiceRoleKey!)
+     : null;
++  return {
++    modo: !supabase && entorno !== "production" ? "desarrollo" : "produccion",
++    correosPermitidos: config.correosPermitidos,
++    async verificarJwt(token) {
++      if (!supabase) return null;
++      const { data, error } = await supabase.auth.getUser(token);
++      if (error || !data.user) return null;
++      return { id: data.user.id, correo: data.user.email ?? null };
++    },
++    async buscarCaja(hashLlave) {
++      if (!supabase) return null;
++      const { data, error } = await obtenerClienteDb()
++        .from("caja_api_key")
++        .select("id, nombre")
++        .eq("llave_hash", hashLlave)
++        .is("revocada_at", null)
++        .maybeSingle();
++      if (error) throw new Error(`No se pudo verificar la llave de caja: ${error.message}`);
++      return data;
++    },
++  };
++}
++
++/**
++ * Autenticación del contexto "protegido" (§ server.ts). Acepta dos credenciales:
++ *  - `X-Caja-Key`: llave por caja (se guarda solo su hash). Siempre tiene permiso fiscal.
++ *  - `Authorization: Bearer <JWT de Supabase>` (Sign in with Google). Tiene permiso fiscal
++ *    solo si el correo está en `API_CORREOS_PERMITIDOS`.
++ * Se registra sobre el contexto protegido, NUNCA sobre la raíz: `/health` y los servicios de
++ * recepción de la DGII (`/fe/*`) viven afuera a propósito.
++ */
++export function registrarAuth(app: FastifyInstance, deps: DependenciasAuth): void {
++  const permitidos = new Set(deps.correosPermitidos.map((c) => c.trim().toLowerCase()).filter(Boolean));
++  app.decorateRequest("usuario", null);
+ 
+   app.addHook("onRequest", async (request, reply) => {
+-    if (!supabase) {
+-      request.usuario = { id: "dev-local", correo: null };
++    if (deps.modo === "desarrollo") {
++      request.usuario = { id: "dev-local", correo: null, tipo: "desarrollo", permisoFiscal: true };
+       return;
+     }
+ 
++    const llave = request.headers[CABECERA_LLAVE_CAJA];
++    if (typeof llave === "string" && llave.trim()) {
++      let caja: { id: string; nombre: string } | null;
++      try {
++        caja = await deps.buscarCaja(hashLlaveCaja(llave.trim()));
++      } catch (error) {
++        request.log.error(error, "Fallo al verificar la llave de caja");
++        await reply.code(503).send({ error: "No se pudo verificar la llave de la caja. Intenta de nuevo." });
++        return;
++      }
++      if (caja) {
++        request.usuario = { id: caja.id, correo: null, tipo: "caja", permisoFiscal: true };
++        return;
++      }
++      if (!request.headers.authorization) {
++        await reply.code(401).send({ error: "Llave de caja inválida o revocada." });
++        return;
++      }
++      request.log.warn("Llave de caja inválida o revocada; se intenta con la sesión de Google.");
++    }
++
+     const auth = request.headers.authorization;
+     if (!auth?.startsWith("Bearer ")) {
+       await reply.code(401).send({ error: "Falta el token de autenticación." });
+       return;
+     }
+-
+-    const token = auth.slice("Bearer ".length);
+-    const { data, error } = await supabase.auth.getUser(token);
+-    if (error || !data.user) {
++    const usuario = await deps.verificarJwt(auth.slice("Bearer ".length));
++    if (!usuario) {
+       await reply.code(401).send({ error: "Token de autenticación inválido o expirado." });
+       return;
+     }
+-
+-    request.usuario = { id: data.user.id, correo: data.user.email ?? null };
++    request.usuario = {
++      ...usuario,
++      tipo: "google",
++      permisoFiscal: usuario.correo !== null && permitidos.has(usuario.correo.toLowerCase()),
++    };
+   });
+ }
++
++export async function exigirPermisoFiscal(request: FastifyRequest, reply: FastifyReply): Promise<void> {
++  if (!request.usuario?.permisoFiscal) {
++    await reply.code(403).send({
++      error: "Esta cuenta no tiene permiso para emitir comprobantes fiscales. Usa la llave de la caja.",
++    });
++  }
++}
+diff --git a/packages/api/src/routes/fiscal.ts b/packages/api/src/routes/fiscal.ts
+index ef4e6e0..d3e9397 100644
+--- a/packages/api/src/routes/fiscal.ts
++++ b/packages/api/src/routes/fiscal.ts
+@@ -1,22 +1,106 @@
+-import type { FastifyPluginAsync } from "fastify";
++import type { FastifyPluginAsync, FastifyReply, FastifyBaseLogger } from "fastify";
+ import type { ComprobanteATransmitir } from "@sfr/core";
++import type { ModuloFiscal } from "../fiscal/iniciar.js";
++import type { RangoAnulacion } from "../fiscal/xml/anecf.js";
++import type { SolicitudEntrega } from "../fiscal/servicio-entrega.js";
++import { DgiiNoDisponibleError, DgiiRespuestaError, DocumentoFiscalInvalidoError } from "../fiscal/errores.js";
++
++async function responderError(error: unknown, reply: FastifyReply, log: FastifyBaseLogger): Promise<void> {
++  if (error instanceof DocumentoFiscalInvalidoError) {
++    await reply.code(400).send({ error: error.message });
++    return;
++  }
++  if (error instanceof DgiiNoDisponibleError) {
++    log.warn(error, "DGII no disponible");
++    await reply.code(503).send({ error: "La DGII no está disponible en este momento. Intenta de nuevo." });
++    return;
++  }
++  if (error instanceof DgiiRespuestaError) {
++    log.warn({ status: error.status, cuerpo: error.cuerpo }, "La DGII rechazó la solicitud");
++    await reply.code(502).send({ error: `La DGII rechazó la solicitud: ${error.cuerpo || error.message}` });
++    return;
++  }
++  log.error(error, "Error inesperado en el módulo fiscal");
++  await reply.code(500).send({ error: "Error interno al procesar el comprobante fiscal." });
++}
+ 
+ /**
+- * Endpoint de transmisión e-CF a la DGII (§ Módulo fiscal).
+- *
+- * *** SIN IMPLEMENTAR *** — sigue pendiente la decisión "PAC certificado vs.
+- * integración directa al API de la DGII" (ver plan.md, "Decisiones aún
+- * pendientes"). Responde 501 explícito en vez de simular una respuesta que
+- * podría confundirse con una transmisión real; el cliente hoy usa
+- * `crearProveedorFiscalSimulado()` de `@sfr/core` para desarrollo/pruebas.
+- *
+- * Cuando se implemente: recibir `ComprobanteATransmitir`, construir y firmar
+- * el XML, transmitir (vía PAC o DGII directo), y devolver `ResultadoTransmision`.
++ * Emisión e-CF directa a la DGII ("Software de Desarrollo Propio"). El cliente
++ * sigue siendo dueño de sus datos (SQLite local): este backend solo firma con
++ * el .p12 de la empresa y habla con la DGII; no guarda comprobantes.
+  */
+-export const rutaFiscal: FastifyPluginAsync = async (app) => {
+-  app.post<{ Body: ComprobanteATransmitir }>("/fiscal/transmitir", async (_request, reply) => {
+-    await reply.code(501).send({
+-      error: "Transmisión e-CF aún no implementada: falta decidir PAC vs. integración directa a la DGII.",
++export function rutaFiscal(modulo: ModuloFiscal): FastifyPluginAsync {
++  return async (app) => {
++    async function exigirDisponible(reply: FastifyReply): Promise<boolean> {
++      if (modulo.disponible) return true;
++      await reply.code(503).send({ error: `Facturación electrónica no configurada: ${modulo.motivo}` });
++      return false;
++    }
++
++    app.get("/fiscal/estado", async () => {
++      if (!modulo.disponible) return { disponible: false, ambiente: modulo.ambiente, motivo: modulo.motivo };
++      return {
++        disponible: true,
++        ambiente: modulo.ambiente,
++        rncEmisor: modulo.rncEmisor,
++        certificadoVence: modulo.certificadoVence.toISOString(),
++      };
++    });
++
++    app.post<{ Body: ComprobanteATransmitir }>("/fiscal/comprobantes", async (request, reply) => {
++      if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
++      if (request.body?.emisor?.rnc !== modulo.rncEmisor) {
++        await reply.code(403).send({ error: `Este servidor solo firma comprobantes del RNC ${modulo.rncEmisor}.` });
++        return;
++      }
++      try {
++        return await modulo.servicio.emitir(request.body);
++      } catch (error) {
++        await responderError(error, reply, app.log);
++      }
++    });
++
++    app.get<{ Params: { trackId: string } }>("/fiscal/comprobantes/:trackId", async (request, reply) => {
++      if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
++      try {
++        return await modulo.servicio.consultar(request.params.trackId);
++      } catch (error) {
++        await responderError(error, reply, app.log);
++      }
++    });
++
++    app.post<{ Body: { rncEmisor: string; rangos: RangoAnulacion[] } }>(
++      "/fiscal/anulaciones",
++      async (request, reply) => {
++        if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
++        if (request.body?.rncEmisor !== modulo.rncEmisor) {
++          await reply.code(403).send({ error: `Este servidor solo anula secuencias del RNC ${modulo.rncEmisor}.` });
++          return;
++        }
++        try {
++          return await modulo.servicio.anular(request.body.rncEmisor, request.body.rangos);
++        } catch (error) {
++          await responderError(error, reply, app.log);
++        }
++      },
++    );
++
++    app.post<{ Body: SolicitudEntrega }>("/fiscal/entregas", async (request, reply) => {
++      if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
++      try {
++        return await modulo.entrega.entregar(request.body);
++      } catch (error) {
++        await responderError(error, reply, app.log);
++      }
++    });
++
++    app.get<{ Params: { encf: string } }>("/fiscal/trackids/:encf", async (request, reply) => {
++      if (!(await exigirDisponible(reply)) || !modulo.disponible) return;
++      try {
++        return { trackIds: await modulo.dgii.consultarTrackIds(modulo.rncEmisor, request.params.encf) };
++      } catch (error) {
++        await responderError(error, reply, app.log);
++      }
+     });
+-  });
+-};
++  };
++}
+diff --git a/packages/api/src/routes/health.ts b/packages/api/src/routes/health.ts
+index 4ffa0a1..4fff482 100644
+--- a/packages/api/src/routes/health.ts
++++ b/packages/api/src/routes/health.ts
+@@ -1,15 +1,22 @@
+ import type { FastifyPluginAsync } from "fastify";
+ import { cargarConfig } from "../config.js";
++import type { ModuloFiscal } from "../fiscal/iniciar.js";
+ 
+-/** Chequeo de salud + qué tan conectado está el backend a servicios reales. */
+-export const rutaSalud: FastifyPluginAsync = async (app) => {
+-  app.get("/health", async () => {
+-    const config = cargarConfig();
+-    return {
+-      estado: "ok",
+-      timestamp: new Date().toISOString(),
+-      supabaseConfigurado: config.supabaseConfigurado,
+-      powersyncConfigurado: Boolean(config.powersyncUrl),
+-    };
+-  });
+-};
++/**
++ * Chequeo de salud + qué tan conectado está el backend a servicios reales. Es público: del módulo
++ * fiscal solo dice si está activo y en qué ambiente, nunca el motivo (puede nombrar rutas o el RNC).
++ */
++export function rutaSalud(modulo: Pick<ModuloFiscal, "disponible" | "ambiente">): FastifyPluginAsync {
++  return async (app) => {
++    app.get("/health", async () => {
++      const config = cargarConfig();
++      return {
++        estado: "ok",
++        timestamp: new Date().toISOString(),
++        supabaseConfigurado: config.supabaseConfigurado,
++        powersyncConfigurado: Boolean(config.powersyncUrl),
++        fiscal: { disponible: modulo.disponible, ambiente: modulo.ambiente },
++      };
++    });
++  };
++}
+diff --git a/packages/api/src/server.ts b/packages/api/src/server.ts
+index baeadd3..57a9e6b 100644
+--- a/packages/api/src/server.ts
++++ b/packages/api/src/server.ts
+@@ -1,12 +1,21 @@
+ import Fastify from "fastify";
+ import cors from "@fastify/cors";
+ import { cargarConfig } from "./config.js";
+-import { registrarAuth } from "./plugins/auth.js";
++import { registrarAuth, dependenciasAuthDesdeConfig, exigirPermisoFiscal } from "./plugins/auth.js";
+ import { rutaSalud } from "./routes/health.js";
+ import { rutaFiscal } from "./routes/fiscal.js";
+ import { rutaChatbot } from "./routes/chatbot.js";
+ import { rutaTransferencias } from "./routes/transferencias.js";
+ import { iniciarPollerTransferencias } from "./jobs/poller-transferencias.js";
++import { iniciarModuloFiscal } from "./fiscal/iniciar.js";
++import { rutasRecepcion } from "./routes/recepcion.js";
++import { rutaRecibidos } from "./routes/recibidos.js";
++import { crearServicioRecibidos } from "./fiscal/servicio-recibidos.js";
++import { crearClienteContribuyente } from "./fiscal/entrega.js";
++import { crearAlmacenSupabase } from "./fiscal/recepcion/almacen.js";
++import { crearAutenticadorReceptor } from "./fiscal/recepcion/autenticacion.js";
++import { cargarRaices } from "./fiscal/recepcion/raices.js";
++import { dbDisponible, obtenerClienteDb } from "./services/db.js";
+ 
+ /**
+  * Backend del modo multi-caja/multiusuario (§ Flujo de datos y modos).
+@@ -15,9 +24,11 @@ import { iniciarPollerTransferencias } from "./jobs/poller-transferencias.js";
+  * está conectado a Supabase/PowerSync todavía.
+  */
+ const config = cargarConfig();
++const moduloFiscal = iniciarModuloFiscal(config);
++const raices = cargarRaices(config.dgiiCaRaicesRuta);
+ // 10 MB: el límite por defecto de Fastify (1 MB) rechaza las fotos de
+ // comprobantes en base64 que envía el chatbot con visión.
+-const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
++const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024, routerOptions: { caseSensitive: false } });
+ 
+ await app.register(cors, { origin: true });
+ // `/health` vive FUERA del contexto protegido: tiene que "responder siempre" para servir de
+@@ -25,10 +36,34 @@ await app.register(cors, { origin: true });
+ // lograr esto — Fastify resuelve los hooks por jerarquía de `.register()`, no por orden en el
+ // archivo — así que el hook de auth se agrega dentro de un child context propio (`protegido`), y
+ // `rutaSalud`, registrada como hermana sobre `app` y no como su hija, queda afuera.
+-await app.register(rutaSalud);
++await app.register(rutaSalud(moduloFiscal));
++await app.register(
++  rutasRecepcion({
++    receptor: moduloFiscal.disponible ? { rncPropio: moduloFiscal.rncEmisor, firmar: moduloFiscal.firmar } : null,
++    almacen: dbDisponible() ? crearAlmacenSupabase(obtenerClienteDb()) : null,
++    autenticador: crearAutenticadorReceptor({ raices }),
++    raices,
++  }),
++);
+ await app.register(async (protegido) => {
+-  registrarAuth(protegido);
+-  await protegido.register(rutaFiscal);
++  registrarAuth(protegido, dependenciasAuthDesdeConfig(config));
++  await protegido.register(async (fiscal) => {
++    fiscal.addHook("onRequest", exigirPermisoFiscal);
++    await fiscal.register(rutaFiscal(moduloFiscal));
++    await fiscal.register(
++      rutaRecibidos(
++        moduloFiscal.disponible && dbDisponible()
++          ? crearServicioRecibidos({
++              rncPropio: moduloFiscal.rncEmisor,
++              almacen: crearAlmacenSupabase(obtenerClienteDb()),
++              firmar: moduloFiscal.firmar,
++              dgii: moduloFiscal.dgii,
++              contribuyente: crearClienteContribuyente({ firmar: moduloFiscal.firmar }),
++            })
++          : null,
++      ),
++    );
++  });
+   await protegido.register(rutaChatbot);
+   await protegido.register(rutaTransferencias);
+ });
+@@ -37,9 +72,24 @@ await app.listen({ port: config.puerto, host: "0.0.0.0" });
+ 
+ iniciarPollerTransferencias(app, config.transferenciasPollIntervaloMs);
+ 
++if (raices.length === 0) {
++  app.log.warn(
++    "DGII_CA_RAICES_PATH no configurado: los documentos recibidos se verifican por integridad y SN, pero no " +
++      "contra autoridades certificadoras. Las aprobaciones y compras igual se confirman con la DGII.",
++  );
++}
++
++if (moduloFiscal.disponible) {
++  app.log.info(`Facturación electrónica activa (DGII ${moduloFiscal.ambiente}).`);
++} else {
++  app.log.warn(`Facturación electrónica inactiva: ${moduloFiscal.motivo}`);
++}
++
+ if (!config.supabaseConfigurado) {
+   app.log.warn(
+-    "SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY no configurados: todas las solicitudes se autentican " +
+-      "como usuario de desarrollo. No usar así en producción.",
++    process.env.NODE_ENV === "production"
++      ? "SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY no configurados: las rutas protegidas rechazan toda solicitud."
++      : "SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY no configurados: todas las solicitudes se autentican " +
++          "como usuario de desarrollo. No usar así en producción.",
+   );
+ }
+diff --git a/packages/api/tsconfig.json b/packages/api/tsconfig.json
+index 566badc..e1394bd 100644
+--- a/packages/api/tsconfig.json
++++ b/packages/api/tsconfig.json
+@@ -5,5 +5,5 @@
+     "rootDir": ".",
+     "types": ["node"]
+   },
+-  "include": ["src", "test"]
++  "include": ["src", "test", "scripts"]
+ }
+diff --git a/packages/core/src/db/migrations.ts b/packages/core/src/db/migrations.ts
+index 031b26f..5fa668e 100644
+--- a/packages/core/src/db/migrations.ts
++++ b/packages/core/src/db/migrations.ts
+@@ -499,4 +499,144 @@ export const migrations: Migration[] = [
+       CREATE INDEX ix_cotizacion_linea_cotizacion ON cotizacion_linea(cotizacion_id);
+     `,
+   },
++  {
++    id: 11,
++    nombre: "ecf_dgii",
++    sql: /* sql */ `
++      -- Integración directa con la DGII: lo que devuelve la emisión real.
++      ALTER TABLE comprobante_fiscal ADD COLUMN fecha_firma TEXT;
++      ALTER TABLE comprobante_fiscal ADD COLUMN xml_firmado TEXT;
++      ALTER TABLE comprobante_fiscal ADD COLUMN motivo_rechazo TEXT;
++      CREATE INDEX ix_comprobante_fiscal_estado ON comprobante_fiscal(estado_dgii);
++
++      -- e-NCF consumidos que no llegaron a un comprobante válido (sin conexión
++      -- o rechazados): se anulan ante la DGII (ANECF) en lote.
++      CREATE TABLE ncf_anulacion (
++        id                  TEXT PRIMARY KEY,
++        tipo_ecf            TEXT NOT NULL,
++        ncf                 TEXT NOT NULL,
++        motivo              TEXT,
++        estado              TEXT NOT NULL DEFAULT 'pendiente', -- pendiente|anulado|utilizado|revisado
++        ultimo_mensaje_dgii TEXT,
++        created_at          TEXT NOT NULL,
++        updated_at          TEXT NOT NULL,
++        deleted_at          TEXT
++      );
++      CREATE UNIQUE INDEX ux_ncf_anulacion_ncf ON ncf_anulacion(ncf);
++      CREATE INDEX ix_ncf_anulacion_estado ON ncf_anulacion(estado);
++    `,
++  },
++  {
++    id: 12,
++    nombre: "ecf_entrega_receptor",
++    sql: /* sql */ `
++      -- Entrega del e-CF aceptado al comprador electrónico (estándar emisor-receptor DGII).
++      ALTER TABLE comprobante_fiscal ADD COLUMN entrega_estado TEXT NOT NULL DEFAULT 'no_aplica'; -- no_aplica|pendiente|entregado|rechazado|no_electronico
++      ALTER TABLE comprobante_fiscal ADD COLUMN entrega_detalle TEXT;
++      ALTER TABLE comprobante_fiscal ADD COLUMN acuse_recibo_xml TEXT;
++      CREATE INDEX ix_comprobante_fiscal_entrega ON comprobante_fiscal(entrega_estado);
++    `,
++  },
++  {
++    id: 13,
++    nombre: "comprobante_receptor_nombre",
++    sql: /* sql */ `
++      -- Razón social del comprador: la representación impresa la exige (E31) y el comprador puede
++      -- no estar en el catálogo de clientes.
++      ALTER TABLE comprobante_fiscal ADD COLUMN receptor_nombre TEXT;
++    `,
++  },
++  {
++    id: 14,
++    nombre: "comprobante_de_compra_respaldo",
++    sql: /* sql */ `
++      -- El driver de escritorio ejecuta cada sentencia por separado y sin transacción, así que
++      -- reconstruir comprobante_fiscal se hace en tres migraciones que se pueden repetir sin daño.
++      -- Esta copia la tabla y suelta los enlaces que la referencian para poder reemplazarla.
++      CREATE TABLE IF NOT EXISTS comprobante_fiscal_respaldo AS SELECT * FROM comprobante_fiscal;
++      CREATE TABLE IF NOT EXISTS factura_enlace_respaldo AS SELECT id, comprobante_id FROM factura WHERE comprobante_id IS NOT NULL;
++      CREATE TABLE IF NOT EXISTS devolucion_enlace_respaldo AS SELECT id, comprobante_id FROM devolucion WHERE comprobante_id IS NOT NULL;
++      UPDATE factura SET comprobante_id = NULL WHERE comprobante_id IS NOT NULL;
++      UPDATE devolucion SET comprobante_id = NULL WHERE comprobante_id IS NOT NULL;
++    `,
++  },
++  {
++    id: 15,
++    nombre: "comprobante_de_compra_tabla",
++    sql: /* sql */ `
++      DROP TABLE IF EXISTS comprobante_fiscal;
++      CREATE TABLE comprobante_fiscal (
++        id                       TEXT PRIMARY KEY,
++        factura_id               TEXT REFERENCES factura(id),
++        compra_id                TEXT REFERENCES compra(id),
++        tipo_ecf                 TEXT NOT NULL,
++        ncf                      TEXT NOT NULL,
++        secuencia_id             TEXT NOT NULL REFERENCES secuencia_ncf(id),
++        rnc_emisor               TEXT,
++        receptor_documento_tipo  TEXT,
++        receptor_documento_numero TEXT,
++        receptor_nombre          TEXT,
++        fecha_emision            TEXT NOT NULL,
++        monto_gravado            REAL NOT NULL DEFAULT 0,
++        monto_exento             REAL NOT NULL DEFAULT 0,
++        monto_itbis              REAL NOT NULL DEFAULT 0,
++        total                    REAL NOT NULL DEFAULT 0,
++        estado_dgii              TEXT NOT NULL DEFAULT 'pendiente',
++        track_id_dgii            TEXT,
++        codigo_seguridad         TEXT,
++        xml_firmado_ruta         TEXT,
++        qr_url                   TEXT,
++        fecha_transmision        TEXT,
++        fecha_firma              TEXT,
++        xml_firmado              TEXT,
++        motivo_rechazo           TEXT,
++        entrega_estado           TEXT NOT NULL DEFAULT 'no_aplica',
++        entrega_detalle          TEXT,
++        acuse_recibo_xml         TEXT,
++        created_at               TEXT NOT NULL,
++        updated_at               TEXT NOT NULL,
++        deleted_at               TEXT,
++        CHECK (factura_id IS NOT NULL OR compra_id IS NOT NULL)
++      );
++      CREATE UNIQUE INDEX ux_comprobante_fiscal_ncf ON comprobante_fiscal(ncf);
++      CREATE UNIQUE INDEX ux_comprobante_fiscal_compra ON comprobante_fiscal(compra_id) WHERE compra_id IS NOT NULL AND deleted_at IS NULL;
++      CREATE INDEX ix_comprobante_fiscal_factura ON comprobante_fiscal(factura_id);
++      CREATE INDEX ix_comprobante_fiscal_compra ON comprobante_fiscal(compra_id);
++      CREATE INDEX ix_comprobante_fiscal_estado ON comprobante_fiscal(estado_dgii);
++      CREATE INDEX ix_comprobante_fiscal_entrega ON comprobante_fiscal(entrega_estado);
++    `,
++  },
++  {
++    id: 16,
++    nombre: "comprobante_de_compra_restaurar",
++    sql: /* sql */ `
++      INSERT OR IGNORE INTO comprobante_fiscal (
++        id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
++        receptor_documento_numero, receptor_nombre, fecha_emision, monto_gravado, monto_exento,
++        monto_itbis, total, estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url,
++        fecha_transmision, fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle,
++        acuse_recibo_xml, created_at, updated_at, deleted_at
++      )
++      SELECT
++        id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
++        receptor_documento_numero, receptor_nombre, fecha_emision, monto_gravado, monto_exento,
++        monto_itbis, total, estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url,
++        fecha_transmision, fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle,
++        acuse_recibo_xml, created_at, updated_at, deleted_at
++      FROM comprobante_fiscal_respaldo;
++      UPDATE factura SET comprobante_id = (SELECT e.comprobante_id FROM factura_enlace_respaldo e WHERE e.id = factura.id) WHERE id IN (SELECT id FROM factura_enlace_respaldo);
++      UPDATE devolucion SET comprobante_id = (SELECT e.comprobante_id FROM devolucion_enlace_respaldo e WHERE e.id = devolucion.id) WHERE id IN (SELECT id FROM devolucion_enlace_respaldo);
++      DROP TABLE IF EXISTS comprobante_fiscal_respaldo;
++      DROP TABLE IF EXISTS factura_enlace_respaldo;
++      DROP TABLE IF EXISTS devolucion_enlace_respaldo;
++    `,
++  },
++  {
++    id: 17,
++    nombre: "negocio_ubicacion",
++    sql: /* sql */ `
++      ALTER TABLE negocio ADD COLUMN municipio TEXT;
++      ALTER TABLE negocio ADD COLUMN provincia TEXT;
++    `,
++  },
+ ];
+diff --git a/packages/core/src/dominio/ecf.ts b/packages/core/src/dominio/ecf.ts
+index 93c0c1b..7a56277 100644
+--- a/packages/core/src/dominio/ecf.ts
++++ b/packages/core/src/dominio/ecf.ts
+@@ -36,3 +36,35 @@ export const ETIQUETA_TIPO_ECF: Record<TipoEcf, string> = {
+   "46": "Exportaciones (E46)",
+   "47": "Pagos al Exterior (E47)",
+ };
++
++/** Denominación oficial para la representación impresa (Informe Técnico e-CF §18.2.1). */
++export const NOMBRE_TIPO_ECF: Record<TipoEcf, string> = {
++  "31": "Factura de Crédito Fiscal Electrónica",
++  "32": "Factura de Consumo Electrónica",
++  "33": "Nota de Débito Electrónica",
++  "34": "Nota de Crédito Electrónica",
++  "41": "Comprobante Electrónico de Compras",
++  "43": "Comprobante Electrónico para Gastos Menores",
++  "44": "Comprobante Electrónico para Regímenes Especiales",
++  "45": "Comprobante Electrónico Gubernamental",
++  "46": "Comprobante Electrónico para Exportaciones",
++  "47": "Comprobante Electrónico para Pagos al Exterior",
++};
++
++/** Código de modificación de notas de crédito/débito, en palabras (Informe Técnico e-CF §18.2.1). */
++export const DESCRIPCION_CODIGO_MODIFICACION: Record<1 | 2 | 3 | 4 | 5, string> = {
++  1: "Anula el NCF modificado",
++  2: "Corrige Texto del Comprobante Fiscal modificado",
++  3: "Corrige montos del NCF modificado",
++  4: "Reemplazo NCF emitido en contingencia",
++  5: "Referencia Factura Consumo Electrónica",
++};
++
++export function requiereCompradorIdentificado(tipoEcf: TipoEcf): boolean {
++  return tipoEcf === "31" || tipoEcf === "45";
++}
++
++/** La fecha de vencimiento de la secuencia no aplica a notas de crédito ni a facturas de consumo. */
++export function requiereVencimientoEnRepresentacion(tipoEcf: TipoEcf): boolean {
++  return tipoEcf !== "32" && tipoEcf !== "34";
++}
+diff --git a/packages/core/src/dominio/index.ts b/packages/core/src/dominio/index.ts
+index 123a66c..0586ecf 100644
+--- a/packages/core/src/dominio/index.ts
++++ b/packages/core/src/dominio/index.ts
+@@ -19,7 +19,16 @@ export {
+   calcularTotales,
+   procesarCobro,
+ } from "./factura.js";
+-export { type TipoEcf, formatearNcf, tipoEcfSugerido, ETIQUETA_TIPO_ECF } from "./ecf.js";
++export {
++  type TipoEcf,
++  formatearNcf,
++  tipoEcfSugerido,
++  requiereCompradorIdentificado,
++  ETIQUETA_TIPO_ECF,
++  NOMBRE_TIPO_ECF,
++  DESCRIPCION_CODIGO_MODIFICACION,
++  requiereVencimientoEnRepresentacion,
++} from "./ecf.js";
+ export { type CorteCajaInput, type CorteCajaResultado, calcularCorteCaja } from "./caja.js";
+ export {
+   type PoliticaSinExistencia,
+diff --git a/packages/core/src/dominio/mensajes.ts b/packages/core/src/dominio/mensajes.ts
+index 7050704..14e3dc2 100644
+--- a/packages/core/src/dominio/mensajes.ts
++++ b/packages/core/src/dominio/mensajes.ts
+@@ -18,5 +18,6 @@ export const MSG = {
+   lineaNoExiste: "Ese renglón del ticket ya no existe. Es posible que se quitara desde otra ventana.",
+   comprobanteNoExiste:
+     "No se encontró el comprobante fiscal de esa factura, así que no se puede emitir la nota de crédito.",
++  compraNoExiste: "Esa compra ya no existe. Es posible que se haya eliminado desde otra ventana; actualiza la lista.",
+   secuenciaNoExiste: "Esa secuencia de NCF ya no existe. Revísala en Configuración → Comprobantes fiscales.",
+ } as const;
+diff --git a/packages/core/src/fiscal/cobro-fiscal.ts b/packages/core/src/fiscal/cobro-fiscal.ts
+index 3f27364..1003d05 100644
+--- a/packages/core/src/fiscal/cobro-fiscal.ts
++++ b/packages/core/src/fiscal/cobro-fiscal.ts
+@@ -1,13 +1,29 @@
+ import type { FacturaRepo } from "../repos/factura-repo.js";
+ import type { SecuenciaNcfRepo } from "../repos/secuencia-ncf-repo.js";
+ import type { ComprobanteFiscalRepo } from "../repos/comprobante-fiscal-repo.js";
+-import type { ProveedorFiscal } from "./proveedor.js";
++import type { NcfAnulacionRepo } from "../repos/ncf-anulacion-repo.js";
++import type { EmisorFiscal, PagoATransmitir, ProveedorFiscal } from "./proveedor.js";
++import { redondear2 } from "../dominio/dinero.js";
+ import { procesarCobro, type PagoInput } from "../dominio/factura.js";
+-import { formatearNcf, type TipoEcf } from "../dominio/ecf.js";
++import { ETIQUETA_TIPO_ECF, formatearNcf, requiereCompradorIdentificado, type TipoEcf } from "../dominio/ecf.js";
+ import { esDocumentoValido } from "../dominio/validacion.js";
+ import { ValidacionError } from "../repos/producto-repo.js";
+ import type { Factura, ComprobanteFiscal } from "../repos/tipos.js";
+ import { MSG } from "../dominio/mensajes.js";
++import { now } from "../ids.js";
++import { estadoDgiiDe, transmitirNcfConsumido, UMBRAL_CONSUMO_CON_COMPRADOR, validarEmisor } from "./transmision.js";
++
++/** Lo que realmente se aplicó a la factura: el cambio sale del efectivo entregado. */
++function pagosAplicados(pagos: PagoInput[], cambio: number): PagoATransmitir[] {
++  let porDescontar = cambio;
++  const aplicados = [...pagos].reverse().map((p) => {
++    if (p.metodo !== "efectivo" || porDescontar <= 0) return { metodo: p.metodo, monto: p.monto };
++    const descuento = Math.min(p.monto, porDescontar);
++    porDescontar = redondear2(porDescontar - descuento);
++    return { metodo: p.metodo, monto: redondear2(p.monto - descuento) };
++  });
++  return aplicados.reverse().filter((p) => p.monto > 0);
++}
+ 
+ export interface CobrarConFiscalInput {
+   pagos: PagoInput[];
+@@ -15,14 +31,16 @@ export interface CobrarConFiscalInput {
+   tipoEcf: TipoEcf;
+   receptorDocumentoTipo?: "rnc" | "cedula" | null;
+   receptorDocumentoNumero?: string | null;
+-  /** RNC del negocio emisor (de Configuración). */
+-  rncEmisor: string | null;
++  receptorNombre?: string | null;
++  /** Datos del negocio emisor (de Configuración). */
++  emisor: EmisorFiscal | null;
+ }
+ 
+ export interface CobrarConFiscalDeps {
+   facturaRepo: FacturaRepo;
+   secuenciaRepo: SecuenciaNcfRepo;
+   comprobanteRepo: ComprobanteFiscalRepo;
++  anulacionRepo: NcfAnulacionRepo;
+   proveedorFiscal: ProveedorFiscal;
+ }
+ 
+@@ -36,26 +54,39 @@ export interface ResultadoCobroFiscal {
+  * Cobra un ticket EMITIENDO comprobante fiscal (§6).
+  *
+  * Orden importante: primero se valida todo lo que no tiene efectos
+- * secundarios (líneas, monto suficiente, secuencia vigente, formato del
+- * documento del receptor) — recién después se **consume** el número de NCF y
+- * se llama al proveedor fiscal. Así una venta que iba a fallar por dinero
+- * insuficiente nunca desperdicia un NCF.
++ * secundarios (líneas, monto suficiente, secuencia vigente, datos del emisor y
++ * del receptor) — recién después se **consume** el número de NCF y se llama al
++ * proveedor fiscal. Así una venta que iba a fallar por dinero insuficiente
++ * nunca desperdicia un NCF. Si aun así el número se pierde (sin conexión o
++ * rechazo), queda en cola para anularlo ante la DGII.
+  *
+  * Política de contingencia (decisión del usuario, ver plan.md): si no hay
+  * conexión/aceptación de la DGII, **no se permite la venta fiscal** — nada se
+- * cobra. El cajero puede reintentar o cobrar sin comprobante fiscal.
++ * cobra. El cajero puede reintentar o cobrar sin comprobante fiscal. Un e-CF
++ * "en proceso" sí cobra: la DGII ya lo recibió y se reconcilia después.
+  */
+ export async function cobrarConFiscal(
+   deps: CobrarConFiscalDeps,
+   facturaId: string,
+   input: CobrarConFiscalInput,
+ ): Promise<ResultadoCobroFiscal> {
+-  const { facturaRepo, secuenciaRepo, comprobanteRepo, proveedorFiscal } = deps;
+-
+-  if (input.tipoEcf === "31" && !input.receptorDocumentoNumero) {
+-    throw new ValidacionError([
+-      { campo: "receptorDocumentoNumero", mensaje: "El Crédito Fiscal (E31) requiere el RNC del comprador." },
+-    ]);
++  const { facturaRepo, secuenciaRepo, comprobanteRepo } = deps;
++
++  const emisor = validarEmisor(input.emisor);
++  const receptorNombre = input.receptorNombre?.trim() || null;
++
++  if (requiereCompradorIdentificado(input.tipoEcf)) {
++    const etiqueta = ETIQUETA_TIPO_ECF[input.tipoEcf];
++    if (!input.receptorDocumentoNumero) {
++      throw new ValidacionError([
++        { campo: "receptorDocumentoNumero", mensaje: `El ${etiqueta} requiere el RNC del comprador.` },
++      ]);
++    }
++    if (!receptorNombre) {
++      throw new ValidacionError([
++        { campo: "receptorNombre", mensaje: `El ${etiqueta} requiere la razón social del comprador.` },
++      ]);
++    }
+   }
+   if (input.receptorDocumentoNumero && !esDocumentoValido(input.receptorDocumentoTipo, input.receptorDocumentoNumero)) {
+     const etiqueta = input.receptorDocumentoTipo === "cedula" ? "cédula" : "RNC";
+@@ -75,6 +106,15 @@ export async function cobrarConFiscal(
+     throw new ValidacionError([{ campo: "lineas", mensaje: "El ticket no tiene artículos." }]);
+   }
+ 
++  if (input.tipoEcf === "32" && factura.total >= UMBRAL_CONSUMO_CON_COMPRADOR && !input.receptorDocumentoNumero) {
++    throw new ValidacionError([
++      {
++        campo: "receptorDocumentoNumero",
++        mensaje: "Una factura de consumo de RD$250,000.00 o más requiere el RNC o la cédula del comprador.",
++      },
++    ]);
++  }
++
+   const resultadoCobro = procesarCobro(factura.total, input.pagos);
+   if (!resultadoCobro.suficiente) {
+     throw new ValidacionError([
+@@ -96,37 +136,33 @@ export async function cobrarConFiscal(
+   const numero = await secuenciaRepo.consumirSiguiente(secuencia.id);
+   const ncf = formatearNcf(input.tipoEcf, numero);
+ 
+-  let resultadoTransmision;
+-  try {
+-    resultadoTransmision = await proveedorFiscal.transmitir({
++  const resultadoTransmision = await transmitirNcfConsumido(
++    deps,
++    {
+       ncf,
+       tipoEcf: input.tipoEcf,
+-      rncEmisor: input.rncEmisor,
++      emisor,
++      fechaEmision: now(),
++      fechaVencimientoSecuencia: secuencia.vencimiento,
+       receptorDocumentoTipo: input.receptorDocumentoTipo ?? null,
+       receptorDocumentoNumero: input.receptorDocumentoNumero ?? null,
++      receptorNombre,
++      lineas: lineas.map((l) => ({
++        descripcion: l.descripcion,
++        cantidad: l.cantidad,
++        precioUnitario: l.precio_unitario,
++        tasaImpuesto: l.tasa_impuesto,
++        subtotal: l.subtotal,
++      })),
++      pagos: pagosAplicados(input.pagos, resultadoCobro.cambio),
+       montoGravado: factura.subtotal_gravado,
+       montoExento: factura.subtotal_exento,
+       montoItbis: factura.total_itbis,
+       total: factura.total,
+-    });
+-  } catch {
+-    throw new ValidacionError([
+-      {
+-        campo: "fiscal",
+-        mensaje:
+-          "No se pudo transmitir el comprobante a la DGII (sin conexión). No se permite cobrar con NCF sin conexión; puede cobrar sin comprobante fiscal.",
+-      },
+-    ]);
+-  }
+-
+-  if (resultadoTransmision.estado !== "aceptado") {
+-    throw new ValidacionError([
+-      {
+-        campo: "fiscal",
+-        mensaje: `La DGII rechazó el comprobante: ${resultadoTransmision.motivoRechazo ?? "sin detalle"}.`,
+-      },
+-    ]);
+-  }
++      referencia: null,
++    },
++    "el comprobante",
++  );
+ 
+   const { factura: facturaCobrada, cambio } = await facturaRepo.cobrar(facturaId, {
+     pagos: input.pagos,
+@@ -138,16 +174,20 @@ export async function cobrarConFiscal(
+     tipoEcf: input.tipoEcf,
+     ncf,
+     secuenciaId: secuencia.id,
+-    rncEmisor: input.rncEmisor,
++    rncEmisor: emisor.rnc,
+     receptorDocumentoTipo: input.receptorDocumentoTipo ?? null,
+     receptorDocumentoNumero: input.receptorDocumentoNumero ?? null,
++    receptorNombre,
+     montoGravado: facturaCobrada.subtotal_gravado,
+     montoExento: facturaCobrada.subtotal_exento,
+     montoItbis: facturaCobrada.total_itbis,
+     total: facturaCobrada.total,
+-    estadoDgii: "aceptado",
++    estadoDgii: estadoDgiiDe(resultadoTransmision.estado),
+     trackIdDgii: resultadoTransmision.trackId ?? null,
+     codigoSeguridad: resultadoTransmision.codigoSeguridad ?? null,
++    qrUrl: resultadoTransmision.qrUrl ?? null,
++    fechaFirma: resultadoTransmision.fechaFirma ?? null,
++    xmlFirmado: resultadoTransmision.xmlFirmado ?? null,
+   });
+ 
+   await facturaRepo.marcarFiscal(facturaId, comprobante.id);
+diff --git a/packages/core/src/fiscal/devolucion-fiscal.ts b/packages/core/src/fiscal/devolucion-fiscal.ts
+index 9c3b317..d5bef28 100644
+--- a/packages/core/src/fiscal/devolucion-fiscal.ts
++++ b/packages/core/src/fiscal/devolucion-fiscal.ts
+@@ -1,18 +1,22 @@
+ import type { FacturaRepo } from "../repos/factura-repo.js";
+ import type { SecuenciaNcfRepo } from "../repos/secuencia-ncf-repo.js";
+ import type { ComprobanteFiscalRepo } from "../repos/comprobante-fiscal-repo.js";
++import type { NcfAnulacionRepo } from "../repos/ncf-anulacion-repo.js";
+ import type { DevolucionInput, DevolucionRepo } from "../repos/devolucion-repo.js";
+-import type { ProveedorFiscal } from "./proveedor.js";
++import type { EmisorFiscal, ProveedorFiscal } from "./proveedor.js";
+ import { formatearNcf } from "../dominio/ecf.js";
+ import { ValidacionError } from "../repos/producto-repo.js";
+ import type { Devolucion, ComprobanteFiscal } from "../repos/tipos.js";
+ import { MSG } from "../dominio/mensajes.js";
++import { now } from "../ids.js";
++import { estadoDgiiDe, transmitirNcfConsumido, validarEmisor } from "./transmision.js";
+ 
+ export interface DevolucionConFiscalDeps {
+   devolucionRepo: DevolucionRepo;
+   facturaRepo: FacturaRepo;
+   secuenciaRepo: SecuenciaNcfRepo;
+   comprobanteRepo: ComprobanteFiscalRepo;
++  anulacionRepo: NcfAnulacionRepo;
+   proveedorFiscal: ProveedorFiscal;
+ }
+ 
+@@ -21,19 +25,23 @@ export interface ResultadoDevolucionFiscal {
+   comprobante: ComprobanteFiscal;
+ }
+ 
++const CODIGO_ANULA_NCF = 1;
++const CODIGO_CORRIGE_MONTOS = 3;
++
+ /**
+  * Devuelve artículos de una venta que tiene comprobante fiscal (§6, §Ventas):
+  * exige emitir primero una Nota de Crédito (E34) referenciando el NCF
+  * original, con la misma política de "no contingencia" que el cobro fiscal
+  * — si la DGII no acepta la NC, no se completa la devolución (nada se
+- * restituye a inventario, ningún NCF de NC queda a medias).
++ * restituye a inventario) y su número queda en cola para anular.
+  */
+ export async function registrarDevolucionConFiscal(
+   deps: DevolucionConFiscalDeps,
+   input: DevolucionInput,
+-  rncEmisor: string | null,
++  emisorInput: EmisorFiscal | null,
+ ): Promise<ResultadoDevolucionFiscal> {
+-  const { devolucionRepo, facturaRepo, secuenciaRepo, comprobanteRepo, proveedorFiscal } = deps;
++  const { devolucionRepo, facturaRepo, secuenciaRepo, comprobanteRepo } = deps;
++  const emisor = validarEmisor(emisorInput);
+ 
+   const factura = await facturaRepo.obtener(input.facturaId);
+   if (!factura) throw new Error(MSG.facturaNoExiste);
+@@ -62,38 +70,40 @@ export async function registrarDevolucionConFiscal(
+ 
+   const numero = await secuenciaRepo.consumirSiguiente(secuencia.id);
+   const ncf = formatearNcf("34", numero);
++  const esDevolucionTotal = Math.abs(preparada.total - comprobanteOriginal.total) < 0.005;
+ 
+-  let resultadoTransmision;
+-  try {
+-    resultadoTransmision = await proveedorFiscal.transmitir({
++  const resultadoTransmision = await transmitirNcfConsumido(
++    deps,
++    {
+       ncf,
+       tipoEcf: "34",
+-      rncEmisor,
++      emisor,
++      fechaEmision: now(),
++      fechaVencimientoSecuencia: null,
+       receptorDocumentoTipo: comprobanteOriginal.receptor_documento_tipo,
+       receptorDocumentoNumero: comprobanteOriginal.receptor_documento_numero,
++      receptorNombre: null,
++      lineas: preparada.lineas.map((l) => ({
++        descripcion: l.descripcion,
++        cantidad: l.cantidad,
++        precioUnitario: l.precioUnitario,
++        tasaImpuesto: l.tasaImpuesto,
++        subtotal: l.subtotal,
++      })),
++      pagos: [],
+       montoGravado: preparada.subtotalGravado,
+       montoExento: preparada.subtotalExento,
+       montoItbis: preparada.totalItbis,
+       total: preparada.total,
+-    });
+-  } catch {
+-    throw new ValidacionError([
+-      {
+-        campo: "fiscal",
+-        mensaje:
+-          "No se pudo transmitir la Nota de Crédito a la DGII (sin conexión). No se permite procesar la devolución fiscal sin conexión.",
+-      },
+-    ]);
+-  }
+-
+-  if (resultadoTransmision.estado !== "aceptado") {
+-    throw new ValidacionError([
+-      {
+-        campo: "fiscal",
+-        mensaje: `La DGII rechazó la Nota de Crédito: ${resultadoTransmision.motivoRechazo ?? "sin detalle"}.`,
++      referencia: {
++        ncfModificado: comprobanteOriginal.ncf,
++        fechaNcfModificado: comprobanteOriginal.fecha_emision,
++        codigoModificacion: esDevolucionTotal ? CODIGO_ANULA_NCF : CODIGO_CORRIGE_MONTOS,
++        razon: input.motivo?.trim() || null,
+       },
+-    ]);
+-  }
++    },
++    "la Nota de Crédito",
++  );
+ 
+   const devolucion = await devolucionRepo.crear(input);
+ 
+@@ -102,16 +112,19 @@ export async function registrarDevolucionConFiscal(
+     tipoEcf: "34",
+     ncf,
+     secuenciaId: secuencia.id,
+-    rncEmisor,
++    rncEmisor: emisor.rnc,
+     receptorDocumentoTipo: comprobanteOriginal.receptor_documento_tipo,
+     receptorDocumentoNumero: comprobanteOriginal.receptor_documento_numero,
+     montoGravado: preparada.subtotalGravado,
+     montoExento: preparada.subtotalExento,
+     montoItbis: preparada.totalItbis,
+     total: preparada.total,
+-    estadoDgii: "aceptado",
++    estadoDgii: estadoDgiiDe(resultadoTransmision.estado),
+     trackIdDgii: resultadoTransmision.trackId ?? null,
+     codigoSeguridad: resultadoTransmision.codigoSeguridad ?? null,
++    qrUrl: resultadoTransmision.qrUrl ?? null,
++    fechaFirma: resultadoTransmision.fechaFirma ?? null,
++    xmlFirmado: resultadoTransmision.xmlFirmado ?? null,
+   });
+ 
+   await devolucionRepo.marcarComprobante(devolucion.id, comprobante.id);
+diff --git a/packages/core/src/fiscal/proveedor.ts b/packages/core/src/fiscal/proveedor.ts
+index 549bcab..cb8fedd 100644
+--- a/packages/core/src/fiscal/proveedor.ts
++++ b/packages/core/src/fiscal/proveedor.ts
+@@ -1,27 +1,87 @@
+ import type { TipoEcf } from "../dominio/ecf.js";
++import type { MetodoPago } from "../dominio/factura.js";
+ 
+ /**
+- * Puerto de transmisión fiscal. Cualquier implementación real (PAC certificado
+- * o integración directa al API de la DGII — decisión pendiente del usuario,
+- * ver `plan.md`) implementa esta interfaz. El resto del sistema (secuencias,
+- * NCF, recibo) no depende de cuál se elija.
++ * Puerto de transmisión fiscal. La implementación real vive en `@sfr/api`
++ * (integración directa al API de la DGII, "Software de Desarrollo Propio"):
++ * el cliente la consume vía HTTP. El resto del sistema (secuencias, NCF,
++ * recibo) no depende de cómo se transmite.
+  */
++export interface EmisorFiscal {
++  rnc: string;
++  razonSocial: string;
++  nombreComercial: string | null;
++  direccion: string;
++}
++
++/** Línea tal como se vendió: `precioUnitario` y `subtotal` llevan el ITBIS incluido. */
++export interface LineaATransmitir {
++  descripcion: string;
++  cantidad: number;
++  precioUnitario: number;
++  tasaImpuesto: number;
++  subtotal: number;
++  /** Servicio (no bien): solo a un servicio se le retiene ISR en un E41. */
++  esServicio?: boolean;
++  itbisRetenido?: number;
++  isrRetenido?: number;
++}
++
++export interface PagoATransmitir {
++  metodo: MetodoPago;
++  monto: number;
++}
++
++/**
++ * Códigos DGII: 1 anula el NCF modificado, 2 corrige texto, 3 corrige montos,
++ * 4 reemplaza un NCF emitido en contingencia, 5 referencia una factura de consumo electrónica.
++ */
++export type CodigoModificacion = 1 | 2 | 3 | 4 | 5;
++
++export interface ReferenciaComprobante {
++  ncfModificado: string;
++  /** Fecha ISO de emisión del comprobante modificado. */
++  fechaNcfModificado: string;
++  codigoModificacion: CodigoModificacion;
++  razon: string | null;
++}
++
+ export interface ComprobanteATransmitir {
+   ncf: string;
+   tipoEcf: TipoEcf;
+-  rncEmisor: string | null;
++  emisor: EmisorFiscal;
++  /** Fecha ISO de emisión. */
++  fechaEmision: string;
++  /** Fecha ISO (AAAA-MM-DD) de vencimiento de la secuencia; la DGII la exige en E31. */
++  fechaVencimientoSecuencia: string | null;
+   receptorDocumentoTipo: "rnc" | "cedula" | null;
+   receptorDocumentoNumero: string | null;
++  receptorNombre: string | null;
++  lineas: LineaATransmitir[];
++  pagos: PagoATransmitir[];
+   montoGravado: number;
+   montoExento: number;
+   montoItbis: number;
+   total: number;
++  /** Obligatoria en notas de crédito/débito (E33/E34). */
++  referencia: ReferenciaComprobante | null;
+ }
+ 
++/**
++ * Estados de la DGII: `aceptado_condicional` tiene validez fiscal igual que
++ * `aceptado`; `en_proceso` significa que la DGII aún no valida y hay que
++ * consultar luego por `trackId`.
++ */
++export type EstadoTransmision = "aceptado" | "aceptado_condicional" | "en_proceso" | "rechazado";
++
+ export interface ResultadoTransmision {
+-  estado: "aceptado" | "rechazado";
++  estado: EstadoTransmision;
+   trackId?: string;
+   codigoSeguridad?: string;
++  /** Fecha y hora de la firma en formato DGII (dd-MM-AAAA HH:mm:ss). */
++  fechaFirma?: string;
++  qrUrl?: string;
++  xmlFirmado?: string;
+   motivoRechazo?: string;
+ }
+ 
+@@ -29,14 +89,16 @@ export interface ProveedorFiscal {
+   transmitir(comprobante: ComprobanteATransmitir): Promise<ResultadoTransmision>;
+ }
+ 
++export function tieneValidezFiscal(estado: EstadoTransmision): boolean {
++  return estado === "aceptado" || estado === "aceptado_condicional";
++}
++
+ /**
+  * *** SIMULADOR — NO transmite nada real a la DGII. ***
+  *
+- * Placeholder mientras se decide el proveedor real (PAC vs. integración
+- * directa, pendiente de confirmar). Simula una aceptación instantánea para
+- * poder construir y probar el flujo completo de e-CF (secuencias, NCF,
+- * recibo) sin conexión real. Sustituir por una implementación real de
+- * `ProveedorFiscal` antes de emitir comprobantes en producción.
++ * Simula una aceptación instantánea para desarrollar y probar el flujo
++ * completo sin conexión ni certificado. Usar `crearProveedorFiscalHttp` (en
++ * `@sfr/ui`) para emitir comprobantes reales.
+  */
+ export function crearProveedorFiscalSimulado(): ProveedorFiscal {
+   return {
+@@ -44,7 +106,7 @@ export function crearProveedorFiscalSimulado(): ProveedorFiscal {
+       return {
+         estado: "aceptado",
+         trackId: `SIM-${Date.now()}`,
+-        codigoSeguridad: Math.random().toString(36).slice(2, 10).toUpperCase(),
++        codigoSeguridad: Math.random().toString(36).slice(2, 8).toUpperCase(),
+       };
+     },
+   };
+diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
+index 84ba893..28af3b3 100644
+--- a/packages/core/src/index.ts
++++ b/packages/core/src/index.ts
+@@ -21,7 +21,14 @@ export {
+   type ProveedorFiscal,
+   type ComprobanteATransmitir,
+   type ResultadoTransmision,
++  type EstadoTransmision,
++  type EmisorFiscal,
++  type LineaATransmitir,
++  type PagoATransmitir,
++  type ReferenciaComprobante,
++  type CodigoModificacion,
+   crearProveedorFiscalSimulado,
++  tieneValidezFiscal,
+ } from "./fiscal/proveedor.js";
+ export {
+   cobrarConFiscal,
+@@ -29,11 +36,40 @@ export {
+   type CobrarConFiscalDeps,
+   type ResultadoCobroFiscal,
+ } from "./fiscal/cobro-fiscal.js";
++export {
++  reconciliarComprobantesPendientes,
++  anularNcfPendientes,
++  agruparEnRangos,
++  entregarComprobantesAReceptores,
++  type DatosEntrega,
++  type ResultadoEntrega,
++  type EntregaDeps,
++  type ReconciliarDeps,
++  type ResumenReconciliacion,
++  type AnularDeps,
++  type RangoNcf,
++} from "./fiscal/seguimiento.js";
++export { validarEmisor, emisorDesdeNegocio, UMBRAL_CONSUMO_CON_COMPRADOR } from "./fiscal/transmision.js";
+ export {
+   registrarDevolucionConFiscal,
+   type DevolucionConFiscalDeps,
+   type ResultadoDevolucionFiscal,
+ } from "./fiscal/devolucion-fiscal.js";
++export {
++  emitirNotaDebitoFiscal,
++  TASAS_NOTA_DEBITO,
++  type NotaDebitoInput,
++  type NotaDebitoFiscalDeps,
++  type ResultadoNotaDebitoFiscal,
++} from "./fiscal/nota-debito-fiscal.js";
++export {
++  emitirComprobanteDeCompra,
++  type TipoEcfDeCompra,
++  type RetencionLineaInput,
++  type ComprobanteDeCompraInput,
++  type ComprobanteDeCompraDeps,
++  type ResultadoComprobanteDeCompra,
++} from "./fiscal/comprobante-compra.js";
+ export {
+   crearClienteAuth,
+   iniciarSesionGoogleWeb,
+diff --git a/packages/core/src/repos/backup-repo.ts b/packages/core/src/repos/backup-repo.ts
+index 9613bed..573bcd7 100644
+--- a/packages/core/src/repos/backup-repo.ts
++++ b/packages/core/src/repos/backup-repo.ts
+@@ -17,11 +17,11 @@ const TABLAS = [
+   "factura_linea",
+   "pago",
+   "secuencia_ncf",
++  "proveedor",
++  "compra",
+   "comprobante_fiscal",
+   "corte_caja",
+   "movimiento_inventario",
+-  "proveedor",
+-  "compra",
+   "compra_linea",
+   "comprobante_archivo",
+   "bitacora_accion",
+@@ -30,6 +30,7 @@ const TABLAS = [
+   "promocion",
+   "cotizacion",
+   "cotizacion_linea",
++  "ncf_anulacion",
+ ] as const;
+ 
+ export interface RespaldoCompleto {
+diff --git a/packages/core/src/repos/compra-repo.ts b/packages/core/src/repos/compra-repo.ts
+index 226153e..00e14b0 100644
+--- a/packages/core/src/repos/compra-repo.ts
++++ b/packages/core/src/repos/compra-repo.ts
+@@ -197,6 +197,13 @@ export function crearCompraRepo(db: SqlDriver) {
+       );
+     },
+ 
++    async marcarComprobanteEmitido(id: string): Promise<void> {
++      await db.run(
++        "UPDATE compra SET tiene_comprobante_fiscal=1, estado_clasificacion='con_fiscal', updated_at=? WHERE id=?",
++        [now(), id],
++      );
++    },
++
+     /** Lista de compras, filtrable por período y proveedor, más reciente primero. */
+     async listar(
+       filtro: { desde?: string | null; hasta?: string | null; proveedorId?: string | null } = {},
+diff --git a/packages/core/src/repos/comprobante-fiscal-repo.ts b/packages/core/src/repos/comprobante-fiscal-repo.ts
+index 0881626..dacede1 100644
+--- a/packages/core/src/repos/comprobante-fiscal-repo.ts
++++ b/packages/core/src/repos/comprobante-fiscal-repo.ts
+@@ -1,16 +1,18 @@
+ import type { SqlDriver } from "../db/driver.js";
+ import { newId, now } from "../ids.js";
+ import type { TipoEcf } from "../dominio/ecf.js";
+-import type { ComprobanteFiscal, EstadoDgii } from "./tipos.js";
++import type { ComprobanteFiscal, EstadoDgii, EstadoEntrega } from "./tipos.js";
+ 
+ export interface CrearComprobanteInput {
+-  facturaId: string;
++  facturaId?: string | null;
++  compraId?: string | null;
+   tipoEcf: TipoEcf;
+   ncf: string;
+   secuenciaId: string;
+   rncEmisor: string | null;
+   receptorDocumentoTipo: "rnc" | "cedula" | null;
+   receptorDocumentoNumero: string | null;
++  receptorNombre?: string | null;
+   montoGravado: number;
+   montoExento: number;
+   montoItbis: number;
+@@ -18,26 +20,41 @@ export interface CrearComprobanteInput {
+   estadoDgii: EstadoDgii;
+   trackIdDgii?: string | null;
+   codigoSeguridad?: string | null;
++  qrUrl?: string | null;
++  fechaFirma?: string | null;
++  xmlFirmado?: string | null;
++  motivoRechazo?: string | null;
+ }
+ 
+-const COLS = `id, factura_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
+-  receptor_documento_numero, fecha_emision, monto_gravado, monto_exento, monto_itbis, total,
++const COLS = `id, factura_id, compra_id, tipo_ecf, ncf, secuencia_id, rnc_emisor, receptor_documento_tipo,
++  receptor_documento_numero, receptor_nombre, fecha_emision, monto_gravado, monto_exento, monto_itbis, total,
+   estado_dgii, track_id_dgii, codigo_seguridad, xml_firmado_ruta, qr_url, fecha_transmision,
++  fecha_firma, xml_firmado, motivo_rechazo, entrega_estado, entrega_detalle, acuse_recibo_xml,
+   created_at, updated_at, deleted_at`;
+ 
++const TIPOS_CON_ENTREGA: ReadonlySet<TipoEcf> = new Set(["31", "33", "34", "45"]);
++
++function entregaInicial(tipoEcf: TipoEcf, receptorTipo: "rnc" | "cedula" | null): EstadoEntrega {
++  return TIPOS_CON_ENTREGA.has(tipoEcf) && receptorTipo === "rnc" ? "pendiente" : "no_aplica";
++}
++
++const TRANSMITIDO: ReadonlySet<EstadoDgii> = new Set(["aceptado", "aceptado_condicional", "pendiente", "rechazado"]);
++
+ export function crearComprobanteFiscalRepo(db: SqlDriver) {
+   return {
+     async crear(input: CrearComprobanteInput): Promise<ComprobanteFiscal> {
+       const ts = now();
+       const c: ComprobanteFiscal = {
+         id: newId(),
+-        factura_id: input.facturaId,
++        factura_id: input.facturaId ?? null,
++        compra_id: input.compraId ?? null,
+         tipo_ecf: input.tipoEcf,
+         ncf: input.ncf,
+         secuencia_id: input.secuenciaId,
+         rnc_emisor: input.rncEmisor,
+         receptor_documento_tipo: input.receptorDocumentoTipo,
+         receptor_documento_numero: input.receptorDocumentoNumero,
++        receptor_nombre: input.receptorNombre ?? null,
+         fecha_emision: ts,
+         monto_gravado: input.montoGravado,
+         monto_exento: input.montoExento,
+@@ -47,22 +64,30 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
+         track_id_dgii: input.trackIdDgii ?? null,
+         codigo_seguridad: input.codigoSeguridad ?? null,
+         xml_firmado_ruta: null,
+-        qr_url: null,
+-        fecha_transmision: input.estadoDgii === "aceptado" ? ts : null,
++        qr_url: input.qrUrl ?? null,
++        fecha_transmision: TRANSMITIDO.has(input.estadoDgii) ? ts : null,
++        fecha_firma: input.fechaFirma ?? null,
++        xml_firmado: input.xmlFirmado ?? null,
++        motivo_rechazo: input.motivoRechazo ?? null,
++        entrega_estado: entregaInicial(input.tipoEcf, input.receptorDocumentoTipo),
++        entrega_detalle: null,
++        acuse_recibo_xml: null,
+         created_at: ts,
+         updated_at: ts,
+         deleted_at: null,
+       };
+ 
+-      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(22).fill("?").join(",")})`, [
++      await db.run(`INSERT INTO comprobante_fiscal (${COLS}) VALUES (${Array(30).fill("?").join(",")})`, [
+         c.id,
+         c.factura_id,
++        c.compra_id,
+         c.tipo_ecf,
+         c.ncf,
+         c.secuencia_id,
+         c.rnc_emisor,
+         c.receptor_documento_tipo,
+         c.receptor_documento_numero,
++        c.receptor_nombre,
+         c.fecha_emision,
+         c.monto_gravado,
+         c.monto_exento,
+@@ -74,6 +99,12 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
+         c.xml_firmado_ruta,
+         c.qr_url,
+         c.fecha_transmision,
++        c.fecha_firma,
++        c.xml_firmado,
++        c.motivo_rechazo,
++        c.entrega_estado,
++        c.entrega_detalle,
++        c.acuse_recibo_xml,
+         c.created_at,
+         c.updated_at,
+         c.deleted_at,
+@@ -93,6 +124,67 @@ export function crearComprobanteFiscalRepo(db: SqlDriver) {
+         [facturaId],
+       );
+     },
++
++    async listarNotasPorFactura(facturaId: string): Promise<ComprobanteFiscal[]> {
++      return db.all<ComprobanteFiscal>(
++        `SELECT ${COLS} FROM comprobante_fiscal
++          WHERE factura_id=? AND tipo_ecf IN ('33','34') AND deleted_at IS NULL ORDER BY created_at, rowid`,
++        [facturaId],
++      );
++    },
++
++    async obtenerPorCompra(compraId: string): Promise<ComprobanteFiscal | undefined> {
++      return db.get<ComprobanteFiscal>(
++        `SELECT ${COLS} FROM comprobante_fiscal WHERE compra_id=? AND deleted_at IS NULL`,
++        [compraId],
++      );
++    },
++
++    async listarPendientes(): Promise<ComprobanteFiscal[]> {
++      return db.all<ComprobanteFiscal>(
++        `SELECT ${COLS} FROM comprobante_fiscal
++          WHERE estado_dgii='pendiente' AND deleted_at IS NULL ORDER BY fecha_emision`,
++      );
++    },
++
++    /** Lo que requiere atención: en validación, rechazados por la DGII o entrega al comprador fallida. */
++    async listarParaRevision(): Promise<ComprobanteFiscal[]> {
++      return db.all<ComprobanteFiscal>(
++        `SELECT ${COLS} FROM comprobante_fiscal
++          WHERE (estado_dgii IN ('pendiente','rechazado') OR entrega_estado='rechazado') AND deleted_at IS NULL
++          ORDER BY fecha_emision DESC LIMIT 200`,
++      );
++    },
++
++    /** Aceptados por la DGII cuya entrega al comprador electrónico sigue pendiente. */
++    async listarPorEntregar(): Promise<ComprobanteFiscal[]> {
++      return db.all<ComprobanteFiscal>(
++        `SELECT ${COLS} FROM comprobante_fiscal
++          WHERE entrega_estado='pendiente' AND estado_dgii IN ('aceptado','aceptado_condicional')
++            AND deleted_at IS NULL ORDER BY fecha_emision`,
++      );
++    },
++
++    async registrarEntrega(
++      id: string,
++      estado: EstadoEntrega,
++      detalle: string | null,
++      acuseXml: string | null,
++    ): Promise<void> {
++      await db.run(
++        "UPDATE comprobante_fiscal SET entrega_estado=?, entrega_detalle=?, acuse_recibo_xml=?, updated_at=? WHERE id=?",
++        [estado, detalle, acuseXml, now(), id],
++      );
++    },
++
++    async actualizarEstado(id: string, estado: EstadoDgii, motivoRechazo: string | null = null): Promise<void> {
++      await db.run("UPDATE comprobante_fiscal SET estado_dgii=?, motivo_rechazo=?, updated_at=? WHERE id=?", [
++        estado,
++        motivoRechazo,
++        now(),
++        id,
++      ]);
++    },
+   };
+ }
+ 
+diff --git a/packages/core/src/repos/index.ts b/packages/core/src/repos/index.ts
+index fad15e8..995a075 100644
+--- a/packages/core/src/repos/index.ts
++++ b/packages/core/src/repos/index.ts
+@@ -28,6 +28,7 @@ export {
+   type CrearComprobanteInput,
+   type ComprobanteFiscalRepo,
+ } from "./comprobante-fiscal-repo.js";
++export { crearNcfAnulacionRepo, type RegistrarNcfAnulacionInput, type NcfAnulacionRepo } from "./ncf-anulacion-repo.js";
+ export {
+   crearCorteCajaRepo,
+   type ResumenPeriodoVentas,
+diff --git a/packages/core/src/repos/negocio-repo.ts b/packages/core/src/repos/negocio-repo.ts
+index 0dd69c0..f3d8060 100644
+--- a/packages/core/src/repos/negocio-repo.ts
++++ b/packages/core/src/repos/negocio-repo.ts
+@@ -13,6 +13,8 @@ export interface NegocioInput {
+   razon_social?: string | null;
+   rnc?: string | null;
+   direccion?: string | null;
++  municipio?: string | null;
++  provincia?: string | null;
+   telefono?: string | null;
+   correo?: string | null;
+   regimen?: string | null;
+@@ -38,7 +40,7 @@ export function validarNegocio(input: NegocioInput): ErrorValidacion[] {
+   return errores;
+ }
+ 
+-const COLS = `id, nombre_comercial, razon_social, rnc, direccion, telefono, correo,
++const COLS = `id, nombre_comercial, razon_social, rnc, direccion, municipio, provincia, telefono, correo,
+   logo_ruta, regimen, ancho_impresora_default, redondeo_centavo, inventario_activo,
+   created_at, updated_at, deleted_at`;
+ 
+@@ -64,6 +66,8 @@ export function crearNegocioRepo(db: SqlDriver) {
+           razon_social: input.razon_social ?? null,
+           rnc: input.rnc ?? null,
+           direccion: input.direccion ?? null,
++          municipio: input.municipio ?? null,
++          provincia: input.provincia ?? null,
+           telefono: input.telefono ?? null,
+           correo: input.correo ?? null,
+           logo_ruta: null,
+@@ -75,12 +79,14 @@ export function crearNegocioRepo(db: SqlDriver) {
+           updated_at: ts,
+           deleted_at: null,
+         };
+-        await db.run(`INSERT INTO negocio (${COLS}) VALUES (${Array(15).fill("?").join(",")})`, [
++        await db.run(`INSERT INTO negocio (${COLS}) VALUES (${Array(17).fill("?").join(",")})`, [
+           n.id,
+           n.nombre_comercial,
+           n.razon_social,
+           n.rnc,
+           n.direccion,
++          n.municipio,
++          n.provincia,
+           n.telefono,
+           n.correo,
+           n.logo_ruta,
+@@ -96,7 +102,7 @@ export function crearNegocioRepo(db: SqlDriver) {
+       }
+ 
+       await db.run(
+-        `UPDATE negocio SET nombre_comercial=?, razon_social=?, rnc=?, direccion=?, telefono=?,
++        `UPDATE negocio SET nombre_comercial=?, razon_social=?, rnc=?, direccion=?, municipio=?, provincia=?, telefono=?,
+            correo=?, regimen=?, ancho_impresora_default=?, redondeo_centavo=?, inventario_activo=?,
+            updated_at=?
+          WHERE id=?`,
+@@ -105,6 +111,8 @@ export function crearNegocioRepo(db: SqlDriver) {
+           input.razon_social ?? actual.razon_social,
+           input.rnc ?? actual.rnc,
+           input.direccion ?? actual.direccion,
++          input.municipio ?? actual.municipio,
++          input.provincia ?? actual.provincia,
+           input.telefono ?? actual.telefono,
+           input.correo ?? actual.correo,
+           input.regimen ?? actual.regimen,
+diff --git a/packages/core/src/repos/secuencia-ncf-repo.ts b/packages/core/src/repos/secuencia-ncf-repo.ts
+index 588b687..87386f2 100644
+--- a/packages/core/src/repos/secuencia-ncf-repo.ts
++++ b/packages/core/src/repos/secuencia-ncf-repo.ts
+@@ -110,6 +110,10 @@ export function crearSecuenciaNcfRepo(db: SqlDriver) {
+       return actualizadas;
+     },
+ 
++    async obtener(id: string): Promise<SecuenciaNcf | undefined> {
++      return db.get<SecuenciaNcf>(`SELECT ${COLS} FROM secuencia_ncf WHERE id=?`, [id]);
++    },
++
+     /** Secuencia disponible para un tipo (no vencida, no agotada), o undefined si no hay. */
+     async obtenerVigente(tipoEcf: TipoEcf): Promise<SecuenciaNcf | undefined> {
+       const candidatas = await db.all<SecuenciaNcf>(
+diff --git a/packages/core/src/repos/tipos.ts b/packages/core/src/repos/tipos.ts
+index 99ca4d2..45c35b2 100644
+--- a/packages/core/src/repos/tipos.ts
++++ b/packages/core/src/repos/tipos.ts
+@@ -157,7 +157,7 @@ export interface CotizacionLinea extends Auditoria {
+ 
+ export type ModoSecuencia = "ecf" | "ncf_papel" | "contingencia";
+ export type EstadoSecuencia = "disponible" | "agotada" | "vencida";
+-export type EstadoDgii = "pendiente" | "aceptado" | "rechazado" | "contingencia";
++export type EstadoDgii = "pendiente" | "aceptado" | "aceptado_condicional" | "rechazado" | "contingencia";
+ 
+ export interface SecuenciaNcf extends Auditoria {
+   id: string;
+@@ -173,13 +173,15 @@ export interface SecuenciaNcf extends Auditoria {
+ 
+ export interface ComprobanteFiscal extends Auditoria {
+   id: string;
+-  factura_id: string;
++  factura_id: string | null;
++  compra_id: string | null;
+   tipo_ecf: TipoEcf;
+   ncf: string;
+   secuencia_id: string;
+   rnc_emisor: string | null;
+   receptor_documento_tipo: "rnc" | "cedula" | null;
+   receptor_documento_numero: string | null;
++  receptor_nombre: string | null;
+   fecha_emision: string;
+   monto_gravado: number;
+   monto_exento: number;
+@@ -191,6 +193,26 @@ export interface ComprobanteFiscal extends Auditoria {
+   xml_firmado_ruta: string | null;
+   qr_url: string | null;
+   fecha_transmision: string | null;
++  fecha_firma: string | null;
++  xml_firmado: string | null;
++  motivo_rechazo: string | null;
++  entrega_estado: EstadoEntrega;
++  entrega_detalle: string | null;
++  acuse_recibo_xml: string | null;
++}
++
++/** Entrega del e-CF aceptado al comprador cuando este es emisor electrónico. */
++export type EstadoEntrega = "no_aplica" | "pendiente" | "entregado" | "rechazado" | "no_electronico";
++
++export type EstadoNcfAnulacion = "pendiente" | "anulado" | "utilizado" | "revisado";
++
++export interface NcfAnulacion extends Auditoria {
++  id: string;
++  tipo_ecf: TipoEcf;
++  ncf: string;
++  motivo: string | null;
++  estado: EstadoNcfAnulacion;
++  ultimo_mensaje_dgii: string | null;
+ }
+ 
+ export type EstadoCorteCaja = "abierto" | "cerrado";
+@@ -319,6 +341,8 @@ export interface Negocio extends Auditoria {
+   razon_social: string | null;
+   rnc: string | null;
+   direccion: string | null;
++  municipio: string | null;
++  provincia: string | null;
+   telefono: string | null;
+   correo: string | null;
+   logo_ruta: string | null;
+diff --git a/packages/core/test/devolucion.test.ts b/packages/core/test/devolucion.test.ts
+index ba1c278..98c86b3 100644
+--- a/packages/core/test/devolucion.test.ts
++++ b/packages/core/test/devolucion.test.ts
+@@ -9,14 +9,23 @@ import {
+   crearMovimientoInventarioRepo,
+   crearSecuenciaNcfRepo,
+   crearComprobanteFiscalRepo,
++  crearNcfAnulacionRepo,
+   crearProveedorFiscalSimulado,
+   crearDevolucionRepo,
+   cobrarConFiscal,
+   registrarDevolucionConFiscal,
+   ValidacionError,
+   type ProveedorFiscal,
++  type EmisorFiscal,
+ } from "../src/index.js";
+ 
++const EMISOR: EmisorFiscal = {
++  rnc: "131880738",
++  razonSocial: "SUPLIDORA MAROHI SRL",
++  nombreComercial: "Suplidora Marohi",
++  direccion: "Calle Principal #1, Santo Domingo",
++};
++
+ async function nuevaDb(): Promise<SqlDriver> {
+   const db = createNodeSqliteDriver();
+   await migrate(db);
+@@ -161,6 +170,7 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () =>
+       facturaRepo: crearFacturaRepo(db),
+       secuenciaRepo: crearSecuenciaNcfRepo(db),
+       comprobanteRepo: crearComprobanteFiscalRepo(db),
++      anulacionRepo: crearNcfAnulacionRepo(db),
+       proveedorFiscal: proveedor,
+     };
+   }
+@@ -181,13 +191,13 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () =>
+     await cobrarConFiscal(d, t.id, {
+       pagos: [{ metodo: "efectivo", monto: 100 }],
+       tipoEcf: "32",
+-      rncEmisor: "101023122",
++      emisor: EMISOR,
+     });
+ 
+     const { devolucion, comprobante } = await registrarDevolucionConFiscal(
+       d,
+       { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
+-      "101023122",
++      EMISOR,
+     );
+ 
+     expect(comprobante.tipo_ecf).toBe("34");
+@@ -209,11 +219,7 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () =>
+     await d.facturaRepo.cobrar(t.id, { pagos: [{ metodo: "efectivo", monto: 50 }] }); // venta normal, sin NCF
+ 
+     await expect(
+-      registrarDevolucionConFiscal(
+-        d,
+-        { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
+-        "101023122",
+-      ),
++      registrarDevolucionConFiscal(d, { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] }, EMISOR),
+     ).rejects.toBeInstanceOf(ValidacionError);
+   });
+ 
+@@ -232,15 +238,11 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () =>
+     await cobrarConFiscal(d, t.id, {
+       pagos: [{ metodo: "efectivo", monto: 50 }],
+       tipoEcf: "32",
+-      rncEmisor: "101023122",
++      emisor: EMISOR,
+     });
+ 
+     await expect(
+-      registrarDevolucionConFiscal(
+-        d,
+-        { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
+-        "101023122",
+-      ),
++      registrarDevolucionConFiscal(d, { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] }, EMISOR),
+     ).rejects.toBeInstanceOf(ValidacionError);
+   });
+ 
+@@ -260,7 +262,7 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () =>
+     await cobrarConFiscal(d, t.id, {
+       pagos: [{ metodo: "efectivo", monto: 50 }],
+       tipoEcf: "32",
+-      rncEmisor: "101023122",
++      emisor: EMISOR,
+     });
+ 
+     const proveedorQueRechaza: ProveedorFiscal = {
+@@ -273,7 +275,7 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () =>
+       registrarDevolucionConFiscal(
+         { ...d, proveedorFiscal: proveedorQueRechaza },
+         { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
+-        "101023122",
++        EMISOR,
+       ),
+     ).rejects.toBeInstanceOf(ValidacionError);
+ 
+diff --git a/packages/core/test/fiscal.test.ts b/packages/core/test/fiscal.test.ts
+index 18c6b20..75ae8c0 100644
+--- a/packages/core/test/fiscal.test.ts
++++ b/packages/core/test/fiscal.test.ts
+@@ -6,14 +6,23 @@ import {
+   crearFacturaRepo,
+   crearSecuenciaNcfRepo,
+   crearComprobanteFiscalRepo,
++  crearNcfAnulacionRepo,
+   crearProveedorFiscalSimulado,
+   cobrarConFiscal,
+   formatearNcf,
+   tipoEcfSugerido,
+   ValidacionError,
+   type ProveedorFiscal,
++  type EmisorFiscal,
+ } from "../src/index.js";
+ 
++const EMISOR: EmisorFiscal = {
++  rnc: "131880738",
++  razonSocial: "SUPLIDORA MAROHI SRL",
++  nombreComercial: "Suplidora Marohi",
++  direccion: "Calle Principal #1, Santo Domingo",
++};
++
+ async function nuevaDb(): Promise<SqlDriver> {
+   const db = createNodeSqliteDriver();
+   await migrate(db);
+@@ -103,6 +112,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
+       facturaRepo: crearFacturaRepo(db),
+       secuenciaRepo: crearSecuenciaNcfRepo(db),
+       comprobanteRepo: crearComprobanteFiscalRepo(db),
++      anulacionRepo: crearNcfAnulacionRepo(db),
+       proveedorFiscal: proveedor,
+     };
+   }
+@@ -127,7 +137,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
+     const { factura, comprobante, cambio } = await cobrarConFiscal(d, t.id, {
+       pagos: [{ metodo: "efectivo", monto: 100 }],
+       tipoEcf: "32",
+-      rncEmisor: "101023122",
++      emisor: EMISOR,
+     });
+ 
+     expect(factura.estado).toBe("cobrada");
+@@ -144,7 +154,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
+     const t = await ticketCon100(d.facturaRepo);
+ 
+     await expect(
+-      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 100 }], tipoEcf: "31", rncEmisor: "101023122" }),
++      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 100 }], tipoEcf: "31", emisor: EMISOR }),
+     ).rejects.toBeInstanceOf(ValidacionError);
+ 
+     const { comprobante } = await cobrarConFiscal(d, t.id, {
+@@ -152,7 +162,8 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
+       tipoEcf: "31",
+       receptorDocumentoTipo: "rnc",
+       receptorDocumentoNumero: "101023122",
+-      rncEmisor: "101023122",
++      receptorNombre: "CLIENTE EJEMPLO SRL",
++      emisor: EMISOR,
+     });
+     expect(comprobante.ncf).toBe("E310000000001");
+   });
+@@ -167,7 +178,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
+         tipoEcf: "31",
+         receptorDocumentoTipo: "rnc",
+         receptorDocumentoNumero: "111111111",
+-        rncEmisor: "101023122",
++        emisor: EMISOR,
+       }),
+     ).rejects.toBeInstanceOf(ValidacionError);
+   });
+@@ -176,7 +187,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
+     const d = deps();
+     const t = await ticketCon100(d.facturaRepo);
+     await expect(
+-      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 100 }], tipoEcf: "32", rncEmisor: null }),
++      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 100 }], tipoEcf: "32", emisor: EMISOR }),
+     ).rejects.toBeInstanceOf(ValidacionError);
+     // El ticket sigue abierto: no se tocó nada.
+     expect((await d.facturaRepo.obtener(t.id))?.estado).toBe("abierta");
+@@ -188,7 +199,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
+     const t = await ticketCon100(d.facturaRepo);
+ 
+     await expect(
+-      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 10 }], tipoEcf: "32", rncEmisor: null }),
++      cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 10 }], tipoEcf: "32", emisor: EMISOR }),
+     ).rejects.toBeInstanceOf(ValidacionError);
+ 
+     const vigente = await d.secuenciaRepo.obtenerVigente("32");
+@@ -210,7 +221,7 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
+       cobrarConFiscal({ ...d, proveedorFiscal: proveedorQueRechaza }, t.id, {
+         pagos: [{ metodo: "efectivo", monto: 100 }],
+         tipoEcf: "32",
+-        rncEmisor: "101023122",
++        emisor: EMISOR,
+       }),
+     ).rejects.toBeInstanceOf(ValidacionError);
+ 
+diff --git a/packages/ui/package.json b/packages/ui/package.json
+index e680af4..7cbceff 100644
+--- a/packages/ui/package.json
++++ b/packages/ui/package.json
+@@ -10,7 +10,8 @@
+     "./estilos-globales.css": "./src/estilos-globales.css"
+   },
+   "scripts": {
+-    "typecheck": "tsc --noEmit"
++    "typecheck": "tsc --noEmit",
++    "test": "vitest run"
+   },
+   "dependencies": {
+     "@fontsource-variable/inter": "^5.3.0",
+@@ -19,7 +20,8 @@
+     "exceljs": "^4.4.0",
+     "jspdf": "^4.2.1",
+     "jspdf-autotable": "^5.0.8",
+-    "lucide-react": "^1.33.0"
++    "lucide-react": "^1.33.0",
++    "qrcode-generator": "^2.0.4"
+   },
+   "peerDependencies": {
+     "react": "^18.3.1",
+@@ -30,6 +32,7 @@
+     "@types/react-dom": "^18.3.1",
+     "react": "^18.3.1",
+     "react-dom": "^18.3.1",
+-    "typescript": "^5.6.3"
++    "typescript": "^5.6.3",
++    "vitest": "^2.1.9"
+   }
+ }
+diff --git a/packages/ui/src/componentes/ChatBot.tsx b/packages/ui/src/componentes/ChatBot.tsx
+index 5825ed4..eb62650 100644
+--- a/packages/ui/src/componentes/ChatBot.tsx
++++ b/packages/ui/src/componentes/ChatBot.tsx
+@@ -1,6 +1,7 @@
+ import { useRef, useState } from "react";
+ import { MessageCircle, Bot, X, Camera } from "lucide-react";
+ import { enviarMensaje, type MensajeChat } from "../data/chatbotCliente.js";
++import { useRepos } from "../data/contexto.js";
+ import { s, c, sombra } from "../estilos.js";
+ import { BotonVoz } from "./BotonVoz.js";
+ import { mensajeError } from "../utilidades/errores.js";
+@@ -21,6 +22,7 @@ function leerArchivoComoBase64(file: File): Promise<string> {
+  * fallar en silencio. No guarda nada por sí mismo: es solo conversación.
+  */
+ export function ChatBot() {
++  const { api } = useRepos();
+   const [abierto, setAbierto] = useState(false);
+   const [historial, setHistorial] = useState<MensajeChat[]>([]);
+   const [texto, setTexto] = useState("");
+@@ -56,7 +58,7 @@ export function ChatBot() {
+       const imagenAdjunta = archivoAdjunto
+         ? { data: await leerArchivoComoBase64(archivoAdjunto), tipoMime: archivoAdjunto.type || "image/jpeg" }
+         : undefined;
+-      const respuesta = await enviarMensaje(historialPrevio, mensajeTexto, imagenAdjunta);
++      const respuesta = await enviarMensaje(api, historialPrevio, mensajeTexto, imagenAdjunta);
+       setHistorial((prev) => [...prev, { rol: "assistant", texto: respuesta }]);
+     } catch (e) {
+       setError(mensajeError(e));
+diff --git a/packages/ui/src/componentes/ModalCobro.tsx b/packages/ui/src/componentes/ModalCobro.tsx
+index d4527f8..7aef116 100644
+--- a/packages/ui/src/componentes/ModalCobro.tsx
++++ b/packages/ui/src/componentes/ModalCobro.tsx
+@@ -1,5 +1,12 @@
+ import { useState, type CSSProperties } from "react";
+-import { type MetodoPago, type TipoEcf, ETIQUETA_TIPO_ECF, tipoEcfSugerido, procesarCobro } from "@sfr/core";
++import {
++  type MetodoPago,
++  type TipoEcf,
++  ETIQUETA_TIPO_ECF,
++  requiereCompradorIdentificado,
++  tipoEcfSugerido,
++  procesarCobro,
++} from "@sfr/core";
+ import { CreditCard } from "lucide-react";
+ import { s, c, sombra, money } from "../estilos.js";
+ import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+@@ -14,7 +21,7 @@ const METODOS: { valor: MetodoPago; etiqueta: string }[] = [
+   { valor: "credito", etiqueta: "Crédito" },
+ ];
+ 
+-const TIPOS_ECF_DISPONIBLES: TipoEcf[] = ["32", "31"];
++const TIPOS_ECF_DISPONIBLES: TipoEcf[] = ["32", "31", "45"];
+ 
+ interface FilaPago {
+   metodo: MetodoPago;
+@@ -25,6 +32,7 @@ export interface FiscalInput {
+   tipoEcf: TipoEcf;
+   receptorDocumentoTipo: "rnc" | "cedula" | null;
+   receptorDocumentoNumero: string | null;
++  receptorNombre: string | null;
+ }
+ 
+ /** Qué hacer con el recibo al cerrar la venta: imprimirlo (térmica/GDI/navegador, § recibo.ts),
+@@ -38,6 +46,7 @@ export interface ModalCobroProps {
+   /** Para prellenar el documento del receptor si el ticket ya tiene cliente asignado. */
+   clienteDocumentoTipo?: "rnc" | "cedula" | null;
+   clienteDocumentoNumero?: string | null;
++  clienteNombre?: string | null;
+   onCancelar: () => void;
+   /** El padre hace el cobro real (repo.cobrar / cobrarConFiscal) e imprime/genera el PDF según `salida`. */
+   onConfirmar: (
+@@ -55,6 +64,7 @@ export function ModalCobro({
+   notasIniciales,
+   clienteDocumentoTipo,
+   clienteDocumentoNumero,
++  clienteNombre,
+   onCancelar,
+   onConfirmar,
+ }: ModalCobroProps) {
+@@ -66,8 +76,10 @@ export function ModalCobro({
+ 
+   const [emitirFiscal, setEmitirFiscal] = useState(false);
+   const [tipoEcf, setTipoEcf] = useState<TipoEcf>(tipoEcfSugerido(clienteDocumentoTipo));
++  const compradorObligatorio = requiereCompradorIdentificado(tipoEcf);
+   const [receptorTipo, setReceptorTipo] = useState<"rnc" | "cedula">(clienteDocumentoTipo ?? "rnc");
+   const [receptorNumero, setReceptorNumero] = useState(clienteDocumentoNumero ?? "");
++  const [receptorNombre, setReceptorNombre] = useState(clienteNombre ?? "");
+ 
+   useAtajosTeclado({
+     Escape: onCancelar,
+@@ -101,8 +113,12 @@ export function ModalCobro({
+       setError(`Falta por pagar RD$ ${money(resultado.faltante)}.`);
+       return;
+     }
+-    if (emitirFiscal && tipoEcf === "31" && !receptorNumero.trim()) {
+-      setError("El Crédito Fiscal (E31) requiere el RNC del comprador.");
++    if (emitirFiscal && compradorObligatorio && !receptorNumero.trim()) {
++      setError(`El ${ETIQUETA_TIPO_ECF[tipoEcf]} requiere el RNC del comprador.`);
++      return;
++    }
++    if (emitirFiscal && compradorObligatorio && !receptorNombre.trim()) {
++      setError(`El ${ETIQUETA_TIPO_ECF[tipoEcf]} requiere la razón social del comprador.`);
+       return;
+     }
+     const fiscal: FiscalInput | null = emitirFiscal
+@@ -110,6 +126,7 @@ export function ModalCobro({
+           tipoEcf,
+           receptorDocumentoTipo: receptorNumero.trim() ? receptorTipo : null,
+           receptorDocumentoNumero: receptorNumero.trim() || null,
++          receptorNombre: receptorNombre.trim() || null,
+         }
+       : null;
+ 
+@@ -250,12 +267,23 @@ export function ModalCobro({
+             </select>
+             <input
+               style={{ ...s.input, flex: 1 }}
+-              placeholder={tipoEcf === "31" ? "RNC del comprador (obligatorio)" : "RNC/cédula (opcional)"}
++              placeholder={compradorObligatorio ? "RNC del comprador (obligatorio)" : "RNC/cédula (opcional)"}
+               value={receptorNumero}
+               onChange={(e) => setReceptorNumero(e.target.value)}
+             />
+           </div>
+         )}
++        {emitirFiscal && (compradorObligatorio || receptorNumero.trim() !== "") && (
++          <input
++            style={{ ...s.input, marginBottom: 8 }}
++            placeholder={
++              compradorObligatorio ? "Razón social del comprador (obligatoria)" : "Nombre del comprador (opcional)"
++            }
++            aria-label="Razón social del comprador"
++            value={receptorNombre}
++            onChange={(e) => setReceptorNombre(e.target.value)}
++          />
++        )}
+ 
+         <label style={s.label}>Notas</label>
+         <textarea
+diff --git a/packages/ui/src/componentes/ModalDevolucion.tsx b/packages/ui/src/componentes/ModalDevolucion.tsx
+index dcc14c2..179494b 100644
+--- a/packages/ui/src/componentes/ModalDevolucion.tsx
++++ b/packages/ui/src/componentes/ModalDevolucion.tsx
+@@ -1,28 +1,41 @@
+ import { useState, type CSSProperties } from "react";
+-import { type FacturaLinea, type Factura, calcularLinea, registrarDevolucionConFiscal } from "@sfr/core";
++import {
++  type FacturaLinea,
++  type Factura,
++  type ComprobanteFiscal,
++  type EmisorFiscal,
++  calcularLinea,
++  registrarDevolucionConFiscal,
++} from "@sfr/core";
+ import { Undo2 } from "lucide-react";
+ import { useRepos } from "../data/contexto.js";
+ import { s, c, sombra, money } from "../estilos.js";
+ import { filtrarNumero } from "../utilidades/numero.js";
+ import { mensajeError } from "../utilidades/errores.js";
++import { datosReciboNotaGuardada } from "../impresion/representacion.js";
++import { imprimirRecibo } from "../impresion/recibo.js";
++import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
+ 
+ export interface ModalDevolucionProps {
+   factura: Factura;
+   lineas: FacturaLinea[];
+-  rncEmisor: string | null;
++  emisor: EmisorFiscal | null;
+   onCerrar: () => void;
+   onCompletada: () => void;
+ }
+ 
+ /** Devolver artículos de una venta ya cobrada (§ Ventas). Si la venta es fiscal, exige emitir una Nota de Crédito (E34). */
+-export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onCompletada }: ModalDevolucionProps) {
++export function ModalDevolucion({ factura, lineas, emisor, onCerrar, onCompletada }: ModalDevolucionProps) {
+   const {
+     devolucion: devolucionRepo,
+     factura: facturaRepo,
+     secuenciaNcf,
+     comprobanteFiscal,
++    ncfAnulacion,
+     proveedorFiscal,
++    negocio: negocioRepo,
+   } = useRepos();
++  const [nota, setNota] = useState<ComprobanteFiscal | null>(null);
+   const [cantidades, setCantidades] = useState<Record<string, string>>({});
+   const [motivo, setMotivo] = useState("");
+   const [error, setError] = useState<string | null>(null);
+@@ -58,17 +71,19 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
+         lineas: lineasARetornar.map((x) => ({ facturaLineaId: x.linea.id, cantidad: x.cantidad })),
+       };
+       if (factura.tipo === "fiscal") {
+-        await registrarDevolucionConFiscal(
++        const resultado = await registrarDevolucionConFiscal(
+           {
+             devolucionRepo,
+             facturaRepo,
+             secuenciaRepo: secuenciaNcf,
+             comprobanteRepo: comprobanteFiscal,
++            anulacionRepo: ncfAnulacion,
+             proveedorFiscal,
+           },
+           input,
+-          rncEmisor,
++          emisor,
+         );
++        setNota(resultado.comprobante);
+       } else {
+         await devolucionRepo.crear(input);
+       }
+@@ -81,6 +96,30 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
+     }
+   }
+ 
++  async function imprimirNota(salida: "imprimir" | "pdf") {
++    if (!nota) return;
++    try {
++      const n = await negocioRepo.obtener();
++      const datos = await datosReciboNotaGuardada({
++        nota,
++        factura,
++        cliente: null,
++        negocio: n ?? {
++          nombre_comercial: "Mi Negocio",
++          rnc: null,
++          direccion: null,
++          telefono: null,
++          ancho_impresora_default: 80,
++        },
++        secuencias: secuenciaNcf,
++      });
++      if (salida === "imprimir") imprimirRecibo(datos);
++      else guardarPdf(generarPdfRecibo(datos), `Nota-${nota.ncf}.pdf`);
++    } catch (e) {
++      setError(mensajeError(e));
++    }
++  }
++
+   return (
+     <div style={overlay} onClick={onCerrar}>
+       <div style={tarjeta} onClick={(e) => e.stopPropagation()}>
+@@ -144,6 +183,16 @@ export function ModalDevolucion({ factura, lineas, rncEmisor, onCerrar, onComple
+         )}
+ 
+         <div style={s.formFooter}>
++          {nota && (
++            <>
++              <button style={s.boton} onClick={() => void imprimirNota("imprimir")}>
++                Imprimir nota
++              </button>
++              <button style={s.botonSecundario} onClick={() => void imprimirNota("pdf")}>
++                Guardar PDF
++              </button>
++            </>
++          )}
+           {!mensaje && (
+             <button style={s.boton} disabled={guardando} onClick={confirmar}>
+               Confirmar devolución
+diff --git a/packages/ui/src/data/chatbotCliente.ts b/packages/ui/src/data/chatbotCliente.ts
+index 1178c36..2faed24 100644
+--- a/packages/ui/src/data/chatbotCliente.ts
++++ b/packages/ui/src/data/chatbotCliente.ts
+@@ -1,13 +1,10 @@
++import type { ApiClient } from "./apiClient.js";
++
+ /**
+- * Cliente HTTP del chatbot (§ Fase 3: chatbot con voz y visión). Habla con
+- * el backend `@sfr/api` (packages/api) — que es opcional: si no está
+- * corriendo, o si le falta `ANTHROPIC_API_KEY`, estas funciones lanzan un
+- * error con un mensaje claro para mostrar en la UI, en vez de fallar en
+- * silencio.
++ * Cliente del chatbot (§ Fase 3: chatbot con voz y visión) sobre el backend `@sfr/api`, que es
++ * opcional: si no está corriendo o le falta `ANTHROPIC_API_KEY`, `ApiClient` lanza un error con un
++ * mensaje claro para mostrar en la UI.
+  */
+-const BASE_URL =
+-  (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_API_URL ?? "http://localhost:3001";
+-
+ export interface MensajeChat {
+   rol: "user" | "assistant";
+   texto: string;
+@@ -31,59 +28,17 @@ export interface DatosExtraidosComprobante {
+   notas: string | null;
+ }
+ 
+-async function leerError(respuesta: Response): Promise<string> {
+-  try {
+-    const cuerpo = (await respuesta.json()) as { error?: string };
+-    if (cuerpo.error) return cuerpo.error;
+-  } catch {
+-    // el cuerpo no era JSON; caemos al mensaje genérico de abajo
+-  }
+-  return `El asistente respondió con un error (${respuesta.status}).`;
+-}
+-
+-function envolverErrorDeRed(e: unknown): never {
+-  if (e instanceof TypeError) {
+-    throw new Error(
+-      "No se pudo conectar con el asistente. Verifica que el backend (packages/api) esté corriendo en " +
+-        BASE_URL +
+-        ".",
+-    );
+-  }
+-  throw e instanceof Error ? e : new Error(String(e));
+-}
+-
+ export async function enviarMensaje(
++  api: ApiClient,
+   historial: MensajeChat[],
+   mensaje: string,
+   imagen?: ImagenAdjunta,
+ ): Promise<string> {
+-  let respuesta: Response;
+-  try {
+-    respuesta = await fetch(`${BASE_URL}/chatbot/mensaje`, {
+-      method: "POST",
+-      headers: { "Content-Type": "application/json" },
+-      body: JSON.stringify({ historial, mensaje, imagen }),
+-    });
+-  } catch (e) {
+-    envolverErrorDeRed(e);
+-  }
+-  if (!respuesta.ok) throw new Error(await leerError(respuesta));
+-  const cuerpo = (await respuesta.json()) as { respuesta: string };
+-  return cuerpo.respuesta;
++  const { respuesta } = await api.post<{ respuesta: string }>("/chatbot/mensaje", { historial, mensaje, imagen });
++  return respuesta;
+ }
+ 
+-export async function analizarComprobante(imagen: ImagenAdjunta): Promise<DatosExtraidosComprobante> {
+-  let respuesta: Response;
+-  try {
+-    respuesta = await fetch(`${BASE_URL}/chatbot/analizar-comprobante`, {
+-      method: "POST",
+-      headers: { "Content-Type": "application/json" },
+-      body: JSON.stringify({ imagen }),
+-    });
+-  } catch (e) {
+-    envolverErrorDeRed(e);
+-  }
+-  if (!respuesta.ok) throw new Error(await leerError(respuesta));
+-  const cuerpo = (await respuesta.json()) as { datos: DatosExtraidosComprobante };
+-  return cuerpo.datos;
++export async function analizarComprobante(api: ApiClient, imagen: ImagenAdjunta): Promise<DatosExtraidosComprobante> {
++  const { datos } = await api.post<{ datos: DatosExtraidosComprobante }>("/chatbot/analizar-comprobante", { imagen });
++  return datos;
+ }
+diff --git a/packages/ui/src/data/contexto.tsx b/packages/ui/src/data/contexto.tsx
+index e4800e7..306bbb4 100644
+--- a/packages/ui/src/data/contexto.tsx
++++ b/packages/ui/src/data/contexto.tsx
+@@ -1,4 +1,4 @@
+-import { createContext, useContext, type ReactNode } from "react";
++import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+ import {
+   type SqlDriver,
+   type ProveedorFiscal,
+@@ -9,6 +9,7 @@ import {
+   crearFacturaRepo,
+   crearSecuenciaNcfRepo,
+   crearComprobanteFiscalRepo,
++  crearNcfAnulacionRepo,
+   crearProveedorFiscalSimulado,
+   crearCorteCajaRepo,
+   crearMovimientoInventarioRepo,
+@@ -22,6 +23,13 @@ import {
+   crearBackupRepo,
+   crearCotizacionRepo,
+ } from "@sfr/core";
++import { useAuth } from "../contexto/Auth.js";
++import { crearApiClient, type ApiClient } from "./apiClient.js";
++import { obtenerLlaveCaja } from "./llaveCaja.js";
++import { MODO_FISCAL, crearProveedorFiscalHttp, type ModoFiscal } from "./fiscalCliente.js";
++import { ejecutarCicloFiscal } from "./seguimientoFiscal.js";
++
++const INTERVALO_SEGUIMIENTO_FISCAL_MS = 5 * 60 * 1000;
+ 
+ /** Conjunto de repos disponibles para las pantallas. */
+ export interface Repos {
+@@ -32,6 +40,7 @@ export interface Repos {
+   factura: ReturnType<typeof crearFacturaRepo>;
+   secuenciaNcf: ReturnType<typeof crearSecuenciaNcfRepo>;
+   comprobanteFiscal: ReturnType<typeof crearComprobanteFiscalRepo>;
++  ncfAnulacion: ReturnType<typeof crearNcfAnulacionRepo>;
+   corteCaja: ReturnType<typeof crearCorteCajaRepo>;
+   movimientoInventario: ReturnType<typeof crearMovimientoInventarioRepo>;
+   proveedor: ReturnType<typeof crearProveedorRepo>;
+@@ -44,41 +53,81 @@ export interface Repos {
+   backup: ReturnType<typeof crearBackupRepo>;
+   cotizacion: ReturnType<typeof crearCotizacionRepo>;
+   /**
+-   * *** SIMULADO — no transmite nada real a la DGII. *** Placeholder hasta
+-   * decidir PAC vs integración directa (ver plan.md). Sustituir aquí por la
+-   * implementación real cuando esté disponible.
++   * `VITE_FISCAL_MODO=dgii` transmite de verdad vía `@sfr/api` (firma con el
++   * .p12 de la empresa). Cualquier otro valor usa el simulador, que NO envía
++   * nada a la DGII.
+    */
+   proveedorFiscal: ProveedorFiscal;
++  modoFiscal: ModoFiscal;
++  api: ApiClient;
+ }
+ 
+ const ReposContext = createContext<Repos | null>(null);
+ 
++/**
++ * Consulta periódicamente a la DGII los comprobantes que quedaron "en proceso"
++ * y anula los e-NCF consumidos que nunca llegaron a un comprobante válido.
++ */
++function useSeguimientoFiscal(repos: Repos, activo: boolean): void {
++  useEffect(() => {
++    if (!activo) return;
++    async function correr() {
++      try {
++        const resumen = await ejecutarCicloFiscal(repos);
++        if (resumen.rechazados.length || resumen.entregasRechazadas.length || resumen.utilizados.length) {
++          console.warn(
++            "Hay comprobantes fiscales que requieren revisión (Configuración → Facturación electrónica).",
++            resumen,
++          );
++        }
++      } catch (error) {
++        console.warn("Falló un ciclo de seguimiento fiscal; se reintentará en el próximo intervalo.", error);
++      }
++    }
++    void correr();
++    const temporizador = setInterval(() => void correr(), INTERVALO_SEGUIMIENTO_FISCAL_MS);
++    return () => clearInterval(temporizador);
++  }, [repos, activo]);
++}
++
+ /**
+  * Provee los repos a partir de un `SqlDriver` ya migrado. Cada shell (PWA,
+  * escritorio) crea su driver y lo pasa aquí; las pantallas son idénticas.
+  */
+ export function ProveedorDatos({ db, children }: { db: SqlDriver; children: ReactNode }) {
+-  const repos: Repos = {
+-    producto: crearProductoRepo(db),
+-    cliente: crearClienteRepo(db),
+-    departamento: crearDepartamentoRepo(db),
+-    negocio: crearNegocioRepo(db),
+-    factura: crearFacturaRepo(db),
+-    secuenciaNcf: crearSecuenciaNcfRepo(db),
+-    comprobanteFiscal: crearComprobanteFiscalRepo(db),
+-    corteCaja: crearCorteCajaRepo(db),
+-    movimientoInventario: crearMovimientoInventarioRepo(db),
+-    proveedor: crearProveedorRepo(db),
+-    compra: crearCompraRepo(db),
+-    comprobanteArchivo: crearComprobanteArchivoRepo(db),
+-    bitacora: crearBitacoraRepo(db),
+-    devolucion: crearDevolucionRepo(db),
+-    reportes: crearReportesRepo(db),
+-    promocion: crearPromocionRepo(db),
+-    backup: crearBackupRepo(db),
+-    cotizacion: crearCotizacionRepo(db),
+-    proveedorFiscal: crearProveedorFiscalSimulado(),
+-  };
++  const { sesion } = useAuth();
++  const accessToken = sesion?.accessToken ?? null;
++  const api = useMemo(() => crearApiClient({ obtenerToken: () => accessToken, obtenerLlaveCaja }), [accessToken]);
++
++  const repos = useMemo<Repos>(() => {
++    return {
++      producto: crearProductoRepo(db),
++      cliente: crearClienteRepo(db),
++      departamento: crearDepartamentoRepo(db),
++      negocio: crearNegocioRepo(db),
++      factura: crearFacturaRepo(db),
++      secuenciaNcf: crearSecuenciaNcfRepo(db),
++      comprobanteFiscal: crearComprobanteFiscalRepo(db),
++      ncfAnulacion: crearNcfAnulacionRepo(db),
++      corteCaja: crearCorteCajaRepo(db),
++      movimientoInventario: crearMovimientoInventarioRepo(db),
++      proveedor: crearProveedorRepo(db),
++      compra: crearCompraRepo(db),
++      comprobanteArchivo: crearComprobanteArchivoRepo(db),
++      bitacora: crearBitacoraRepo(db),
++      devolucion: crearDevolucionRepo(db),
++      reportes: crearReportesRepo(db),
++      promocion: crearPromocionRepo(db),
++      backup: crearBackupRepo(db),
++      cotizacion: crearCotizacionRepo(db),
++      proveedorFiscal: MODO_FISCAL === "dgii" ? crearProveedorFiscalHttp(api) : crearProveedorFiscalSimulado(),
++      modoFiscal: MODO_FISCAL,
++      api,
++    };
++  }, [db, api]);
++
++  useSeguimientoFiscal(repos, MODO_FISCAL === "dgii");
++
+   return <ReposContext.Provider value={repos}>{children}</ReposContext.Provider>;
+ }
+ 
+diff --git a/packages/ui/src/data/transferenciasCliente.ts b/packages/ui/src/data/transferenciasCliente.ts
+index 1bc13f8..70f2fa0 100644
+--- a/packages/ui/src/data/transferenciasCliente.ts
++++ b/packages/ui/src/data/transferenciasCliente.ts
+@@ -1,11 +1,9 @@
++import type { ApiClient } from "./apiClient.js";
++
+ /**
+- * Cliente HTTP de "Últimas transferencias recibidas" (§ plan.md). Habla con `@sfr/api`, igual
+- * que `chatbotCliente.ts` — opcional y solo del lado de la nube, requiere sesión iniciada
+- * (`Authorization: Bearer <accessToken>`, ver `contexto/Auth.tsx`).
++ * Cliente de "Últimas transferencias recibidas" (§ plan.md) sobre el backend `@sfr/api`: opcional
++ * y solo del lado de la nube; requiere sesión iniciada o la llave de la caja (ver `apiClient`).
+  */
+-const BASE_URL =
+-  (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_API_URL ?? "http://localhost:3001";
+-
+ export type EstadoConfirmacion = "pendiente" | "confirmada" | "descartada";
+ 
+ export interface NotificacionTransferencia {
+@@ -21,65 +19,28 @@ export interface NotificacionTransferencia {
+   createdAt: string;
+ }
+ 
+-async function leerError(respuesta: Response): Promise<string> {
+-  try {
+-    const cuerpo = (await respuesta.json()) as { error?: string };
+-    if (cuerpo.error) return cuerpo.error;
+-  } catch {
+-    // el cuerpo no era JSON; caemos al mensaje genérico de abajo
+-  }
+-  return `El servidor respondió con un error (${respuesta.status}).`;
+-}
+-
+-function envolverErrorDeRed(e: unknown): never {
+-  if (e instanceof TypeError) {
+-    throw new Error(
+-      "No se pudo conectar con el servidor. Verifica tu conexión y que el backend (packages/api) esté " +
+-        "corriendo en " +
+-        BASE_URL +
+-        ".",
+-    );
+-  }
+-  throw e instanceof Error ? e : new Error(String(e));
+-}
+-
+-export async function obtenerTransferenciasRecientes(accessToken: string): Promise<NotificacionTransferencia[]> {
+-  let respuesta: Response;
+-  try {
+-    respuesta = await fetch(`${BASE_URL}/transferencias/recientes`, {
+-      headers: { Authorization: `Bearer ${accessToken}` },
+-    });
+-  } catch (e) {
+-    envolverErrorDeRed(e);
+-  }
+-  if (!respuesta.ok) throw new Error(await leerError(respuesta));
+-  const cuerpo = (await respuesta.json()) as { transferencias: NotificacionTransferencia[] };
+-  return cuerpo.transferencias;
++export async function obtenerTransferenciasRecientes(api: ApiClient): Promise<NotificacionTransferencia[]> {
++  const { transferencias } = await api.get<{ transferencias: NotificacionTransferencia[] }>(
++    "/transferencias/recientes",
++  );
++  return transferencias;
+ }
+ 
+ async function cambiarEstado(
+-  accessToken: string,
++  api: ApiClient,
+   id: string,
+   accion: "confirmar" | "descartar",
+ ): Promise<NotificacionTransferencia> {
+-  let respuesta: Response;
+-  try {
+-    respuesta = await fetch(`${BASE_URL}/transferencias/${id}/${accion}`, {
+-      method: "PATCH",
+-      headers: { Authorization: `Bearer ${accessToken}` },
+-    });
+-  } catch (e) {
+-    envolverErrorDeRed(e);
+-  }
+-  if (!respuesta.ok) throw new Error(await leerError(respuesta));
+-  const cuerpo = (await respuesta.json()) as { transferencia: NotificacionTransferencia };
+-  return cuerpo.transferencia;
++  const { transferencia } = await api.patch<{ transferencia: NotificacionTransferencia }>(
++    `/transferencias/${encodeURIComponent(id)}/${accion}`,
++  );
++  return transferencia;
+ }
+ 
+-export function confirmarTransferencia(accessToken: string, id: string): Promise<NotificacionTransferencia> {
+-  return cambiarEstado(accessToken, id, "confirmar");
++export function confirmarTransferencia(api: ApiClient, id: string): Promise<NotificacionTransferencia> {
++  return cambiarEstado(api, id, "confirmar");
+ }
+ 
+-export function descartarTransferencia(accessToken: string, id: string): Promise<NotificacionTransferencia> {
+-  return cambiarEstado(accessToken, id, "descartar");
++export function descartarTransferencia(api: ApiClient, id: string): Promise<NotificacionTransferencia> {
++  return cambiarEstado(api, id, "descartar");
+ }
+diff --git a/packages/ui/src/impresion/escpos.ts b/packages/ui/src/impresion/escpos.ts
+index 066ee09..84162e9 100644
+--- a/packages/ui/src/impresion/escpos.ts
++++ b/packages/ui/src/impresion/escpos.ts
+@@ -1,5 +1,6 @@
+ import type { ReciboDatos } from "./recibo.js";
+ import type { CotizacionImpresionDatos } from "./cotizacion.js";
++import { datosComprador, descripcionLinea, encabezadoFiscal, lineasDireccionEmisor } from "./representacion.js";
+ 
+ /**
+  * Generador de comandos ESC/POS crudos para impresoras térmicas (§ hardware,
+@@ -103,6 +104,17 @@ class ConstructorEscPos {
+     return this.linea(izq + " ".repeat(espacio) + der);
+   }
+ 
++  /** Código QR nativo (GS ( k, modelo 2, corrección M). `modulo` es el tamaño de cada punto (1–16). */
++  qr(datos: string, modulo = 6): this {
++    const contenido = [...new TextEncoder().encode(datos)];
++    const largo = contenido.length + 3;
++    return this.bytes([GS, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00])
++      .bytes([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, modulo])
++      .bytes([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, 0x31])
++      .bytes([GS, 0x28, 0x6b, largo & 0xff, (largo >> 8) & 0xff, 0x31, 0x50, 0x30, ...contenido])
++      .bytes([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30]);
++  }
++
+   cortar(): this {
+     return this.bytes([GS, 0x56, 1]);
+   }
+@@ -135,8 +147,11 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
+   // El nombre del negocio va a tamaño real doble (alto Y ancho) — es una sola línea corta, así que
+   // se lo puede permitir sin arriesgar el conteo de caracteres de las columnas de más abajo.
+   b.alinear("centro").tamano("grande").negrita(true).linea(negocio.nombre_comercial).negrita(false).tamano("alto");
++  if (comprobante && negocio.razon_social && negocio.razon_social !== negocio.nombre_comercial) {
++    b.linea(negocio.razon_social);
++  }
+   if (negocio.rnc) b.linea(`RNC: ${negocio.rnc}`);
+-  if (negocio.direccion) b.linea(negocio.direccion);
++  for (const l of lineasDireccionEmisor(negocio)) b.linea(l);
+   if (negocio.telefono) b.linea(`Tel: ${negocio.telefono}`);
+   b.alinear("izq").separador(ancho);
+ 
+@@ -148,16 +163,18 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
+   if (cliente) b.linea(`Cliente: ${cliente.nombre} ${cliente.apellidos ?? ""}`.trim());
+ 
+   if (comprobante) {
+-    b.alinear("centro").negrita(true).linea(comprobante.tipoEcfEtiqueta).negrita(false);
+-    b.linea(`NCF: ${comprobante.ncf}`);
+-    if (comprobante.codigoSeguridad) b.linea(`Cód. seguridad: ${comprobante.codigoSeguridad}`);
++    const [tipo, ...resto] = encabezadoFiscal(comprobante);
++    b.alinear("centro").negrita(true).linea(tipo).negrita(false);
++    for (const l of resto) b.linea(l);
+     b.alinear("izq");
++    for (const l of datosComprador(comprobante)) b.linea(l);
+   }
+ 
+   b.separador(ancho);
+   for (const l of lineas) {
+-    b.linea(l.descripcion);
++    b.linea(descripcionLinea(l, !!comprobante));
+     b.columnas(`${cantidad(l.cantidad)} x ${money(l.precio_unitario)}`, money(l.subtotal), ancho);
++    if (comprobante && l.monto_itbis > 0) b.columnas("", `ITBIS ${money(l.monto_itbis)}`, ancho);
+   }
+   b.separador(ancho);
+ 
+@@ -184,6 +201,14 @@ export function generarEscPos(datos: ReciboDatos): Uint8Array {
+     b.separador(ancho).linea(`Notas: ${factura.notas}`);
+   }
+ 
++  if (comprobante?.qrUrl || comprobante?.codigoSeguridad) {
++    b.separador(ancho).alinear("centro");
++    if (comprobante.qrUrl) b.qr(comprobante.qrUrl).saltos(1);
++    if (comprobante.codigoSeguridad) b.linea(`Codigo de seguridad: ${comprobante.codigoSeguridad}`);
++    if (comprobante.fechaFirma) b.linea(`Fecha firma digital: ${comprobante.fechaFirma}`);
++    b.alinear("izq");
++  }
++
+   b.separador(ancho).alinear("centro").linea("¡Gracias por su compra!");
+   // El cabezal de corte está unos cuantos mm por debajo del cabezal de
+   // impresión: si no se avanza suficiente papel antes de cortar, la cuchilla
+diff --git a/packages/ui/src/impresion/pdf.ts b/packages/ui/src/impresion/pdf.ts
+index b62a839..2671de4 100644
+--- a/packages/ui/src/impresion/pdf.ts
++++ b/packages/ui/src/impresion/pdf.ts
+@@ -1,6 +1,8 @@
+ import { jsPDF } from "jspdf";
+ import autoTable from "jspdf-autotable";
+-import type { ReciboDatos } from "./recibo.js";
++import type { ComprobanteRecibo, ReciboDatos } from "./recibo.js";
++import { datosComprador, descripcionLinea, encabezadoFiscal, lineasDireccionEmisor } from "./representacion.js";
++import { modulosQr } from "./qr.js";
+ 
+ /**
+  * PDF real (no el diálogo "Guardar como PDF" del navegador — un archivo .pdf
+@@ -31,8 +33,11 @@ function formatearFechaIso(fechaIso: string): string {
+ 
+ interface NegocioPdf {
+   nombre_comercial: string;
++  razon_social?: string | null;
+   rnc: string | null;
+   direccion: string | null;
++  municipio?: string | null;
++  provincia?: string | null;
+   telefono: string | null;
+ }
+ 
+@@ -42,12 +47,19 @@ interface DocumentoPdfDatos {
+   fecha: string;
+   negocio: NegocioPdf;
+   cliente?: { nombre: string; apellidos: string | null } | null;
+-  lineas: { descripcion: string; cantidad: number; precio_unitario: number; subtotal: number }[];
++  lineas: {
++    descripcion: string;
++    cantidad: number;
++    precio_unitario: number;
++    subtotal: number;
++    tasa_impuesto?: number;
++    monto_itbis?: number;
++  }[];
+   subtotalGravado: number;
+   subtotalExento: number;
+   totalItbis: number;
+   total: number;
+-  comprobante?: { ncf: string; tipoEcfEtiqueta: string } | null;
++  comprobante?: ComprobanteRecibo | null;
+   pagos?: { metodo: string; monto: number }[];
+   montoPagado?: number;
+   cambio?: number;
+@@ -77,8 +89,11 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
+   doc.setFontSize(9);
+   doc.setTextColor(90);
+   const lineasNegocio = [
++    datos.comprobante && datos.negocio.razon_social && datos.negocio.razon_social !== datos.negocio.nombre_comercial
++      ? datos.negocio.razon_social
++      : null,
+     datos.negocio.rnc ? `RNC: ${datos.negocio.rnc}` : null,
+-    datos.negocio.direccion,
++    ...lineasDireccionEmisor(datos.negocio),
+     datos.negocio.telefono ? `Tel: ${datos.negocio.telefono}` : null,
+   ].filter((l): l is string => !!l);
+   for (const l of lineasNegocio) {
+@@ -93,10 +108,24 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
+   doc.setFont("helvetica", "normal");
+   doc.setFontSize(10);
+   const fecha = new Date(datos.fecha);
+-  doc.text(`No. ${datos.numero}`, derecha, 27, { align: "right" });
+-  doc.text(fecha.toLocaleDateString("es-DO"), derecha, 32, { align: "right" });
++  const lineasDerecha = [
++    ...(datos.comprobante ? encabezadoFiscal(datos.comprobante).slice(1) : []),
++    `No. ${datos.numero}`,
++    `Fecha de emisión: ${fecha.toLocaleDateString("es-DO")}`,
++  ];
++  lineasDerecha.forEach((l, i) => doc.text(l, derecha, 27 + i * 5, { align: "right" }));
+ 
+-  y = Math.max(y, 32) + 8;
++  y = Math.max(y, 27 + (lineasDerecha.length - 1) * 5) + 8;
++
++  if (datos.comprobante) {
++    const comprador = datosComprador(datos.comprobante);
++    if (comprador.length > 0) {
++      doc.setFont("helvetica", "normal");
++      doc.setFontSize(10);
++      comprador.forEach((l, i) => doc.text(l, margen, y + i * 5));
++      y += comprador.length * 5 + 4;
++    }
++  }
+ 
+   if (datos.cliente) {
+     doc.setFont("helvetica", "bold");
+@@ -107,23 +136,24 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
+     y += 12;
+   }
+ 
+-  if (datos.comprobante) {
+-    doc.setFont("helvetica", "bold");
+-    doc.setFontSize(10);
+-    doc.text(`${datos.comprobante.tipoEcfEtiqueta} — NCF: ${datos.comprobante.ncf}`, margen, y);
+-    y += 8;
+-  }
+-
+   autoTable(doc, {
+     startY: y,
+     margin: { left: margen, right: margen },
+-    head: [["Descripción", "Cant.", "Precio unit.", "Subtotal"]],
+-    body: datos.lineas.map((l) => [
+-      l.descripcion,
+-      cantidad(l.cantidad),
+-      `RD$ ${money(l.precio_unitario)}`,
+-      `RD$ ${money(l.subtotal)}`,
+-    ]),
++    head: [
++      datos.comprobante
++        ? ["Descripción", "Cant.", "Precio unit.", "ITBIS", "Valor"]
++        : ["Descripción", "Cant.", "Precio unit.", "Subtotal"],
++    ],
++    body: datos.lineas.map((l) => {
++      const descripcion = descripcionLinea(
++        { descripcion: l.descripcion, tasa_impuesto: l.tasa_impuesto ?? 0.18 },
++        !!datos.comprobante,
++      );
++      const base = [descripcion, cantidad(l.cantidad), `RD$ ${money(l.precio_unitario)}`];
++      return datos.comprobante
++        ? [...base, l.monto_itbis ? `RD$ ${money(l.monto_itbis)}` : "", `RD$ ${money(l.subtotal)}`]
++        : [...base, `RD$ ${money(l.subtotal)}`];
++    }),
+     styles: { font: "helvetica", fontSize: 9, cellPadding: 2.5 },
+     headStyles: { fillColor: [30, 30, 30], textColor: 255 },
+     columnStyles: {
+@@ -163,6 +193,10 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
+     y += 8;
+   }
+ 
++  if (datos.comprobante?.qrUrl) {
++    y = dibujarTimbre(doc, datos.comprobante, Math.max(margen, DISTANCIA_MINIMA_QR_BORDE_MM), y + 6);
++  }
++
+   if (datos.piePagina) {
+     doc.setFont("helvetica", "italic");
+     doc.setFontSize(8);
+@@ -173,6 +207,38 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
+   return doc;
+ }
+ 
++const LADO_QR_MM = 30;
++/** Informe Técnico e-CF §18.2.3: el QR empieza a 2 cm o más del borde, lado inferior izquierdo. */
++const DISTANCIA_MINIMA_QR_BORDE_MM = 20;
++
++function dibujarTimbre(
++  doc: jsPDF,
++  comprobante: { codigoSeguridad?: string | null; fechaFirma?: string | null; qrUrl?: string | null },
++  x: number,
++  yInicial: number,
++): number {
++  const modulos = modulosQr(comprobante.qrUrl!);
++  const lado = LADO_QR_MM / modulos.length;
++  let y = yInicial;
++  if (y + LADO_QR_MM > doc.internal.pageSize.getHeight() - 20) {
++    doc.addPage();
++    y = 20;
++  }
++  doc.setFillColor(0, 0, 0);
++  modulos.forEach((fila, f) =>
++    fila.forEach((oscuro, c) => {
++      if (oscuro) doc.rect(x + c * lado, y + f * lado, lado, lado, "F");
++    }),
++  );
++  doc.setFont("helvetica", "normal");
++  doc.setFontSize(9);
++  doc.setTextColor(0);
++  const textoX = x + LADO_QR_MM + 5;
++  if (comprobante.codigoSeguridad) doc.text(`Código de seguridad: ${comprobante.codigoSeguridad}`, textoX, y + 10);
++  if (comprobante.fechaFirma) doc.text(`Fecha de firma digital: ${comprobante.fechaFirma}`, textoX, y + 16);
++  return y + LADO_QR_MM + 4;
++}
++
+ /** PDF del recibo de una venta cobrada (§ Cobrar) — mismo shape de datos que `imprimirRecibo`. */
+ export function generarPdfRecibo(datos: ReciboDatos): jsPDF {
+   return construirPdf({
+diff --git a/packages/ui/src/impresion/recibo.ts b/packages/ui/src/impresion/recibo.ts
+index 4124ed5..d59d185 100644
+--- a/packages/ui/src/impresion/recibo.ts
++++ b/packages/ui/src/impresion/recibo.ts
+@@ -1,5 +1,7 @@
+ import type { Factura, FacturaLinea, Cliente, Negocio } from "@sfr/core";
+ import { generarEscPos } from "./escpos.js";
++import { svgQr } from "./qr.js";
++import { datosComprador, descripcionLinea, encabezadoFiscal, lineasDireccionEmisor } from "./representacion.js";
+ import {
+   hayImpresoraTermicaDisponible,
+   obtenerImpresoraSeleccionada,
+@@ -24,8 +26,24 @@ import {
+  *    la venta.
+  */
+ 
++export interface ComprobanteRecibo {
++  ncf: string;
++  /** Denominación oficial del tipo (NOMBRE_TIPO_ECF de `@sfr/core`). */
++  tipoEcfEtiqueta: string;
++  /** Fecha ISO (AAAA-MM-DD); solo en los tipos donde la RI la exige. */
++  fechaVencimientoSecuencia?: string | null;
++  receptorDocumento?: string | null;
++  receptorNombre?: string | null;
++  codigoSeguridad?: string | null;
++  fechaFirma?: string | null;
++  /** URL de consulta del timbre en la DGII: se imprime como código QR. */
++  qrUrl?: string | null;
++  referencia?: { ncfModificado: string; codigoModificacion: string } | null;
++}
++
+ export interface ReciboDatos {
+-  negocio: Pick<Negocio, "nombre_comercial" | "rnc" | "direccion" | "telefono" | "ancho_impresora_default">;
++  negocio: Pick<Negocio, "nombre_comercial" | "rnc" | "direccion" | "telefono" | "ancho_impresora_default"> &
++    Partial<Pick<Negocio, "razon_social" | "municipio" | "provincia">>;
+   factura: Pick<
+     Factura,
+     | "numero_interno"
+@@ -38,11 +56,14 @@ export interface ReciboDatos {
+     | "cambio"
+     | "notas"
+   >;
+-  lineas: Pick<FacturaLinea, "descripcion" | "cantidad" | "precio_unitario" | "subtotal">[];
++  lineas: Pick<
++    FacturaLinea,
++    "descripcion" | "cantidad" | "precio_unitario" | "subtotal" | "tasa_impuesto" | "monto_itbis"
++  >[];
+   pagos: { metodo: string; monto: number }[];
+   cliente?: Pick<Cliente, "nombre" | "apellidos"> | null;
+   /** Presente solo si la venta se emitió con comprobante fiscal (§6). */
+-  comprobante?: { ncf: string; tipoEcfEtiqueta: string; codigoSeguridad?: string | null } | null;
++  comprobante?: ComprobanteRecibo | null;
+ }
+ 
+ const ETIQUETA_METODO: Record<string, string> = {
+@@ -71,14 +92,19 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
+     .map(
+       (l) => `
+       <tr>
+-        <td colspan="4" class="desc">${escapeHtml(l.descripcion)}</td>
++        <td colspan="4" class="desc">${escapeHtml(descripcionLinea(l, !!comprobante))}</td>
+       </tr>
+       <tr>
+         <td class="num">${cantidad(l.cantidad)}</td>
+         <td class="num">x</td>
+         <td class="num">${money(l.precio_unitario)}</td>
+         <td class="num total">${money(l.subtotal)}</td>
+-      </tr>`,
++      </tr>${
++        comprobante && l.monto_itbis > 0
++          ? `
++      <tr><td colspan="4" class="num">ITBIS ${money(l.monto_itbis)}</td></tr>`
++          : ""
++      }`,
+     )
+     .join("");
+ 
+@@ -109,8 +135,11 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
+ <body>
+   <h1>${escapeHtml(negocio.nombre_comercial)}</h1>
+   <div class="centro">
++    ${comprobante && negocio.razon_social && negocio.razon_social !== negocio.nombre_comercial ? `${escapeHtml(negocio.razon_social)}<br/>` : ""}
+     ${negocio.rnc ? `RNC: ${escapeHtml(negocio.rnc)}<br/>` : ""}
+-    ${negocio.direccion ? `${escapeHtml(negocio.direccion)}<br/>` : ""}
++    ${lineasDireccionEmisor(negocio)
++      .map((l) => `${escapeHtml(l)}<br/>`)
++      .join("")}
+     ${negocio.telefono ? `Tel: ${escapeHtml(negocio.telefono)}` : ""}
+   </div>
+   <hr/>
+@@ -119,9 +148,15 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
+   ${
+     comprobante
+       ? `
+-  <div class="centro" style="font-weight:bold; margin-top:4px;">${escapeHtml(comprobante.tipoEcfEtiqueta)}</div>
+-  <div class="centro">NCF: ${escapeHtml(comprobante.ncf)}</div>
+-  ${comprobante.codigoSeguridad ? `<div class="centro">Cód. seguridad: ${escapeHtml(comprobante.codigoSeguridad)}</div>` : ""}
++  ${encabezadoFiscal(comprobante)
++    .map(
++      (l, i) =>
++        `<div class="centro"${i === 0 ? ' style="font-weight:bold; margin-top:4px;"' : ""}>${escapeHtml(l)}</div>`,
++    )
++    .join("")}
++  ${datosComprador(comprobante)
++    .map((l) => `<div>${escapeHtml(l)}</div>`)
++    .join("")}
+   `
+       : ""
+   }
+@@ -137,12 +172,25 @@ function generarHtmlRecibo(datos: ReciboDatos): string {
+   <div class="linea"><span>Pagado</span><span>RD$ ${money(factura.monto_pagado)}</span></div>
+   <div class="linea"><span>Cambio</span><span>RD$ ${money(factura.cambio)}</span></div>
+   ${factura.notas ? `<hr/><div>Notas: ${escapeHtml(factura.notas)}</div>` : ""}
++  ${comprobante ? bloqueTimbreHtml(comprobante) : ""}
+   <hr/>
+   <div class="centro">¡Gracias por su compra!</div>
+ </body>
+ </html>`;
+ }
+ 
++function bloqueTimbreHtml(comprobante: ComprobanteRecibo): string {
++  const partes: string[] = ["<hr/>"];
++  if (comprobante.qrUrl) partes.push(`<div class="centro">${svgQr(comprobante.qrUrl, 30)}</div>`);
++  if (comprobante.codigoSeguridad) {
++    partes.push(`<div class="centro">Código de seguridad: ${escapeHtml(comprobante.codigoSeguridad)}</div>`);
++  }
++  if (comprobante.fechaFirma) {
++    partes.push(`<div class="centro">Fecha de firma digital: ${escapeHtml(comprobante.fechaFirma)}</div>`);
++  }
++  return partes.join("\n  ");
++}
++
+ function escapeHtml(s: string): string {
+   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+ }
+@@ -162,8 +210,11 @@ function generarTextoRecibo(datos: ReciboDatos): string[] {
+   const out: string[] = [];
+ 
+   out.push(negocio.nombre_comercial);
++  if (comprobante && negocio.razon_social && negocio.razon_social !== negocio.nombre_comercial) {
++    out.push(negocio.razon_social);
++  }
+   if (negocio.rnc) out.push(`RNC: ${negocio.rnc}`);
+-  if (negocio.direccion) out.push(negocio.direccion);
++  out.push(...lineasDireccionEmisor(negocio));
+   if (negocio.telefono) out.push(`Tel: ${negocio.telefono}`);
+   out.push(separador);
+ 
+@@ -176,15 +227,14 @@ function generarTextoRecibo(datos: ReciboDatos): string[] {
+   if (cliente) out.push(`Cliente: ${cliente.nombre} ${cliente.apellidos ?? ""}`.trim());
+ 
+   if (comprobante) {
+-    out.push(comprobante.tipoEcfEtiqueta);
+-    out.push(`NCF: ${comprobante.ncf}`);
+-    if (comprobante.codigoSeguridad) out.push(`Cód. seguridad: ${comprobante.codigoSeguridad}`);
++    out.push(...encabezadoFiscal(comprobante), ...datosComprador(comprobante));
+   }
+ 
+   out.push(separador);
+   for (const l of lineas) {
+-    out.push(l.descripcion);
++    out.push(descripcionLinea(l, !!comprobante));
+     out.push(columnasTexto(`${cantidad(l.cantidad)} x ${money(l.precio_unitario)}`, money(l.subtotal)));
++    if (comprobante && l.monto_itbis > 0) out.push(columnasTexto("", `ITBIS ${money(l.monto_itbis)}`));
+   }
+   out.push(separador);
+ 
+@@ -202,6 +252,11 @@ function generarTextoRecibo(datos: ReciboDatos): string[] {
+     out.push(separador);
+     out.push(`Notas: ${factura.notas}`);
+   }
++  if (comprobante?.codigoSeguridad) {
++    out.push(separador);
++    out.push(`Código de seguridad: ${comprobante.codigoSeguridad}`);
++    if (comprobante.fechaFirma) out.push(`Fecha de firma digital: ${comprobante.fechaFirma}`);
++  }
+   out.push(separador);
+   out.push("¡Gracias por su compra!");
+   return out;
+diff --git a/packages/ui/src/pantallas/Compras.tsx b/packages/ui/src/pantallas/Compras.tsx
+index aefa216..0eb683a 100644
+--- a/packages/ui/src/pantallas/Compras.tsx
++++ b/packages/ui/src/pantallas/Compras.tsx
+@@ -5,7 +5,11 @@ import {
+   type Compra,
+   type CompraLinea,
+   type ComprobanteArchivo,
++  type ComprobanteFiscal,
+   type ImpuestoTipo,
++  type Negocio,
++  ETIQUETA_TIPO_ECF,
++  emisorDesdeNegocio,
+ } from "@sfr/core";
+ import { Truck, Star, Sparkles } from "lucide-react";
+ import { useRepos } from "../data/contexto.js";
+@@ -14,6 +18,9 @@ import { analizarComprobante, type DatosExtraidosComprobante } from "../data/cha
+ import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+ import { filtrarNumero } from "../utilidades/numero.js";
+ import { mensajeError } from "../utilidades/errores.js";
++import { ComprobantesProveedores, type EcfParaCompra } from "../componentes/ComprobantesProveedores.js";
++import { ModalComprobanteCompra } from "../componentes/ModalComprobanteCompra.js";
++import { marcarEcfRecibidoImportado } from "../data/fiscalCliente.js";
+ 
+ interface LineaLocal {
+   producto_id: string | null;
+@@ -42,7 +49,18 @@ function leerArchivoComoBase64(file: File): Promise<string> {
+ 
+ /** Compras (§ Compras e inventario, con archivado): registrar una compra y consultar el historial. */
+ export function Compras() {
+-  const { compra: repo, proveedor: proveedores, producto: productos, comprobanteArchivo: archivos } = useRepos();
++  const {
++    compra: repo,
++    proveedor: proveedores,
++    producto: productos,
++    comprobanteArchivo: archivos,
++    comprobanteFiscal,
++    negocio: negocioRepo,
++    api,
++    modoFiscal,
++  } = useRepos();
++  const [ecfOrigenId, setEcfOrigenId] = useState<string | null>(null);
++  const [recargarRecibidos, setRecargarRecibidos] = useState(0);
+ 
+   // --- Formulario de nueva compra --------------------------------------
+   const [fecha, setFecha] = useState(hoyIso());
+@@ -81,6 +99,9 @@ export function Compras() {
+   const [lineasSel, setLineasSel] = useState<CompraLinea[]>([]);
+   const [archivosSel, setArchivosSel] = useState<ComprobanteArchivo[]>([]);
+   const [proveedoresPorId, setProveedoresPorId] = useState<Record<string, Proveedor>>({});
++  const [comprobanteSel, setComprobanteSel] = useState<ComprobanteFiscal | null | undefined>(undefined);
++  const [mostrarEmitir, setMostrarEmitir] = useState(false);
++  const [negocio, setNegocio] = useState<Negocio | null>(null);
+ 
+   const proveedorRef = useRef<HTMLInputElement>(null);
+   const busquedaProductoRef = useRef<HTMLInputElement>(null);
+@@ -118,9 +139,28 @@ export function Compras() {
+ 
+   useEffect(() => {
+     if (!seleccionadaId) return;
+-    void repo.obtenerLineas(seleccionadaId).then(setLineasSel);
+-    void archivos.obtenerPorCompra(seleccionadaId).then(setArchivosSel);
+-  }, [repo, archivos, seleccionadaId]);
++    let vigente = true;
++    setLineasSel([]);
++    setArchivosSel([]);
++    setComprobanteSel(undefined);
++    void repo.obtenerLineas(seleccionadaId).then((x) => vigente && setLineasSel(x));
++    void archivos.obtenerPorCompra(seleccionadaId).then((x) => vigente && setArchivosSel(x));
++    void comprobanteFiscal.obtenerPorCompra(seleccionadaId).then((x) => vigente && setComprobanteSel(x ?? null));
++    return () => {
++      vigente = false;
++    };
++  }, [repo, archivos, comprobanteFiscal, seleccionadaId]);
++
++  useEffect(() => {
++    void negocioRepo.obtener().then((n) => setNegocio(n ?? null));
++  }, [negocioRepo]);
++
++  async function recargarTrasEmitir() {
++    if (seleccionadaId) {
++      setComprobanteSel((await comprobanteFiscal.obtenerPorCompra(seleccionadaId)) ?? null);
++    }
++    await cargarHistorial();
++  }
+ 
+   async function buscarProveedor(q: string) {
+     setProveedorQ(q);
+@@ -199,7 +239,7 @@ export function Compras() {
+     setAnalizando(true);
+     try {
+       const base64 = await leerArchivoComoBase64(archivo);
+-      const datos = await analizarComprobante({ data: base64, tipoMime: archivo.type || "image/jpeg" });
++      const datos = await analizarComprobante(api, { data: base64, tipoMime: archivo.type || "image/jpeg" });
+       setDatosIA(datos);
+       // Solo se rellenan campos que mapean 1:1 al formulario. Los renglones
+       // de la compra NO se generan automáticamente — la herramienta solo lee
+@@ -216,7 +256,35 @@ export function Compras() {
+     }
+   }
+ 
++  /** Pasa al formulario un e-CF recibido de un proveedor: el usuario revisa y guarda como cualquier compra. */
++  async function usarEcfEnCompra(ecf: EcfParaCompra) {
++    setError(null);
++    setMensaje(null);
++    try {
++      const { recibido, items } = ecf;
++      const conocido = (await proveedores.listar()).find((p) => p.rnc === recibido.rncEmisor);
++      const proveedor =
++        conocido ??
++        (await proveedores.crear({
++          nombre: recibido.razonSocialEmisor || `RNC ${recibido.rncEmisor}`,
++          rnc: recibido.rncEmisor,
++        }));
++      const [dia, mes, anio] = recibido.fechaEmision.split("-");
++      if (dia && mes && anio) setFecha(`${anio}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`);
++      setProveedorSel(proveedor);
++      setNcfProveedor(recibido.encf);
++      setTieneComprobanteFiscal(true);
++      setNotas(`e-CF ${recibido.encf} recibido de ${recibido.razonSocialEmisor || recibido.rncEmisor}`);
++      setLineas(items.map((i) => ({ producto_id: null, ...i })));
++      setEcfOrigenId(ecf.id);
++      setMensaje("Revisa los artículos (puedes enlazarlos a productos del catálogo) y guarda la compra.");
++    } catch (e) {
++      setError(mensajeError(e));
++    }
++  }
++
+   function limpiarFormulario() {
++    setEcfOrigenId(null);
+     setFecha(hoyIso());
+     setProveedorSel(null);
+     setNcfProveedor("");
+@@ -268,6 +336,14 @@ export function Compras() {
+         });
+       }
+ 
++      if (ecfOrigenId) {
++        try {
++          await marcarEcfRecibidoImportado(api, ecfOrigenId);
++        } catch (e) {
++          console.warn("La compra se guardó, pero no se pudo marcar el e-CF como registrado", e);
++        }
++        setRecargarRecibidos((n) => n + 1);
++      }
+       setMensaje("Compra registrada.");
+       limpiarFormulario();
+       await cargarHistorial();
+@@ -282,6 +358,12 @@ export function Compras() {
+ 
+   return (
+     <div>
++      {modoFiscal === "dgii" && (
++        <ComprobantesProveedores
++          onUsarEnCompra={(ecf) => void usarEcfEnCompra(ecf)}
++          recargarSeñal={recargarRecibidos}
++        />
++      )}
+       <div style={{ ...s.tarjeta, marginBottom: 16 }}>
+         <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+           <Truck size={18} /> Nueva compra
+@@ -731,6 +813,28 @@ export function Compras() {
+               <span>RD$ {money(seleccionada.total)}</span>
+             </div>
+ 
++            {comprobanteSel && (
++              <p style={{ margin: "12px 0 0", fontSize: 13 }}>
++                <strong>{ETIQUETA_TIPO_ECF[comprobanteSel.tipo_ecf]}</strong>
++                <br />
++                NCF: {comprobanteSel.ncf}
++                <br />
++                DGII: {ESTADO_DGII_COMPRA[comprobanteSel.estado_dgii]}
++              </p>
++            )}
++            {comprobanteSel === null &&
++              lineasSel.length > 0 &&
++              !seleccionada.ncf_proveedor &&
++              modoFiscal === "dgii" && (
++                <button
++                  type="button"
++                  style={{ ...s.botonSecundario, marginTop: 12, minHeight: 44, width: "100%" }}
++                  onClick={() => setMostrarEmitir(true)}
++                >
++                  Emitir comprobante fiscal
++                </button>
++              )}
++
+             {archivosSel.length > 0 && (
+               <div style={{ marginTop: 12 }}>
+                 <label style={s.label}>Comprobante adjunto</label>
+@@ -750,6 +854,25 @@ export function Compras() {
+           </div>
+         )}
+       </div>
++
++      {mostrarEmitir && seleccionada && (
++        <ModalComprobanteCompra
++          compra={seleccionada}
++          lineas={lineasSel}
++          proveedor={seleccionada.proveedor_id ? (proveedoresPorId[seleccionada.proveedor_id] ?? null) : null}
++          emisor={emisorDesdeNegocio(negocio)}
++          onCerrar={() => setMostrarEmitir(false)}
++          onEmitida={() => void recargarTrasEmitir()}
++        />
++      )}
+     </div>
+   );
+ }
++
++const ESTADO_DGII_COMPRA: Record<ComprobanteFiscal["estado_dgii"], string> = {
++  pendiente: "en proceso de validación",
++  aceptado: "aceptado",
++  aceptado_condicional: "aceptado condicional",
++  rechazado: "rechazado",
++  contingencia: "contingencia",
++};
+diff --git a/packages/ui/src/pantallas/Configuracion.tsx b/packages/ui/src/pantallas/Configuracion.tsx
+index 5c63364..e68f4fb 100644
+--- a/packages/ui/src/pantallas/Configuracion.tsx
++++ b/packages/ui/src/pantallas/Configuracion.tsx
+@@ -4,6 +4,7 @@ import { Store, Printer, Save } from "lucide-react";
+ import { useRepos } from "../data/contexto.js";
+ import { s, c } from "../estilos.js";
+ import { SeccionSecuenciasNcf } from "../componentes/SeccionSecuenciasNcf.js";
++import { SeccionFacturacionElectronica } from "../componentes/SeccionFacturacionElectronica.js";
+ import { SeccionBitacora } from "../componentes/SeccionBitacora.js";
+ import { SeccionImpresoraTermica } from "../componentes/SeccionImpresoraTermica.js";
+ import { SeccionCuentaGoogle } from "../componentes/SeccionCuentaGoogle.js";
+@@ -16,6 +17,8 @@ const VACIO: NegocioInput = {
+   razon_social: "",
+   rnc: "",
+   direccion: "",
++  municipio: "",
++  provincia: "",
+   telefono: "",
+   correo: "",
+   ancho_impresora_default: 80,
+@@ -45,6 +48,8 @@ export function Configuracion() {
+           razon_social: n.razon_social ?? "",
+           rnc: n.rnc ?? "",
+           direccion: n.direccion ?? "",
++          municipio: n.municipio ?? "",
++          provincia: n.provincia ?? "",
+           telefono: n.telefono ?? "",
+           correo: n.correo ?? "",
+           ancho_impresora_default: n.ancho_impresora_default as 58 | 80,
+@@ -151,6 +156,22 @@ export function Configuracion() {
+               onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+             />
+           </div>
++          <div>
++            <label style={s.label}>Municipio</label>
++            <input
++              style={s.input}
++              value={form.municipio ?? ""}
++              onChange={(e) => setForm({ ...form, municipio: e.target.value })}
++            />
++          </div>
++          <div>
++            <label style={s.label}>Provincia</label>
++            <input
++              style={s.input}
++              value={form.provincia ?? ""}
++              onChange={(e) => setForm({ ...form, provincia: e.target.value })}
++            />
++          </div>
+         </div>
+       </div>
+ 
+@@ -208,6 +229,8 @@ export function Configuracion() {
+ 
+       <SeccionImpresoraTermica />
+ 
++      <SeccionFacturacionElectronica />
++
+       <SeccionSecuenciasNcf />
+ 
+       <div style={{ ...s.tarjeta, marginTop: 16 }}>
+diff --git a/packages/ui/src/pantallas/ConsultaFacturas.tsx b/packages/ui/src/pantallas/ConsultaFacturas.tsx
+index 336da7b..bc04a4c 100644
+--- a/packages/ui/src/pantallas/ConsultaFacturas.tsx
++++ b/packages/ui/src/pantallas/ConsultaFacturas.tsx
+@@ -6,15 +6,20 @@ import {
+   type Cliente,
+   type ComprobanteFiscal,
+   type Negocio,
++  type EstadoDgii,
+   ETIQUETA_TIPO_ECF,
++  emisorDesdeNegocio,
+   normalizar,
+ } from "@sfr/core";
+ import { Receipt, ClipboardList } from "lucide-react";
+ import { useRepos } from "../data/contexto.js";
+ import { s, c, money } from "../estilos.js";
++import { ejecutarCicloFiscal } from "../data/seguimientoFiscal.js";
++import { comprobanteParaRecibo, datosReciboNotaGuardada } from "../impresion/representacion.js";
+ import { imprimirRecibo } from "../impresion/recibo.js";
+ import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
+ import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
++import { ModalNotaDebito } from "../componentes/ModalNotaDebito.js";
+ import { useAlertas } from "../contexto/Alertas.js";
+ import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+ import { useEsAngosto } from "../hooks/useBreakpoint.js";
+@@ -42,7 +47,23 @@ const TIPOS: { valor: "" | "normal" | "fiscal"; etiqueta: string }[] = [
+ 
+ /** Consulta de facturas ya cobradas: filtrar, ver detalle y reimprimir. */
+ function FacturasCobradas() {
+-  const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo } = useRepos();
++  const repos = useRepos();
++  const { factura: repo, cliente: clientes, comprobanteFiscal, negocio: negocioRepo, secuenciaNcf, modoFiscal } = repos;
++  const [consultandoDgii, setConsultandoDgii] = useState(false);
++  const [avisoDgii, setAvisoDgii] = useState<string | null>(null);
++
++  async function consultarDgiiAhora() {
++    setConsultandoDgii(true);
++    setAvisoDgii(null);
++    try {
++      await ejecutarCicloFiscal(repos);
++      await cargar();
++    } catch (e) {
++      setAvisoDgii(mensajeError(e));
++    } finally {
++      setConsultandoDgii(false);
++    }
++  }
+   const { elegir } = useAlertas();
+   const esAngosto = useEsAngosto();
+ 
+@@ -60,6 +81,9 @@ function FacturasCobradas() {
+   const [pagosSel, setPagosSel] = useState<Pago[]>([]);
+   const [negocio, setNegocio] = useState<Negocio | null>(null);
+   const [mostrarDevolucion, setMostrarDevolucion] = useState(false);
++  const [mostrarNotaDebito, setMostrarNotaDebito] = useState(false);
++  const [notasSel, setNotasSel] = useState<ComprobanteFiscal[]>([]);
++  const notaDebitoOcupada = useRef(false);
+ 
+   const seleccionada = filas.find((f) => f.factura.id === seleccionadaId) ?? null;
+ 
+@@ -72,7 +96,9 @@ function FacturasCobradas() {
+     },
+     Escape: () => {
+       if (mostrarDevolucion) setMostrarDevolucion(false);
+-      else setSeleccionadaId(null);
++      else if (mostrarNotaDebito) {
++        if (!notaDebitoOcupada.current) setMostrarNotaDebito(false);
++      } else setSeleccionadaId(null);
+     },
+   });
+ 
+@@ -114,7 +140,13 @@ function FacturasCobradas() {
+     if (!seleccionadaId) return;
+     void repo.obtenerLineas(seleccionadaId).then(setLineasSel);
+     void repo.obtenerPagos(seleccionadaId).then(setPagosSel);
+-  }, [repo, seleccionadaId]);
++    let vigente = true;
++    void comprobanteFiscal.listarNotasPorFactura(seleccionadaId).then((n) => vigente && setNotasSel(n));
++    return () => {
++      vigente = false;
++      setNotasSel([]);
++    };
++  }, [repo, comprobanteFiscal, seleccionadaId]);
+ 
+   async function recargarDespuesDeDevolucion() {
+     if (seleccionadaId) await repo.obtenerLineas(seleccionadaId).then(setLineasSel);
+@@ -138,6 +170,27 @@ function FacturasCobradas() {
+     ancho_impresora_default: 80,
+   };
+ 
++  async function reimprimirNota(fila: FilaFactura, nota: ComprobanteFiscal) {
++    const salida = await elegir(
++      "¿Cómo quieres reimprimir esta nota?",
++      [
++        { valor: "imprimir", etiqueta: "Imprimir" },
++        { valor: "pdf", etiqueta: "Guardar PDF" },
++      ],
++      { titulo: "Reimprimir nota" },
++    );
++    if (!salida) return;
++    const datos = await datosReciboNotaGuardada({
++      nota,
++      factura: fila.factura,
++      cliente: fila.cliente,
++      negocio: negocio ?? negocioReciboDefault,
++      secuencias: secuenciaNcf,
++    });
++    if (salida === "imprimir") imprimirRecibo(datos);
++    else guardarPdf(generarPdfRecibo(datos), `Nota-${nota.ncf}.pdf`);
++  }
++
+   async function reimprimir(fila: FilaFactura) {
+     const salida = await elegir(
+       "¿Cómo quieres reimprimir esta factura?",
+@@ -155,13 +208,7 @@ function FacturasCobradas() {
+       lineas: lineasSel,
+       pagos: pagosSel,
+       cliente: fila.cliente,
+-      comprobante: fila.comprobante
+-        ? {
+-            ncf: fila.comprobante.ncf,
+-            tipoEcfEtiqueta: ETIQUETA_TIPO_ECF[fila.comprobante.tipo_ecf],
+-            codigoSeguridad: fila.comprobante.codigo_seguridad,
+-          }
+-        : null,
++      comprobante: fila.comprobante ? await comprobanteParaRecibo(fila.comprobante, secuenciaNcf) : null,
+     };
+     if (salida === "imprimir") {
+       imprimirRecibo(datosRecibo);
+@@ -307,9 +354,57 @@ function FacturasCobradas() {
+                 {ETIQUETA_TIPO_ECF[seleccionada.comprobante.tipo_ecf]}
+                 <br />
+                 NCF: {seleccionada.comprobante.ncf}
++                <br />
++                <span style={{ color: ESTADO_DGII[seleccionada.comprobante.estado_dgii].color }}>
++                  DGII: {ESTADO_DGII[seleccionada.comprobante.estado_dgii].etiqueta}
++                  {seleccionada.comprobante.motivo_rechazo ? ` — ${seleccionada.comprobante.motivo_rechazo}` : ""}
++                </span>
++                {seleccionada.comprobante.estado_dgii === "rechazado" && (
++                  <span style={{ display: "block", fontWeight: 400, color: c.gris, fontSize: 13 }}>
++                    No tiene validez fiscal. Revísalo con tu contador antes de volver a facturar esta venta.
++                  </span>
++                )}
++                {seleccionada.comprobante.estado_dgii === "pendiente" && modoFiscal === "dgii" && (
++                  <button
++                    type="button"
++                    style={{ ...s.botonSecundario, marginTop: 8, minHeight: 44 }}
++                    disabled={consultandoDgii}
++                    onClick={() => void consultarDgiiAhora()}
++                  >
++                    {consultandoDgii ? "Consultando…" : "Consultar estado en la DGII"}
++                  </button>
++                )}
++                {avisoDgii && (
++                  <span role="alert" style={{ display: "block", color: c.rojo, fontWeight: 400, fontSize: 13 }}>
++                    {avisoDgii}
++                  </span>
++                )}
+               </p>
+             )}
+ 
++            {notasSel.length > 0 && (
++              <div style={{ marginTop: 8 }}>
++                <label style={s.label}>Notas de esta venta</label>
++                {notasSel.map((n) => (
++                  <div
++                    key={n.id}
++                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
++                  >
++                    <span style={{ fontSize: 13 }}>
++                      {ETIQUETA_TIPO_ECF[n.tipo_ecf]} · {n.ncf} · RD$ {money(n.total)}
++                    </span>
++                    <button
++                      type="button"
++                      style={{ ...s.botonSecundario, minHeight: 44 }}
++                      onClick={() => void reimprimirNota(seleccionada, n)}
++                    >
++                      Reimprimir
++                    </button>
++                  </div>
++                ))}
++              </div>
++            )}
++
+             <table style={{ ...s.tabla, marginTop: 8 }}>
+               <tbody>
+                 {lineasSel.map((l) => (
+@@ -357,6 +452,11 @@ function FacturasCobradas() {
+               <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => setMostrarDevolucion(true)}>
+                 Devolver
+               </button>
++              {admiteNotaDebito(seleccionada.comprobante) && modoFiscal === "dgii" && (
++                <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => setMostrarNotaDebito(true)}>
++                  Nota de débito
++                </button>
++              )}
+             </div>
+           </div>
+         )}
+@@ -366,18 +466,52 @@ function FacturasCobradas() {
+         <ModalDevolucion
+           factura={seleccionada.factura}
+           lineas={lineasSel}
+-          rncEmisor={negocio?.rnc ?? null}
++          emisor={emisorDesdeNegocio(negocio)}
+           onCerrar={() => setMostrarDevolucion(false)}
+           onCompletada={() => void recargarDespuesDeDevolucion()}
+         />
+       )}
++
++      {mostrarNotaDebito && seleccionada?.comprobante && (
++        <ModalNotaDebito
++          comprobante={seleccionada.comprobante}
++          factura={seleccionada.factura}
++          cliente={seleccionada.cliente}
++          emisor={emisorDesdeNegocio(negocio)}
++          negocioRecibo={negocio ?? negocioReciboDefault}
++          onCerrar={() => setMostrarNotaDebito(false)}
++          onEmitida={() => {
++            void cargar();
++            void comprobanteFiscal.listarNotasPorFactura(seleccionada.factura.id).then(setNotasSel);
++          }}
++          onOcupado={(ocupado) => {
++            notaDebitoOcupada.current = ocupado;
++          }}
++        />
++      )}
+     </div>
+   );
+ }
+ 
++function admiteNotaDebito(comprobante: ComprobanteFiscal | null): boolean {
++  return (
++    !!comprobante &&
++    (comprobante.tipo_ecf === "31" || comprobante.tipo_ecf === "32" || comprobante.tipo_ecf === "45") &&
++    (comprobante.estado_dgii === "aceptado" || comprobante.estado_dgii === "aceptado_condicional")
++  );
++}
++
+ /** Envuelve facturas cobradas y cotizaciones (§ ConsultaCotizaciones) en una sola pantalla con
+  *  pestañas — evita sumar un décimo ítem al menú lateral, que rompería el esquema de atajos
+  *  Alt+1..9 (§ AppShell). */
++const ESTADO_DGII: Record<EstadoDgii, { etiqueta: string; color: string }> = {
++  pendiente: { etiqueta: "en proceso de validación", color: c.amarillo },
++  aceptado: { etiqueta: "aceptado", color: c.verde },
++  aceptado_condicional: { etiqueta: "aceptado condicional", color: c.verde },
++  rechazado: { etiqueta: "rechazado", color: c.rojo },
++  contingencia: { etiqueta: "contingencia", color: c.amarillo },
++};
++
+ export function ConsultaFacturas() {
+   const [tab, setTab] = useState<"facturas" | "cotizaciones">("facturas");
+ 
+diff --git a/packages/ui/src/pantallas/Transferencias.tsx b/packages/ui/src/pantallas/Transferencias.tsx
+index 47057f6..d0cd823 100644
+--- a/packages/ui/src/pantallas/Transferencias.tsx
++++ b/packages/ui/src/pantallas/Transferencias.tsx
+@@ -1,6 +1,7 @@
+ import { useCallback, useEffect, useState } from "react";
+ import { Landmark, LogIn, RefreshCw, Check, X } from "lucide-react";
+ import { useAuth } from "../contexto/Auth.js";
++import { useRepos } from "../data/contexto.js";
+ import { s, c, money } from "../estilos.js";
+ import { mensajeError } from "../utilidades/errores.js";
+ import {
+@@ -29,6 +30,7 @@ const COLOR_ESTADO: Record<NotificacionTransferencia["estadoConfirmacion"], { fo
+  */
+ export function Transferencias() {
+   const { disponible, sesion, cargando: cargandoSesion, iniciarSesionGoogle } = useAuth();
++  const { api } = useRepos();
+   const [transferencias, setTransferencias] = useState<NotificacionTransferencia[]>([]);
+   const [cargando, setCargando] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+@@ -39,13 +41,13 @@ export function Transferencias() {
+     setCargando(true);
+     setError(null);
+     try {
+-      setTransferencias(await obtenerTransferenciasRecientes(sesion.accessToken));
++      setTransferencias(await obtenerTransferenciasRecientes(api));
+     } catch (e) {
+       setError(mensajeError(e));
+     } finally {
+       setCargando(false);
+     }
+-  }, [sesion]);
++  }, [sesion, api]);
+ 
+   useEffect(() => {
+     void cargar();
+@@ -56,7 +58,8 @@ export function Transferencias() {
+     setEnCurso(id);
+     setError(null);
+     try {
+-      const actualizada = tipo === "confirmar" ? await confirmarTransferencia(sesion.accessToken, id) : await descartarTransferencia(sesion.accessToken, id);
++      const actualizada =
++        tipo === "confirmar" ? await confirmarTransferencia(api, id) : await descartarTransferencia(api, id);
+       setTransferencias((prev) => prev.map((t) => (t.id === id ? actualizada : t)));
+     } catch (e) {
+       setError(mensajeError(e));
+@@ -69,8 +72,8 @@ export function Transferencias() {
+     return (
+       <div style={s.tarjeta}>
+         <p style={{ margin: 0, color: c.gris }}>
+-          Esta pantalla requiere el modo multi-caja/multiusuario (Sign in with Google), que no está configurado en
+-          esta instalación.
++          Esta pantalla requiere el modo multi-caja/multiusuario (Sign in with Google), que no está configurado en esta
++          instalación.
+         </p>
+       </div>
+     );
+@@ -90,7 +93,10 @@ export function Transferencias() {
+         <p style={{ marginTop: 0, color: c.gris }}>
+           Inicia sesión para ver las transferencias recibidas en las cuentas del negocio.
+         </p>
+-        <button style={{ ...s.boton, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => void iniciarSesionGoogle()}>
++        <button
++          style={{ ...s.boton, display: "inline-flex", alignItems: "center", gap: 6 }}
++          onClick={() => void iniciarSesionGoogle()}
++        >
+           <LogIn size={14} aria-hidden="true" /> Iniciar sesión con Google
+         </button>
+       </div>
+@@ -155,7 +161,13 @@ export function Transferencias() {
+                     {t.estadoConfirmacion === "pendiente" && (
+                       <div style={{ display: "flex", gap: 6 }}>
+                         <button
+-                          style={{ ...s.botonSecundario, padding: "6px 10px", display: "inline-flex", alignItems: "center", gap: 4 }}
++                          style={{
++                            ...s.botonSecundario,
++                            padding: "6px 10px",
++                            display: "inline-flex",
++                            alignItems: "center",
++                            gap: 4,
++                          }}
+                           disabled={enCurso === t.id}
+                           onClick={() => void accion(t.id, "confirmar")}
+                           aria-label="Confirmar transferencia"
+diff --git a/packages/ui/src/pantallas/Ventas.tsx b/packages/ui/src/pantallas/Ventas.tsx
+index 01ab56c..f8b0242 100644
+--- a/packages/ui/src/pantallas/Ventas.tsx
++++ b/packages/ui/src/pantallas/Ventas.tsx
+@@ -8,6 +8,7 @@ import {
+   type Negocio,
+   type MetodoPago,
+   cobrarConFiscal,
++  emisorDesdeNegocio,
+   aplicarDescuento,
+   pctGananciaDesdePrecio,
+ } from "@sfr/core";
+@@ -17,7 +18,8 @@ import { ModalCobro, type FiscalInput, type SalidaCobro } from "../componentes/M
+ import { ModalCotizacion, type SalidaCotizacion } from "../componentes/ModalCotizacion.js";
+ import { FormularioProducto, diferenciasProducto, type CambioProducto } from "../componentes/FormularioProducto.js";
+ import { ModalConfirmarCambios } from "../componentes/ModalConfirmarCambios.js";
+-import { imprimirRecibo } from "../impresion/recibo.js";
++import { imprimirRecibo, type ComprobanteRecibo } from "../impresion/recibo.js";
++import { comprobanteParaRecibo } from "../impresion/representacion.js";
+ import { imprimirCotizacion } from "../impresion/cotizacion.js";
+ import { generarPdfRecibo, generarPdfCotizacion, guardarPdf } from "../impresion/pdf.js";
+ import { abrirGavetaTermica } from "../impresion/termica.js";
+@@ -81,6 +83,7 @@ export function Ventas() {
+     negocio: negocioRepo,
+     secuenciaNcf,
+     comprobanteFiscal,
++    ncfAnulacion,
+     proveedorFiscal,
+     promocion: promocionRepo,
+     cotizacion: cotizacionRepo,
+@@ -1045,11 +1048,17 @@ export function Ventas() {
+     if (!activoId) return;
+ 
+     let factura: Factura;
+-    let comprobanteRecibo: { ncf: string; tipoEcfEtiqueta: string; codigoSeguridad?: string | null } | null = null;
++    let comprobanteRecibo: ComprobanteRecibo | null = null;
+ 
+     if (fiscal) {
+       const resultado = await cobrarConFiscal(
+-        { facturaRepo: repo, secuenciaRepo: secuenciaNcf, comprobanteRepo: comprobanteFiscal, proveedorFiscal },
++        {
++          facturaRepo: repo,
++          secuenciaRepo: secuenciaNcf,
++          comprobanteRepo: comprobanteFiscal,
++          anulacionRepo: ncfAnulacion,
++          proveedorFiscal,
++        },
+         activoId,
+         {
+           pagos,
+@@ -1057,15 +1066,12 @@ export function Ventas() {
+           tipoEcf: fiscal.tipoEcf,
+           receptorDocumentoTipo: fiscal.receptorDocumentoTipo,
+           receptorDocumentoNumero: fiscal.receptorDocumentoNumero,
+-          rncEmisor: negocio?.rnc ?? null,
++          receptorNombre: fiscal.receptorNombre,
++          emisor: emisorDesdeNegocio(negocio),
+         },
+       );
+       factura = resultado.factura;
+-      comprobanteRecibo = {
+-        ncf: resultado.comprobante.ncf,
+-        tipoEcfEtiqueta: fiscal.tipoEcf === "31" ? "Crédito Fiscal (E31)" : "Consumo (E32)",
+-        codigoSeguridad: resultado.comprobante.codigo_seguridad,
+-      };
++      comprobanteRecibo = await comprobanteParaRecibo(resultado.comprobante, secuenciaNcf);
+     } else {
+       const resultado = await repo.cobrar(activoId, { pagos, notas });
+       factura = resultado.factura;
+@@ -1161,13 +1167,7 @@ export function Ventas() {
+         lineas: lineasUltima,
+         pagos: pagosUltima,
+         cliente: clienteUltima ?? null,
+-        comprobante: comprobanteUltimo
+-          ? {
+-              ncf: comprobanteUltimo.ncf,
+-              tipoEcfEtiqueta: comprobanteUltimo.tipo_ecf === "31" ? "Crédito Fiscal (E31)" : "Consumo (E32)",
+-              codigoSeguridad: comprobanteUltimo.codigo_seguridad,
+-            }
+-          : null,
++        comprobante: comprobanteUltimo ? await comprobanteParaRecibo(comprobanteUltimo, secuenciaNcf) : null,
+       };
+       if (salida === "imprimir") {
+         imprimirRecibo(datosRecibo);
+@@ -2160,6 +2160,7 @@ export function Ventas() {
+           notasIniciales={activo.notas ?? ""}
+           clienteDocumentoTipo={clienteActivo?.documento_tipo ?? null}
+           clienteDocumentoNumero={clienteActivo?.documento_numero ?? null}
++          clienteNombre={clienteActivo ? `${clienteActivo.nombre} ${clienteActivo.apellidos ?? ""}`.trim() : null}
+           onCancelar={() => {
+             setMostrarCobro(false);
+             enfocarBusqueda();

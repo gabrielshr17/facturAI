@@ -1,0 +1,88 @@
+import { esAmbienteDgii, type AmbienteDgii } from "./fiscal/ambiente.js";
+
+/**
+ * Configuración del backend (§ Multi-caja/multiusuario). Ninguna de estas
+ * variables está conectada todavía a un proyecto real: este paquete es un
+ * *scaffold* — arranca y sirve rutas sin Supabase/PowerSync configurados,
+ * para que la estructura (rutas, tipos, plugin de auth) quede lista y solo
+ * haga falta pegar credenciales reales cuando existan.
+ *
+ * Nada de esto se usa en el modo 100% local (SQLite en el cliente); el
+ * backend solo entra en juego para el modo multi-caja/multiusuario y para
+ * el endpoint de transmisión e-CF (ver plan.md, "Flujo de datos y modos").
+ */
+export interface ConfigApi {
+  puerto: number;
+  supabaseUrl: string | null;
+  supabaseServiceRoleKey: string | null;
+  powersyncUrl: string | null;
+  /** true si todas las credenciales de Supabase están presentes. */
+  supabaseConfigurado: boolean;
+  /** OAuth de la casilla Gmail dedicada que recibe (por reenvío) las notificaciones bancarias del
+   *  negocio (§ Últimas transferencias recibidas). */
+  gmailOAuthClientId: string | null;
+  gmailOAuthClientSecret: string | null;
+  gmailOAuthRefreshToken: string | null;
+  /** true si las tres credenciales de Gmail están presentes. */
+  gmailConfigurado: boolean;
+  /** Cada cuánto se sondea la casilla dedicada en busca de correos nuevos. */
+  transferenciasPollIntervaloMs: number;
+  /** Ambiente DGII (`testecf` pre-certificación, `certecf` certificación, `ecf` producción). */
+  dgiiAmbiente: AmbienteDgii;
+  /** Ruta al certificado digital .p12 de la empresa y su contraseña (§ Módulo fiscal e-CF). */
+  dgiiP12Ruta: string | null;
+  /** Alternativa a la ruta: el .p12 en base64, para hostings donde no se pueden subir archivos. */
+  dgiiP12Base64: string | null;
+  dgiiP12Clave: string | null;
+  /** true si hay certificado y contraseña para firmar. */
+  dgiiConfigurado: boolean;
+  /** RNC de la empresa: el API se niega a firmar comprobantes de cualquier otro emisor. */
+  dgiiRncEmisor: string | null;
+  /** Bundle PEM con las autoridades certificadoras aceptadas para documentos recibidos. */
+  dgiiCaRaicesRuta: string | null;
+  /** Correos de Google con permiso para emitir comprobantes (además de las llaves de caja). */
+  correosPermitidos: string[];
+}
+
+function ambienteDgii(valor: string | undefined): AmbienteDgii {
+  if (!valor) return "testecf";
+  if (!esAmbienteDgii(valor)) {
+    throw new Error(`DGII_AMBIENTE inválido: "${valor}". Valores permitidos: testecf, certecf, ecf.`);
+  }
+  return valor;
+}
+
+export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
+  const supabaseUrl = env.SUPABASE_URL || null;
+  const supabaseServiceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY || null;
+  const gmailOAuthClientId = env.GMAIL_OAUTH_CLIENT_ID || null;
+  const gmailOAuthClientSecret = env.GMAIL_OAUTH_CLIENT_SECRET || null;
+  const gmailOAuthRefreshToken = env.GMAIL_OAUTH_REFRESH_TOKEN || null;
+  const dgiiP12Ruta = env.DGII_P12_PATH || null;
+  const dgiiP12Base64 = env.DGII_P12_BASE64?.replace(/\s+/g, "") || null;
+  const dgiiP12Clave = env.DGII_P12_PASSWORD || null;
+
+  return {
+    puerto: Number(env.PORT) || 3001,
+    supabaseUrl,
+    supabaseServiceRoleKey,
+    powersyncUrl: env.POWERSYNC_URL || null,
+    supabaseConfigurado: Boolean(supabaseUrl && supabaseServiceRoleKey),
+    gmailOAuthClientId,
+    gmailOAuthClientSecret,
+    gmailOAuthRefreshToken,
+    gmailConfigurado: Boolean(gmailOAuthClientId && gmailOAuthClientSecret && gmailOAuthRefreshToken),
+    transferenciasPollIntervaloMs: Number(env.TRANSFERENCIAS_POLL_INTERVALO_MS) || 5 * 60 * 1000,
+    dgiiAmbiente: ambienteDgii(env.DGII_AMBIENTE),
+    dgiiP12Ruta,
+    dgiiP12Base64,
+    dgiiP12Clave,
+    dgiiConfigurado: Boolean((dgiiP12Ruta || dgiiP12Base64) && dgiiP12Clave),
+    dgiiRncEmisor: env.DGII_RNC_EMISOR?.trim() || null,
+    dgiiCaRaicesRuta: env.DGII_CA_RAICES_PATH?.trim() || null,
+    correosPermitidos: (env.API_CORREOS_PERMITIDOS ?? "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean),
+  };
+}

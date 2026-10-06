@@ -1,0 +1,203 @@
+import type { ImpuestoTipo } from "@sfr/core";
+import forge from "node-forge";
+import { DOMParser } from "@xmldom/xmldom";
+import { SignedXml } from "xml-crypto";
+
+const XMLDSIG = "http://www.w3.org/2000/09/xmldsig#";
+const OID_SERIAL_SUJETO = "2.5.4.5";
+
+export type ResultadoVerificacion =
+  { valido: true } | { valido: false; motivo: "especificacion" | "firma"; detalle: string };
+
+type Documento = ReturnType<DOMParser["parseFromString"]>;
+
+function parsear(xml: string): Documento | null {
+  try {
+    const doc = new DOMParser({
+      onError: (nivel, mensaje) => {
+        if (nivel !== "warning") throw new Error(mensaje);
+      },
+    }).parseFromString(xml, "text/xml");
+    return doc.documentElement ? doc : null;
+  } catch {
+    return null;
+  }
+}
+
+function serialSujeto(certificadoPem: string): string {
+  try {
+    const cert = forge.pki.certificateFromPem(certificadoPem);
+    return String(cert.subject.attributes.find((a) => a.type === OID_SERIAL_SUJETO)?.value ?? "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Verifica un documento recibido de otro contribuyente (e-CF, ACECF): la firma debe cubrir el
+ * documento entero (`Reference URI=""`) y el certificado incluido debe pertenecer al RNC que
+ * dice emitirlo (campo SN). Sin lo segundo, cualquiera podría firmar a nombre de otro.
+ */
+export interface OpcionesVerificacion {
+  /**
+   * Certificados (PEM) de las autoridades certificadoras aceptadas. Si se indican, el certificado
+   * del firmante debe estar emitido por una de ellas; sin esto un certificado autofirmado con el SN
+   * adecuado pasaría la verificación.
+   */
+  raices?: string[];
+}
+
+function emitidoPorRaizConfiable(certificadoPem: string, raices: string[]): boolean {
+  try {
+    const almacen = forge.pki.createCaStore(raices);
+    return forge.pki.verifyCertificateChain(almacen, [forge.pki.certificateFromPem(certificadoPem)]);
+  } catch {
+    return false;
+  }
+}
+
+export function verificarDocumentoFirmado(
+  xml: string,
+  rncFirmante: string | null,
+  opciones: OpcionesVerificacion = {},
+): ResultadoVerificacion {
+  const doc = parsear(xml);
+  if (!doc) return { valido: false, motivo: "especificacion", detalle: "El archivo no es un XML válido." };
+
+  const firmas = doc.getElementsByTagNameNS(XMLDSIG, "Signature");
+  if (firmas.length !== 1) {
+    return { valido: false, motivo: "firma", detalle: "El documento debe tener exactamente una firma digital." };
+  }
+  const firma = firmas[0]!;
+  const referencias = firma.getElementsByTagNameNS(XMLDSIG, "Reference");
+  if (referencias.length !== 1 || referencias[0]!.getAttribute("URI") !== "") {
+    return { valido: false, motivo: "firma", detalle: "La firma no cubre el documento completo." };
+  }
+
+  const keyInfo = firma.getElementsByTagNameNS(XMLDSIG, "KeyInfo")[0] ?? null;
+  const certificadoPem = SignedXml.getCertFromKeyInfo(keyInfo as unknown as Node | null);
+  if (!certificadoPem) return { valido: false, motivo: "firma", detalle: "La firma no incluye el certificado." };
+
+  let integra: boolean;
+  try {
+    const verificador = new SignedXml({ publicCert: certificadoPem });
+    verificador.loadSignature(firma as unknown as Node);
+    integra = verificador.checkSignature(xml);
+  } catch (error) {
+    return {
+      valido: false,
+      motivo: "firma",
+      detalle: `Firma inválida: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+  if (!integra) return { valido: false, motivo: "firma", detalle: "El documento fue alterado después de firmado." };
+
+  if (opciones.raices?.length && !emitidoPorRaizConfiable(certificadoPem, opciones.raices)) {
+    return { valido: false, motivo: "firma", detalle: "El certificado no fue emitido por una autoridad de confianza." };
+  }
+  if (rncFirmante !== null && !serialSujeto(certificadoPem).replace(/\D/g, "").includes(rncFirmante)) {
+    return { valido: false, motivo: "firma", detalle: `El certificado no pertenece al RNC ${rncFirmante}.` };
+  }
+  return { valido: true };
+}
+
+export interface EcfRecibido {
+  tipoEcf: string;
+  encf: string;
+  rncEmisor: string;
+  razonSocialEmisor: string;
+  rncComprador: string | null;
+  fechaEmision: string;
+  montoTotal: number;
+  totalItbis: number;
+}
+
+function valor(doc: Documento, etiqueta: string): string | null {
+  return doc.getElementsByTagName(etiqueta)[0]?.textContent?.trim() || null;
+}
+
+export function leerEcfRecibido(xml: string): EcfRecibido | null {
+  const doc = parsear(xml);
+  if (!doc || doc.documentElement?.nodeName !== "ECF") return null;
+  const encf = valor(doc, "eNCF");
+  const rncEmisor = valor(doc, "RNCEmisor");
+  const fechaEmision = valor(doc, "FechaEmision");
+  const montoTotal = valor(doc, "MontoTotal");
+  if (!encf || !rncEmisor || !fechaEmision || !montoTotal) return null;
+  return {
+    tipoEcf: valor(doc, "TipoeCF") ?? encf.slice(1, 3),
+    encf,
+    rncEmisor,
+    razonSocialEmisor: valor(doc, "RazonSocialEmisor") ?? "",
+    rncComprador: valor(doc, "RNCComprador"),
+    fechaEmision,
+    montoTotal: Number(montoTotal),
+    totalItbis: Number(valor(doc, "TotalITBIS") ?? 0),
+  };
+}
+
+export interface AprobacionComercialLeida {
+  rncEmisor: string;
+  rncComprador: string;
+  encf: string;
+  aprobado: boolean;
+  motivo: string | null;
+}
+
+export function leerAprobacionComercial(xml: string): AprobacionComercialLeida | null {
+  const doc = parsear(xml);
+  if (!doc || doc.documentElement?.nodeName !== "ACECF") return null;
+  const rncEmisor = valor(doc, "RNCEmisor");
+  const rncComprador = valor(doc, "RNCComprador");
+  const encf = valor(doc, "eNCF");
+  const estado = valor(doc, "Estado");
+  if (!rncEmisor || !rncComprador || !encf || (estado !== "1" && estado !== "2")) return null;
+  return { rncEmisor, rncComprador, encf, aprobado: estado === "1", motivo: valor(doc, "DetalleMotivoRechazo") };
+}
+
+export function valorEtiqueta(xml: string, etiqueta: string): string | null {
+  const doc = parsear(xml);
+  return doc ? valor(doc, etiqueta) : null;
+}
+
+export interface ItemEcf {
+  descripcion: string;
+  cantidad: number;
+  /** Con ITBIS incluido: la misma convención de las compras en `@sfr/core`. */
+  costoUnitario: number;
+  impuestoTipo: ImpuestoTipo;
+  tasaImpuesto: number;
+}
+
+const IMPUESTO_POR_INDICADOR: Record<string, { impuestoTipo: ImpuestoTipo; tasa: number }> = {
+  "1": { impuestoTipo: "itbis18", tasa: 0.18 },
+  "2": { impuestoTipo: "itbis16", tasa: 0.16 },
+};
+
+function redondear2(valor: number): number {
+  return Math.round((valor + Number.EPSILON) * 100) / 100;
+}
+
+export function leerItemsEcf(xml: string): ItemEcf[] {
+  const doc = parsear(xml);
+  if (!doc) return [];
+  const conItbisIncluido = valor(doc, "IndicadorMontoGravado") === "1";
+  const items = doc.getElementsByTagName("Item");
+  const resultado: ItemEcf[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    const campo = (etiqueta: string) => item.getElementsByTagName(etiqueta)[0]?.textContent?.trim() ?? "";
+    const cantidad = Number(campo("CantidadItem")) || 1;
+    const monto = Number(campo("MontoItem")) || 0;
+    const impuesto = IMPUESTO_POR_INDICADOR[campo("IndicadorFacturacion")] ?? { impuestoTipo: "exento", tasa: 0 };
+    const factor = conItbisIncluido ? 1 : 1 + impuesto.tasa;
+    resultado.push({
+      descripcion: campo("NombreItem") || "Artículo",
+      cantidad,
+      costoUnitario: redondear2((monto / cantidad) * factor),
+      impuestoTipo: impuesto.impuestoTipo,
+      tasaImpuesto: impuesto.tasa,
+    });
+  }
+  return resultado;
+}

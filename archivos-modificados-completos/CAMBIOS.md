@@ -1,0 +1,237 @@
+# Cambios sin publicar todavía
+
+## Facturación electrónica real con la DGII (lista para conectar el certificado)
+
+Las facturas con comprobante fiscal ya se pueden **firmar y enviar de verdad a la DGII**. Mientras
+no esté configurado el certificado digital de la empresa, todo sigue funcionando como antes con el
+simulador; al configurarlo (ver `packages/api/README.md`), las ventas fiscales pasan por la DGII.
+
+- **Consumo (E32) menor a RD$250,000**: se envía el resumen y la respuesta es inmediata.
+- **Crédito fiscal (E31) y consumo de RD$250,000 o más**: la DGII puede tardar en validar. La venta
+  se cobra igual y el comprobante queda "en proceso de validación"; la app consulta su estado sola
+  cada pocos minutos y lo muestra en Consultar facturas.
+- **Nuevo campo en Cobrar**: la **razón social del comprador**, obligatoria para crédito fiscal.
+- **Consumo de RD$250,000 o más** ahora exige RNC o cédula del comprador, como pide la DGII.
+- **El recibo trae el código QR** de la DGII, el código de seguridad y la fecha de firma digital
+  (impresora térmica, PDF e impresión normal).
+- **Números de comprobante que se pierden** (sin conexión o rechazo de la DGII) se anulan
+  automáticamente ante la DGII, en vez de quedar como huecos en la secuencia.
+- Antes de emitir se exige que el negocio tenga **RNC, razón social y dirección** en Configuración.
+
+### Recepción de comprobantes de proveedores y panel fiscal
+
+- **Comprobantes de proveedores** (en Compras): las facturas electrónicas que los proveedores envían a
+  la empresa llegan solas. Desde ahí se **aprueban o rechazan** ante la DGII (y se le avisa al
+  proveedor) y con **Registrar compra** se pasan al formulario de compra con proveedor, NCF y
+  artículos ya llenos, para revisar y guardar.
+- **Facturación electrónica** (en Configuración): muestra si el servicio está activo, en qué ambiente
+  y cuándo vence el certificado (avisa 30 días antes). La lista **Por resolver** reúne los
+  comprobantes en validación, los rechazados por la DGII, los que un comprador no recibió y los
+  números de comprobante que quedaron sin venta, con un botón para **sincronizar con la DGII ahora**.
+- **Llave de la caja**: cada caja se autoriza con su propia llave para emitir comprobantes, sin
+  depender de iniciar sesión con Google.
+- Las facturas de crédito fiscal aceptadas se **entregan automáticamente** al comprador cuando este
+  también es emisor electrónico.
+- En **Consultar facturas**, un comprobante en validación se puede consultar en el momento, y los
+  rechazados indican que no tienen validez fiscal.
+
+### Factura impresa según la DGII
+
+- El tipo de comprobante sale con su **nombre oficial** (ej. "Factura de Crédito Fiscal Electrónica"),
+  junto al e-NCF y su fecha de vencimiento.
+- Aparecen la **razón social** del negocio y del comprador con su RNC, la marca **"E"** en los
+  artículos exentos y el **ITBIS de cada línea**.
+- En el PDF, el código QR respeta la distancia mínima al borde que pide la DGII.
+
+## Ganancia: el % ahora es lo que uno espera
+
+**Costo 100 con 20% de ganancia = precio 120.** Antes daba **141.60**: el sistema sacaba
+120 (costo + 20%) y encima le sumaba el 18% de ITBIS. El precio de venta es lo que paga el
+cliente, con el ITBIS ya adentro, así que el impuesto no vuelve a sumarse: se *extrae* de esos
+120 al facturar, como siempre.
+
+- El **% por defecto de un producto nuevo es 20%** (antes 0%, así que un producto creado sin
+  tocar ese campo se vendía al costo).
+- Cambiar el tipo de impuesto ya **no mueve el precio** en el formulario. Cambia cuánto ITBIS
+  se le extrae a ese precio en la factura, no lo que paga el cliente.
+- Al abrir "Editar producto", el % que se muestra es el que el precio guardado implica de
+  verdad. Los productos que ya existen **no cambian de precio**.
+
+## Los avisos dicen qué pasó, en español
+
+**"Ese producto ya existe".** Al crear un producto con un código de barra que ya está en uso,
+antes salía el texto crudo del motor de base de datos
+(`UNIQUE constraint failed: producto.codigo_barra`). Ahora dice **cuál** producto lo tiene:
+
+> El código de barra 7460170310017 ya está asignado a "Arroz Selecto 5 lb". Dos productos no
+> pueden compartir el mismo código: cámbialo, déjalo vacío, o edita el producto que ya existe.
+
+Y si el nombre se repite (no lo impide la base, pero casi siempre es un descuido), se pregunta
+antes de crear el duplicado, mostrando el precio y el código del que ya está guardado.
+
+**Todos los demás errores pasan por un traductor** (`mensajeError`, en `packages/ui/src/utilidades/`).
+Los 30-y-pico de `setError(String(e))` que había regados por las pantallas mandaban a pantalla lo
+que dijera el motor. Ahora se traducen los casos conocidos —dato repetido, registro enlazado,
+campo obligatorio, base ocupada, disco lleno, base dañada, sin conexión— y lo desconocido cae en
+un mensaje honesto ("No se pudo completar la operación…") con el detalle técnico en la consola,
+no en la cara del usuario.
+
+Los `Producto 01J8…-… no existe` que se mostraban tal cual (con el id interno) pasaron a textos
+de `MSG`, en `packages/core/src/dominio/mensajes.ts`.
+
+## Verificación
+
+- `pnpm -r test` — 149/149 en verde (incluye pruebas nuevas del 20% por defecto, del
+  100 + 20% = 120 y del aviso de código repetido).
+- `pnpm -r typecheck` — limpio en los cinco paquetes.
+- **Sin verificar visualmente:** la extensión de Chrome no estuvo conectada en esta sesión.
+
+---
+
+# Cambios desde la última publicación
+
+Resumen de todo lo que entró entre `a60cae1` (lo último que estaba en GitHub) y `d871060`.
+**76 archivos, +3298 / −453.** Cuatro commits:
+
+| Commit | Qué trae |
+|---|---|
+| `7b93a77` | Iconos Lucide, navegación por teclado en listas, arreglos de impresión y reportes |
+| `644f91a` | Marca facturAI, juego de iconos y guía de diseño |
+| `e7b4f44` | Tramos responsive, trato táctil y accesibilidad de modales |
+| `d871060` | Renombrado del producto a facturAI y marca en el cascarón |
+
+---
+
+## 1. Pantalla de Ventas
+
+**Barra de herramientas reducida de 6 controles a 3.** Salieron el botón de mayoreo (ahora vive en
+cada línea), el de voz y el de "Agregar cantidad". Quedaron `+ No registrado (F7)` y `Consultar (F9)`,
+más un chip que solo aparece cuando el modo mayoreo global está activo — sin él ese modo quedaba
+encendido sin nada en pantalla que lo delatara.
+
+**Mayoreo por línea.** Cada línea del ticket tiene su propio interruptor `mayoreo`. F8 conserva sus
+dos significados: con una línea resaltada alterna ESA línea; sin ninguna, cambia el régimen del
+próximo producto que se agregue.
+
+**Cantidad siempre editable.** El campo de cantidad ya no exige un clic previo para aparecer. En
+líneas a granel se agrega un segundo campo de **monto en RD$** que calcula la cantidad sola
+("RD$100 de arroz").
+
+> La ventanita de cantidad (Insert) NO se eliminó: sigue abriéndose sola al elegir un producto a
+> granel, y es el único lugar donde un monto se convierte en peso.
+
+**Nuevos atajos.** `F4` salta al cliente del ticket (si ya hay uno asignado, enfoca "Quitar", que es
+el camino para cambiarlo). `Supr` borra la línea resaltada, con la misma confirmación que el botón.
+El atajo de "Agregar cantidad" pasó de `F11` a `Insert`.
+
+**Enter crea el cliente** en el formulario rápido de "+ Nuevo", sin tener que ir hasta el botón.
+
+## 2. Apariencia
+
+**Colisión de colores corregida.** El acento de la marca (`#991b1b`) y el color de peligro
+(`#b91c1c`) tenían fondos claros **idénticos** (`#fef2f2`): una fila seleccionada se veía igual que
+un cuadro de error. Se agregó `--sfr-seleccion`, neutro, para resaltados; peligro tiene su propio
+tinte; y los botones destructivos son neutros en reposo y solo se ponen rojos al apuntarlos.
+
+**El anillo de foco dejó de ser rojo.** Un campo simplemente enfocado se leía como un campo
+inválido. Ahora es neutro (`--sfr-foco`), claramente distinto del estado de error.
+
+**Jerarquía.** La búsqueda salió de su tarjeta y va sobre el fondo de la página; la lista del ticket
+es la única superficie con relieve y se estira hasta abajo (antes quedaba flotando con media
+pantalla vacía); Cliente quedó discreto para que Totales pese en su columna.
+
+**Tabla más legible.** Filas de 10px → 13px de padding, cifras de ancho fijo en todas las celdas
+(los dígitos no se alinean sin eso), subtotal más grande y en semibold, anchos de columna explícitos
+— "Cant." se estiraba tanto que dejaba el − y el + en extremos opuestos.
+
+**Menos ruido por fila.** −/cantidad/+ pasaron a ser un solo control segmentado; "Borrar" es un
+icono que aparece al pasar por la fila (sigue alcanzable con Tab y con Supr); el interruptor de
+mayoreo se esconde hasta que se pasa por encima, salvo cuando está activo.
+
+**Atajos como chips.** `Cobrar ⌜F12⌝` en vez de `Cobrar (F12)` (§ `EtiquetaAtajo`).
+
+**Emojis reemplazados por iconos Lucide** en toda la app.
+
+## 3. Responsive y móvil
+
+Nuevo `useBreakpoint` con cuatro tramos. **Lo primero que cede siempre es la barra lateral**, y solo
+después se toca el contenido:
+
+| Ancho | Barra lateral | Contenido |
+|---|---|---|
+| ≥1100 | completa (216px) | dos columnas |
+| 940–1099 | tira de iconos | dos columnas |
+| 700–939 | tira de iconos | apilado |
+| <700 | cajón (hamburguesa) | apilado |
+
+Por encima de 1100px cada rama devuelve el layout de siempre: **la app de escritorio no cambió**.
+
+**Bug de layout corregido:** `<main>` es un hijo flex sin `minWidth: 0`, así que se negaba a
+achicarse por debajo del ancho de su contenido. Con la barra lateral en `flexShrink: 0`, al angostar
+la ventana nada cedía y la columna de Totales quedaba cortada por la mitad. Mismo arreglo
+(`minmax(0, 1fr)`) en las grillas de Ventas, Facturas y Cotizaciones.
+
+**Trato táctil por tipo de puntero, no por ancho** (`(pointer: coarse)`): una tablet es ancha pero se
+maneja con el dedo. Campos a 16px (evita el zoom automático de iOS), objetivos de 44px, sin
+autoFocus que abra el teclado al entrar, y toque para resaltar — con solo `onMouseEnter`, en pantalla
+táctil F8 y +/− se quedaban sin línea sobre la cual actuar.
+
+**PWA instalable:** iconos PNG 192/512 + maskable, `apple-touch-icon`, meta de iOS, color de tema
+corregido (estaba azul, la app es roja), `navigator.storage.persist()` para que el teléfono no
+descarte la base, y volcado de la base al pasar a segundo plano (antes se perdían los últimos
+150 ms de escrituras si el sistema mataba la pestaña).
+
+## 4. Accesibilidad
+
+- Enlace "saltar al contenido"; `<nav>` con `aria-current` en el módulo abierto.
+- Modales con `role="dialog"`/`alertdialog`, trampa de foco y devolución del foco al cerrar
+  (`useModalAccesible`).
+- La búsqueda de productos es un combobox real (`listbox` + `aria-activedescendant`).
+- Los 17 cuadros de error anuncian con `role="alert"`; el cambio en Cobrar se anuncia en vivo.
+- `aria-label` en botones que son solo icono; `scope="col"` en los 70 encabezados de tabla.
+- Anillo de foco visible (`:focus-visible`) y respeto por `prefers-reduced-motion`.
+
+> **Pendiente:** en las pantallas de administración las etiquetas `<label>` todavía no están atadas
+> a sus campos (`htmlFor`/`id`), así que un lector de pantalla no anuncia esos nombres. Falta también
+> verificar contraste de color.
+
+## 5. Correcciones de datos e impresión
+
+**Ganancia estimada.** El cálculo ignoraba en silencio el costo de las líneas vendidas sin producto
+vinculado, inflando la ganancia. Se agregó `ingresosSinCosto` y un aviso en Reportes que dice
+cuánto ingreso no tiene costo conocido, en vez de mostrar un número optimista sin explicación.
+(El comportamiento del cálculo se mantuvo: estaba documentado y cubierto por tests a propósito.)
+
+**Códigos de barra con cero inicial.** El importador CSV convertía a número cualquier cadena de
+dígitos, y `Number("0123456789012")` se come el cero. El código quedaba guardado mal y después el
+escáner no lo encontraba. Ahora un entero con cero a la izquierda se mantiene como texto.
+
+**Reimpresión pregunta primero** entre "Imprimir" y "Guardar PDF", en vez de mandar a la impresora
+de una (§ nueva primitiva `elegir()` en `Alertas`).
+
+**Cotizaciones por impresora térmica** (ESC/POS), que antes solo salían por PDF/navegador.
+
+**Cantidades a 2 decimales** en pantalla y en los impresos (antes 4). Solo presentación: el valor
+guardado conserva su precisión.
+
+**Confirmación al bajar una cantidad a cero**, que borraba la línea en silencio.
+
+## 6. Marca
+
+Marca facturAI propia (`brand/`), juego de iconos generado por script para escritorio y PWA,
+`design-guidelines.md`, y renombrado del producto de "Sistema de Facturación" a **facturAI**.
+
+> El identificador del bundle **no cambió** (`do.facturacion.sistema`), así que la base de datos
+> sigue en la misma carpeta: actualizar no pierde datos.
+
+---
+
+## Verificación
+
+- `pnpm --filter @sfr/core test` — 144/144 en verde.
+- `typecheck` limpio en `@sfr/core`, `@sfr/ui`, `@sfr/desktop` y `@sfr/web`.
+- Instalador de escritorio construido e instalado.
+
+**Sin verificar visualmente en navegador:** la extensión de Chrome no estuvo disponible en esta
+sesión, así que el responsive se revisó por código y con una captura de pantalla, no arrastrando la
+ventana. Vale la pena confirmar a mano el orden de colapso y las pantallas en el teléfono.

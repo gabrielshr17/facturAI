@@ -1,0 +1,129 @@
+# Plan e-CF — tareas pendientes (rama `feature/ecf-dgii`)
+
+Lista de trabajo viva. Se marca `[x]` al terminar cada tarea y se hace commit en ese momento, así
+cualquiera (humano o IA) sabe exactamente dónde quedó el trabajo. Orden aprobado: **A → B → F → D → C → E → G**.
+
+Ya hecho antes de este plan: emisión E31/E32/E34 + RFCE + ANECF, firma XMLDSig, cliente DGII,
+cola de anulación, reconciliación de pendientes, QR en recibos (commits `311a6d8`, `2193d1f`).
+
+Fuentes: documentación oficial DGII (Descripción Técnica Servicios DGII, Descripción Técnica
+Emisores Electrónicos, Proceso de Certificación, Informe Técnico e-CF, XSD v1.0).
+
+## A — Cerrar el acceso al API
+
+- [x] A1. Llave por caja (`X-Caja-Key`): tabla `caja_api_key` (hash SHA-256) en Postgres; plugin de auth
+      acepta llave válida **o** JWT de Google cuyo correo esté en `API_CORREOS_PERMITIDOS`.
+- [x] A2. Script para emitir/revocar llaves de caja (`pnpm --filter @sfr/api caja-key`).
+- [x] A3. `DGII_RNC_EMISOR`: el API se niega a firmar para otro RNC (403) y al arrancar valida que el
+      campo SN del certificado corresponda al RNC (si no, `disponible: false` con el motivo).
+- [x] A4. UI: campo en Configuración para pegar la llave de la caja; `apiClient` la envía.
+
+## B — Servicios de recepción (obligatorios para postular)
+
+- [x] B1. XML ARECF (acuse de recibo) + ACECF (aprobación comercial), validados contra XSD oficiales.
+- [x] B2. Verificación de firma XMLDSig de documentos entrantes.
+- [x] B3. Rutas públicas (fuera del contexto protegido), rutas exactas DGII:
+      `/fe/autenticacion/api/semilla`, `/fe/autenticacion/api/validacioncertificado`,
+      `/fe/recepcion/api/ecf` (responde ARECF firmado), `/fe/aprobacioncomercial/api/ecf` (200/400).
+      Hecho: verificación de firma + SN del emisor, motivos 1-4 del ARECF, token opcional, rutas
+      insensibles a mayúsculas. Sin Postgres o sin certificado responden 503.
+- [x] B4. Persistencia en Postgres: `ecf_recibido`, `aprobacion_comercial_recibida` (XML como texto).
+      Código en `fiscal/recepcion/almacen.ts`; tablas en `schema.sql`.
+- [x] B5. API protegida para la app: listar recibidos, emitir aprobación/rechazo comercial
+      (firma ACECF y envía a DGII + al emisor).
+- [x] B6. UI en Compras: "Comprobantes de proveedores" — ver, importar como compra, aprobar/rechazar.
+
+## F — Esquema Postgres
+
+- [x] F1. `db/schema.sql` al día con todas las migraciones SQLite + tablas de A/B.
+- [x] F2. Test de deriva: falla si una migración SQLite agrega tabla/columna ausente en `schema.sql`;
+      ejecuta `schema.sql` en Postgres real (PGlite) para detectar errores de sintaxis.
+- [ ] F3. **(Necesita OK del usuario)** Aplicar a Supabase.
+
+## D — Números "utilizados" y panel de administración
+
+- [x] D1. Antes de anular, consultar `consultatrackids` (RNC + e-NCF): si la DGII tiene trackId, no se
+      anula — se reconcilia (el e-CF sí llegó).
+- [x] D2. Pantalla Configuración → Facturación electrónica: estado del servicio, vencimiento del
+      certificado (aviso a 30 días), pendientes, cola de anulación (reintentar), utilizados
+      (marcar revisado), rechazados con motivo.
+- [x] D3. Consultar facturas: botón "Consultar estado en la DGII" para comprobantes en validación,
+      guía para rechazados; reimprimir ya incluye QR. **Pendiente de decisión:** re-emitir un
+      comprobante rechazado (nuevo e-NCF para la misma venta) — confirmar el procedimiento con el contador.
+
+## C — Entrega al comprador (rol emisor)
+
+- [x] C1. `consultarDirectorio(rnc)` en el cliente DGII.
+- [x] C2. Tras aceptación de E31/E34 a un comprador electrónico: enviar el e-CF a su URL de recepción,
+      guardar el ARECF; reintentos en el ciclo de seguimiento.
+
+## E — Herramientas de certificación
+
+- [x] E1. Generador genérico fila → XML ordenado por XSD (sin tags vacíos), validado contra XSD.
+- [x] E2. `pnpm --filter @sfr/api set-pruebas <archivo.xlsx> [--enviar]`. Simulacro por defecto (firma con
+      certificado autofirmado si aún no hay .p12). **Al descargar el Excel real:** correr el simulacro y revisar
+      "columnas sin usar" en la salida; si aparecen, ajustar la convención de nombres en
+      `src/fiscal/certificacion/generador.ts`.
+- [x] E3. Representación impresa según Informe Técnico §18 en los 4 formatos (nombre oficial del tipo,
+      e-NCF, válido hasta, razón social emisor/comprador, "E" en exentos, ITBIS por línea, QR ≥ 2 cm del
+      borde). Los PDF del paso 5 salen de Consultar facturas → PDF. **Falta:** Municipio/Provincia del
+      emisor (el negocio no tiene esos campos) y la RI de notas de crédito (las devoluciones no imprimen).
+
+## G — Preparar despliegue
+
+- [x] G1. `DGII_P12_BASE64` como alternativa al archivo.
+- [x] G2. `packages/api/Dockerfile` (probado: build + arranque local) y `packages/api/DESPLIEGUE.md`.
+- [x] G3. Chatbot y transferencias usan `apiClient` (de paso: el chatbot no enviaba credenciales y fallaba con 401 al activar la autenticación).
+
+## H — Tipos de e-CF adicionales (E33, E41, E43–E47)
+
+- [x] H1. Reglas por tipo en `fiscal/xml/perfiles.ts`; un tipo sin perfil falla en vez de generar XML inválido.
+- [x] H2. E33 (nota de débito): XML, servicio `emitirNotaDebitoFiscal` (secuencia E33, cola de anulación),
+      botón en Consultar facturas y RI con "e-NCF modificado" + código de modificación en palabras.
+      **Falta:** reimprimir una nota ya guardada y la RI de E34 al devolver (hoy solo se imprime la E33 recién
+      emitida); configurar la secuencia E33 en Configuración (verificar que la lista de tipos la ofrezca).
+- [x] H3a. E45 (gubernamental): XML, cobro (exige RNC y razón social), entrega al comprador y selección en el modal de cobro.
+- [ ] H3b. E44 y E46 (sin ITBIS). **Bloqueado:** requieren un modo de ticket exonerado de ITBIS (hoy un ticket siempre
+      calcula ITBIS); decidir con el contador. E46 además usa ITBIS a tasa 0% (ITBIS3) y datos de embarque.
+- [x] H4. E41, E43, E47 (gastos y compras emitidos al proveedor): `emitirComprobanteDeCompra`, migración de
+      `comprobante_fiscal` (compra_id, factura_id opcional) y acción "Emitir comprobante fiscal" en el detalle de
+      una compra. Las retenciones las digita el usuario (sin porcentajes fijos hasta que el contador los confirme).
+      **Falta:** representación impresa de E41/E43/E47; verlo en pantalla a 375/768/1440 px; emitir uno real.
+- [x] H5. Transversal: Configuración ya ofrecía secuencias de todos los tipos; el generador y `set-pruebas` funcionan
+      con E33, E41, E43, E44, E45, E46 y E47 (pruebas de ida y vuelta y filas manuales validadas contra el XSD).
+
+## Necesita al usuario (no se avanza sin él)
+
+- Hosting + dominio con SSL para las URL públicas (cuenta de Render/Fly/Railway).
+- ISC de alcoholes: decidido NO construirlo (se compra a un distribuidor; ver docs/investigacion-fiscal.md). Pedir al contador que lo confirme.
+- Política offline: mantener "sin conexión no hay venta fiscal" o adoptar contingencia DGII de 72 h.
+- OK para aplicar el esquema a Supabase (F3).
+- Certificado .p12 y acceso OFV (ver `packages/api/README.md`).
+
+## Bitácora
+
+- 2026-09-27 (noche): Fase A completa (auth por llave de caja + lista de correos, RNC fijo + validación
+  SN del certificado, sección "Facturación electrónica" en Configuración). Falta crear la tabla
+  `caja_api_key` en Postgres (va en F1). **Siguiente: B1.**
+- 2026-09-27 (día): Fases B, F (F1–F2), D, C, E y G completas. Solo queda F3 (aplicar el esquema a
+  Supabase, requiere OK). Hallazgos: dos XSD oficiales con errores de sintaxis (.NET) parchados en
+  `packages/api/xsd/`; `Comprador` vacío en E34 corregido; el chatbot no enviaba credenciales.
+- 2026-09-27 (tarde): revisión de código de todo lo anterior; 5 hallazgos corregidos: documentos
+  recibidos falsificables (ahora se confirman con la DGII antes de aprobar/registrar + raíces CA
+  opcionales `DGII_CA_RAICES_PATH`), respuesta comercial duplicable (reserva atómica), "envío
+  duplicado" mostrado como no recibido, llave de caja revocada bloqueaba la sesión de Google, y
+  argumentos de `set-pruebas`.
+- 2026-09-30: H1–H2 (perfiles por tipo y nota de débito E33). El paquete `@sfr/ui` ahora tiene vitest. Decisiones:
+  la nota de débito usa siempre código de modificación 3 (corrige montos); "corrige texto" no aplica a un cargo
+  monetario.
+- 2026-09-30 (tarde): H3a (E45). La nota de débito admite E31, E32 y E45 como comprobante original. La lista de secuencias de Configuración ya
+  ofrece todos los tipos, incluido E33.
+- 2026-09-30 (noche): H4 y H5. Revisión de código del backend de compras: la migración de `comprobante_fiscal` pasó de
+  un solo paso con PRAGMA a tres migraciones reanudables, porque el driver de escritorio (Tauri) ejecuta cada sentencia
+  por separado y sin transacción. Pendiente antes de certificar: Excel de pruebas, hosting con SSL, aplicar el esquema
+  a Supabase (incluye la migración) y ver las pantallas nuevas en el navegador.
+- 2026-09-30 (cierre): reimpresión de notas guardadas (líneas reconstruidas del XML firmado), municipio y provincia del
+  emisor, RLS en todas las tablas de Postgres y pasos de Supabase en DESPLIEGUE.md. Decisiones: E44/E46 no se construyen
+  en la app (solo se postula por los tipos que se usan); E41/E43/E47 no se imprimen (documentos internos). ISC de alcoholes
+  investigado en docs/investigacion-fiscal.md pero SIN construir: cambia el cálculo del ITBIS y necesita al contador.
+  Falta: imprimir la E34 al devolver (hoy solo se reimprime desde Consultar facturas).

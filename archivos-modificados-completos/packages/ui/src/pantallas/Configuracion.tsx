@@ -1,0 +1,280 @@
+import { useEffect, useRef, useState } from "react";
+import { type NegocioInput, type RespaldoCompleto } from "@sfr/core";
+import { Store, Printer, Save } from "lucide-react";
+import { useRepos } from "../data/contexto.js";
+import { s, c } from "../estilos.js";
+import { SeccionSecuenciasNcf } from "../componentes/SeccionSecuenciasNcf.js";
+import { SeccionFacturacionElectronica } from "../componentes/SeccionFacturacionElectronica.js";
+import { SeccionBitacora } from "../componentes/SeccionBitacora.js";
+import { SeccionImpresoraTermica } from "../componentes/SeccionImpresoraTermica.js";
+import { SeccionCuentaGoogle } from "../componentes/SeccionCuentaGoogle.js";
+import { SeccionSetupTransferencias } from "../componentes/SeccionSetupTransferencias.js";
+import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { mensajesError } from "../utilidades/errores.js";
+
+const VACIO: NegocioInput = {
+  nombre_comercial: "",
+  razon_social: "",
+  rnc: "",
+  direccion: "",
+  municipio: "",
+  provincia: "",
+  telefono: "",
+  correo: "",
+  ancho_impresora_default: 80,
+  redondeo_centavo: true,
+  inventario_activo: false,
+};
+
+export function Configuracion() {
+  const { negocio: repo, backup } = useRepos();
+  const [form, setForm] = useState<NegocioInput>(VACIO);
+  const [errores, setErrores] = useState<string[]>([]);
+  const [guardado, setGuardado] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [erroresImportar, setErroresImportar] = useState<string[]>([]);
+  const [importado, setImportado] = useState<number | null>(null);
+  const inputImportarRef = useRef<HTMLInputElement>(null);
+
+  useAtajosTeclado({ "Ctrl+S": () => void guardar() });
+
+  useEffect(() => {
+    void (async () => {
+      const n = await repo.obtener();
+      if (n) {
+        setForm({
+          nombre_comercial: n.nombre_comercial,
+          razon_social: n.razon_social ?? "",
+          rnc: n.rnc ?? "",
+          direccion: n.direccion ?? "",
+          municipio: n.municipio ?? "",
+          provincia: n.provincia ?? "",
+          telefono: n.telefono ?? "",
+          correo: n.correo ?? "",
+          ancho_impresora_default: n.ancho_impresora_default as 58 | 80,
+          redondeo_centavo: n.redondeo_centavo === 1,
+          inventario_activo: n.inventario_activo === 1,
+        });
+      }
+    })();
+  }, []);
+
+  async function guardar() {
+    setGuardado(false);
+    try {
+      await repo.guardar(form);
+      setErrores([]);
+      setGuardado(true);
+    } catch (e) {
+      setErrores(mensajesError(e));
+    }
+  }
+
+  async function exportarRespaldo() {
+    setExportando(true);
+    try {
+      const respaldo = await backup.exportarTodo();
+      const json = JSON.stringify(respaldo, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `respaldo_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  async function importarRespaldo(archivo: File) {
+    setImportando(true);
+    setErroresImportar([]);
+    setImportado(null);
+    try {
+      const texto = await archivo.text();
+      const respaldo = JSON.parse(texto) as RespaldoCompleto;
+      const resultado = await backup.importarTodo(respaldo);
+      setImportado(resultado.filas);
+    } catch (e) {
+      setErroresImportar(mensajesError(e));
+    } finally {
+      setImportando(false);
+      if (inputImportarRef.current) inputImportarRef.current.value = "";
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      <div style={s.tarjeta}>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <Store size={18} /> Datos del negocio
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={s.label}>Nombre comercial *</label>
+            <input
+              style={s.input}
+              value={form.nombre_comercial}
+              onChange={(e) => setForm({ ...form, nombre_comercial: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={s.label}>Razón social</label>
+            <input
+              style={s.input}
+              value={form.razon_social ?? ""}
+              onChange={(e) => setForm({ ...form, razon_social: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={s.label}>RNC</label>
+            <input style={s.input} value={form.rnc ?? ""} onChange={(e) => setForm({ ...form, rnc: e.target.value })} />
+          </div>
+          <div>
+            <label style={s.label}>Teléfono</label>
+            <input
+              style={s.input}
+              value={form.telefono ?? ""}
+              onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={s.label}>Correo</label>
+            <input
+              style={s.input}
+              value={form.correo ?? ""}
+              onChange={(e) => setForm({ ...form, correo: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={s.label}>Dirección</label>
+            <input
+              style={s.input}
+              value={form.direccion ?? ""}
+              onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={s.label}>Municipio</label>
+            <input
+              style={s.input}
+              value={form.municipio ?? ""}
+              onChange={(e) => setForm({ ...form, municipio: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={s.label}>Provincia</label>
+            <input
+              style={s.input}
+              value={form.provincia ?? ""}
+              onChange={(e) => setForm({ ...form, provincia: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ ...s.tarjeta, marginTop: 16 }}>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <Printer size={18} /> Impresión y montos
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={s.label}>Ancho de impresora</label>
+            <select
+              style={s.input}
+              value={form.ancho_impresora_default}
+              onChange={(e) => setForm({ ...form, ancho_impresora_default: Number(e.target.value) as 58 | 80 })}
+            >
+              <option value={58}>58 mm</option>
+              <option value={80}>80 mm</option>
+            </select>
+          </div>
+        </div>
+        <label style={{ ...s.label, display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+          <input
+            type="checkbox"
+            checked={form.redondeo_centavo ?? true}
+            onChange={(e) => setForm({ ...form, redondeo_centavo: e.target.checked })}
+          />
+          Redondear el cambio al centavo más cercano
+        </label>
+        <label style={{ ...s.label, display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={form.inventario_activo ?? false}
+            onChange={(e) => setForm({ ...form, inventario_activo: e.target.checked })}
+          />
+          Inventario activo (en el MVP se recomienda apagado)
+        </label>
+
+        {errores.length > 0 && (
+          <div role="alert" style={s.errorBox}>
+            {errores.join(" ")}
+          </div>
+        )}
+        {guardado && (
+          <div style={{ ...s.errorBox, background: c.verdeFondo, borderColor: c.verde, color: c.verde }}>
+            Configuración guardada.
+          </div>
+        )}
+
+        <div style={s.formFooter}>
+          <button style={s.boton} onClick={guardar}>
+            Guardar configuración (Ctrl+S)
+          </button>
+        </div>
+      </div>
+
+      <SeccionImpresoraTermica />
+
+      <SeccionFacturacionElectronica />
+
+      <SeccionSecuenciasNcf />
+
+      <div style={{ ...s.tarjeta, marginTop: 16 }}>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <Save size={18} /> Respaldo y exportación
+        </h3>
+        <p style={{ color: c.gris, fontSize: 13 }}>
+          Descarga toda la información del negocio (productos, ventas, compras, etc.) en un archivo JSON.
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={s.botonSecundario} disabled={exportando} onClick={exportarRespaldo}>
+            {exportando ? "Exportando…" : "Exportar respaldo completo"}
+          </button>
+          <button style={s.botonSecundario} disabled={importando} onClick={() => inputImportarRef.current?.click()}>
+            {importando ? "Importando…" : "Importar respaldo"}
+          </button>
+          <input
+            ref={inputImportarRef}
+            type="file"
+            accept="application/json"
+            hidden
+            onChange={(e) => {
+              const archivo = e.target.files?.[0];
+              if (archivo) void importarRespaldo(archivo);
+            }}
+          />
+        </div>
+        {importado !== null && (
+          <p style={{ color: c.verde, fontSize: 13, marginBottom: 0 }}>
+            Respaldo importado: {importado} filas restauradas.
+          </p>
+        )}
+        {erroresImportar.map((e) => (
+          <p key={e} style={{ color: c.rojo, fontSize: 13, marginBottom: 0 }}>
+            {e}
+          </p>
+        ))}
+      </div>
+
+      <SeccionBitacora />
+
+      <SeccionCuentaGoogle />
+
+      <SeccionSetupTransferencias />
+    </div>
+  );
+}

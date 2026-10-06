@@ -1,0 +1,32 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# SQLite local (datos de desarrollo)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Tauri / Rust
+packages/desktop/src-tauri/target/
+
+# Entorno
+.env
+.env.local
+.DS_Store
+
+# Datos reales del negocio (no publicar)
+productDatabase/
+*.xlsx
+*.xls
+
+# Salida local de herramientas de automatización de browser (screenshots, sesiones)
+.playwright-mcp/
+
+# Certificado digital e-CF (DGII): nunca versionar
+*.p12
+*.pfx
+
+docs/dgii/pdf/

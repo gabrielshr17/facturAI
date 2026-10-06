@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+**/*.p12
+**/*.pfx
+**/target
+packages/desktop
+packages/web
+packages/ui
+productDatabase
+.git
