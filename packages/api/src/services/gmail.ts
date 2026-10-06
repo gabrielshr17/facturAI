@@ -2,10 +2,13 @@ import { google } from "googleapis";
 import { cargarConfig } from "../config.js";
 
 /**
- * Cliente de solo lectura (+ marcar como leído) contra la casilla Gmail dedicada que recibe, por
- * reenvío automático configurado a mano por el usuario, las notificaciones bancarias de ambas
- * cuentas reales del negocio (§ Últimas transferencias recibidas, plan.md). No se integra la API
- * de Gmail Y la de Outlook por separado — todo llega reenviado a una sola casilla Gmail.
+ * Cliente de solo lectura (+ marcar como leído) contra el Gmail configurado en `GMAIL_OAUTH_*`
+ * (§ Últimas transferencias recibidas, plan.md). Puede ser una casilla 100% dedicada o el Gmail
+ * personal real del usuario con un alias "+" como destino del reenvío desde Outlook — por eso
+ * `listarCorreosNoLeidos` SIEMPRE filtra por `gmailEtiquetaTransferencias` (default "Transferencias")
+ * además de `is:unread`: si apuntara a una cuenta personal y solo mirara "no leído", procesaría (y
+ * marcaría como leído) cualquier correo personal no relacionado. El usuario crea un filtro en Gmail
+ * que le ponga esa etiqueta a lo que llega de/para el banco (ver README.md).
  */
 export interface CorreoTransferencia {
   /** id del mensaje en Gmail, usado también como clave de idempotencia al marcarlo procesado. */
@@ -60,13 +63,18 @@ function extraerTipo(parte: ParteMensaje | undefined, tipo: string): string {
 }
 
 /**
- * Mensajes no leídos de la casilla dedicada. "No leído" hace de marca de "no procesado todavía"
- * — no hace falta llevar un cursor/estado aparte: `marcarComoProcesado` los quita de esta lista
- * en cuanto se guardan con éxito en `notificacion_transferencia`.
+ * Mensajes no leídos con la etiqueta de transferencias. "No leído" hace de marca de "no procesado
+ * todavía" — no hace falta llevar un cursor/estado aparte: `marcarComoProcesado` los quita de esta
+ * lista en cuanto se guardan con éxito en `notificacion_transferencia`.
  */
 export async function listarCorreosNoLeidos(): Promise<CorreoTransferencia[]> {
   const gmail = obtenerCliente();
-  const lista = await gmail.users.messages.list({ userId: "me", q: "is:unread", maxResults: 20 });
+  const etiqueta = cargarConfig().gmailEtiquetaTransferencias;
+  const lista = await gmail.users.messages.list({
+    userId: "me",
+    q: `is:unread label:"${etiqueta}"`,
+    maxResults: 20,
+  });
   const resultados: CorreoTransferencia[] = [];
   for (const referencia of lista.data.messages ?? []) {
     if (!referencia.id) continue;

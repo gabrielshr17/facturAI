@@ -50,16 +50,27 @@ del chatbot de comprobantes) que extraiga monto/fecha/banco/referencia.
 
 Pasos de configuración manual (una sola vez):
 
-1. Crear una casilla Gmail nueva y gratis, dedicada solo a esto.
-2. En Gmail y Outlook (las cuentas reales del negocio), crear una regla de
-   reenvío automático nativa hacia esa casilla dedicada — nunca guardar la
-   contraseña del banco ni de esas cuentas en ningún lado.
-3. En Google Cloud Console, crear un proyecto, habilitar la Gmail API, y
-   crear credenciales OAuth 2.0 (tipo "Desktop app") con el scope
-   `https://www.googleapis.com/auth/gmail.modify` (lectura + quitar la
-   etiqueta "no leído").
-4. Generar un refresh token para la casilla dedicada (flujo OAuth estándar,
-   una sola vez) y copiar client id/secret/refresh token a
+1. Elegir la casilla Gmail que va a recibir esto: idealmente una nueva y
+   dedicada solo a esto, pero si Google bloquea la verificación por
+   teléfono al crearla, sirve igual un **alias "+"** del Gmail personal real
+   (ej. `tunombre+transferencias@gmail.com`) — llega a la misma bandeja, sin
+   cuenta nueva. Con alias, el paso 2b de abajo es obligatorio (si no, el
+   sondeo tocaría cualquier correo personal no leído).
+2. Reenvío hacia esa dirección:
+   a. **Outlook** (cuenta real del negocio): Configuración → Correo → Reglas
+      → nueva regla "Si es de [banco] → reenviar a [la dirección del paso 1]".
+   b. **Gmail** (si el banco también manda notificaciones directo a un Gmail
+      real, o si usas un alias del paso 1): crear un **filtro** ("De" =
+      correo del banco, o "Para" = el alias) → acción **Aplicar la etiqueta**
+      `Transferencias` (mismo nombre que `GMAIL_LABEL_TRANSFERENCIAS`, default
+      "Transferencias"). Nunca guardar la contraseña del banco ni de esas
+      cuentas en ningún lado.
+3. En Google Cloud Console (con la cuenta del paso 1), crear un proyecto,
+   habilitar la Gmail API, y crear credenciales OAuth 2.0 (tipo "Desktop app")
+   con el scope `https://www.googleapis.com/auth/gmail.modify` (lectura +
+   quitar la etiqueta "no leído").
+4. Generar un refresh token (flujo OAuth estándar, una sola vez, con la
+   cuenta del paso 1) y copiar client id/secret/refresh token a
    `GMAIL_OAUTH_CLIENT_ID`/`GMAIL_OAUTH_CLIENT_SECRET`/`GMAIL_OAUTH_REFRESH_TOKEN`
    en `.env`.
 5. Sacar una API key de Gemini en [Google AI Studio](https://aistudio.google.com/apikey)
