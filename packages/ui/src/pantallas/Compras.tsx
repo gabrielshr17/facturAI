@@ -16,6 +16,7 @@ import { useRepos } from "../data/contexto.js";
 import { s, c, money } from "../estilos.js";
 import { analizarComprobante, type DatosExtraidosComprobante } from "../data/chatbotCliente.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
+import { useEsAngosto, useEsMovil } from "../hooks/useBreakpoint.js";
 import { filtrarNumero } from "../utilidades/numero.js";
 import { mensajeError } from "../utilidades/errores.js";
 import { ComprobantesProveedores, type EcfParaCompra } from "../componentes/ComprobantesProveedores.js";
@@ -59,6 +60,8 @@ export function Compras() {
     api,
     modoFiscal,
   } = useRepos();
+  const esAngosto = useEsAngosto();
+  const esMovil = useEsMovil();
   const [ecfOrigenId, setEcfOrigenId] = useState<string | null>(null);
   const [recargarRecibidos, setRecargarRecibidos] = useState(0);
 
@@ -369,7 +372,7 @@ export function Compras() {
           <Truck size={18} /> Nueva compra
         </h3>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           <div>
             <label style={s.label}>Fecha</label>
             <input style={s.input} type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
@@ -472,10 +475,18 @@ export function Compras() {
           Tiene comprobante fiscal
         </label>
 
-        <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: esMovil ? "wrap" : "nowrap",
+          }}
+        >
           <input
             ref={busquedaProductoRef}
-            style={s.input}
+            style={esMovil ? { ...s.input, flex: "1 1 100%", width: "auto" } : s.input}
             placeholder="Buscar producto para agregar a la compra… (F10)"
             value={busquedaProducto}
             onChange={(e) => void buscarProducto(e.target.value)}
@@ -732,7 +743,13 @@ export function Compras() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: seleccionada ? "1fr 340px" : "1fr", gap: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: seleccionada && !esAngosto ? "minmax(0, 1fr) 340px" : "minmax(0, 1fr)",
+          gap: 16,
+        }}
+      >
         <div style={s.tarjeta}>
           <table style={s.tabla}>
             <thead>
