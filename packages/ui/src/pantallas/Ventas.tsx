@@ -41,7 +41,7 @@ import { ChatBot } from "../componentes/ChatBot.js";
 import { EtiquetaAtajo } from "../componentes/EtiquetaAtajo.js";
 import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
-import { useEsAngosto, useEsTactil, sinAtajo } from "../hooks/useBreakpoint.js";
+import { useEsAngosto, useEsMovil, useEsTactil, sinAtajo } from "../hooks/useBreakpoint.js";
 import { filtrarNumero } from "../utilidades/numero.js";
 import { moverIndiceFila, moverAccionFila } from "../utilidades/navegacionFilas.js";
 import { mensajeError, mensajesError } from "../utilidades/errores.js";
@@ -92,6 +92,7 @@ export function Ventas() {
   // "Angosto" es específicamente "toca apilar", no "no es escritorio": en el tramo `medio` la barra
   // lateral ya se encogió pero Ventas sigue en dos columnas (§ useBreakpoint).
   const esAngosto = useEsAngosto();
+  const esMovil = useEsMovil();
   // Táctil se decide por el tipo de puntero, no por el ancho: una tablet es ancha pero se maneja
   // con el dedo, y las pistas de atajo/el autoFocus sobran igual que en un teléfono.
   const esTactil = useEsTactil();
@@ -1271,10 +1272,15 @@ export function Ventas() {
                   todo la tabla de líneas del ticket) en vez de empujarlo hacia abajo cada vez que
                   aparecen resultados — la lista del ticket no debe moverse mientras se busca. */}
               <div style={{ position: "relative" }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: esMovil ? "wrap" : "nowrap" }}>
                   <input
                     ref={busquedaRef}
-                    style={{ ...s.input, fontSize: 15, padding: "11px 14px" }}
+                    style={{
+                      ...s.input,
+                      fontSize: 15,
+                      padding: "11px 14px",
+                      ...(esMovil ? { flex: "1 1 100%", width: "auto" } : {}),
+                    }}
                     placeholder={esTactil ? "Buscar producto…" : "Escanear código de barra o buscar producto… (F10)"}
                     value={busqueda}
                     // En cualquier pantalla táctil (teléfono o tablet) el autoFocus abre el teclado
@@ -1696,9 +1702,17 @@ export function Ventas() {
                     {lineas.length === 0 && (
                       <tr>
                         <td style={{ ...s.filaVacia, padding: "48px 16px" }} colSpan={6}>
-                          <ShoppingCart size={30} aria-hidden="true" style={{ opacity: 0.35, marginBottom: 10 }} />
-                          <div style={{ fontWeight: 600, color: c.texto, marginBottom: 4 }}>Ticket vacío</div>
-                          <div style={{ fontSize: 13 }}>Escanea un código de barra o busca un producto arriba.</div>
+                          <div
+                            style={
+                              esMovil
+                                ? { position: "sticky", left: 0, boxSizing: "border-box", width: 300, maxWidth: "100%" }
+                                : undefined
+                            }
+                          >
+                            <ShoppingCart size={30} aria-hidden="true" style={{ opacity: 0.35, marginBottom: 10 }} />
+                            <div style={{ fontWeight: 600, color: c.texto, marginBottom: 4 }}>Ticket vacío</div>
+                            <div style={{ fontSize: 13 }}>Escanea un código de barra o busca un producto arriba.</div>
+                          </div>
                         </td>
                       </tr>
                     )}

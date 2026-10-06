@@ -22,7 +22,7 @@ import { ModalDevolucion } from "../componentes/ModalDevolucion.js";
 import { ModalNotaDebito } from "../componentes/ModalNotaDebito.js";
 import { useAlertas } from "../contexto/Alertas.js";
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
-import { useEsAngosto } from "../hooks/useBreakpoint.js";
+import { useEsAngosto, useEsMovil } from "../hooks/useBreakpoint.js";
 import { ConsultaCotizaciones } from "./ConsultaCotizaciones.js";
 import { mensajeError } from "../utilidades/errores.js";
 
@@ -66,6 +66,7 @@ function FacturasCobradas() {
   }
   const { elegir } = useAlertas();
   const esAngosto = useEsAngosto();
+  const esMovil = useEsMovil();
 
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
@@ -270,15 +271,19 @@ function FacturasCobradas() {
             <table style={s.tabla}>
               <thead>
                 <tr>
-                  <th scope="col" style={s.th}>
-                    #
-                  </th>
+                  {!esMovil && (
+                    <th scope="col" style={s.th}>
+                      #
+                    </th>
+                  )}
                   <th scope="col" style={s.th}>
                     Fecha
                   </th>
-                  <th scope="col" style={s.th}>
-                    Cliente
-                  </th>
+                  {!esMovil && (
+                    <th scope="col" style={s.th}>
+                      Cliente
+                    </th>
+                  )}
                   <th scope="col" style={s.th}>
                     Tipo
                   </th>
@@ -291,7 +296,7 @@ function FacturasCobradas() {
               <tbody>
                 {!cargando && filasFiltradas.length === 0 && (
                   <tr>
-                    <td style={s.filaVacia} colSpan={6}>
+                    <td style={s.filaVacia} colSpan={esMovil ? 4 : 6}>
                       No hay facturas que coincidan con el filtro.
                     </td>
                   </tr>
@@ -302,20 +307,33 @@ function FacturasCobradas() {
                     onClick={() => setSeleccionadaId(f.factura.id)}
                     style={{ cursor: "pointer", background: f.factura.id === seleccionadaId ? c.azulClaro : undefined }}
                   >
-                    <td style={s.td}>{f.factura.numero_interno}</td>
+                    {!esMovil && <td style={s.td}>{f.factura.numero_interno}</td>}
                     <td style={s.td}>
                       {new Date(f.factura.fecha_hora).toLocaleString("es-DO", {
                         dateStyle: "short",
                         timeStyle: "short",
                       })}
+                      {esMovil && (
+                        <div style={{ color: c.gris, fontSize: 12, marginTop: 2 }}>
+                          #{f.factura.numero_interno} ·{" "}
+                          {f.cliente ? `${f.cliente.nombre} ${f.cliente.apellidos ?? ""}` : "—"}
+                        </div>
+                      )}
                     </td>
-                    <td style={s.td}>{f.cliente ? `${f.cliente.nombre} ${f.cliente.apellidos ?? ""}` : "—"}</td>
+                    {!esMovil && (
+                      <td style={s.td}>{f.cliente ? `${f.cliente.nombre} ${f.cliente.apellidos ?? ""}` : "—"}</td>
+                    )}
                     <td style={s.td}>
                       <span style={s.badge}>
                         {f.factura.tipo === "fiscal" && f.comprobante
-                          ? `${ETIQUETA_TIPO_ECF[f.comprobante.tipo_ecf]} · ${f.comprobante.ncf}`
+                          ? esMovil
+                            ? ETIQUETA_TIPO_ECF[f.comprobante.tipo_ecf]
+                            : `${ETIQUETA_TIPO_ECF[f.comprobante.tipo_ecf]} · ${f.comprobante.ncf}`
                           : "Normal"}
                       </span>
+                      {esMovil && f.factura.tipo === "fiscal" && f.comprobante && (
+                        <div style={{ color: c.gris, fontSize: 11, marginTop: 4 }}>{f.comprobante.ncf}</div>
+                      )}
                     </td>
                     <td style={s.tdDerecha}>RD$ {money(f.factura.total)}</td>
                     <td style={s.td}>
@@ -446,14 +464,23 @@ function FacturasCobradas() {
             </div>
 
             <div style={s.formFooter}>
-              <button style={{ ...s.boton, flex: 1 }} onClick={() => void reimprimir(seleccionada)}>
+              <button
+                style={{ ...s.boton, flex: "1 1 auto", whiteSpace: "nowrap" }}
+                onClick={() => void reimprimir(seleccionada)}
+              >
                 Reimprimir (Ctrl+P)
               </button>
-              <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => setMostrarDevolucion(true)}>
+              <button
+                style={{ ...s.botonSecundario, flex: "1 1 auto", whiteSpace: "nowrap" }}
+                onClick={() => setMostrarDevolucion(true)}
+              >
                 Devolver
               </button>
               {admiteNotaDebito(seleccionada.comprobante) && modoFiscal === "dgii" && (
-                <button style={{ ...s.botonSecundario, flex: 1 }} onClick={() => setMostrarNotaDebito(true)}>
+                <button
+                  style={{ ...s.botonSecundario, flex: "1 1 auto", whiteSpace: "nowrap" }}
+                  onClick={() => setMostrarNotaDebito(true)}
+                >
                   Nota de débito
                 </button>
               )}

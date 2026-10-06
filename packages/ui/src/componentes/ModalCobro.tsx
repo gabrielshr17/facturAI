@@ -245,9 +245,9 @@ export function ModalCobro({
           Factura con comprobante fiscal (NCF)
         </label>
         {emitirFiscal && (
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
             <select
-              style={{ ...s.input, flex: 1 }}
+              style={{ ...s.input, flex: "1 1 180px", width: "auto", minWidth: 0 }}
               value={tipoEcf}
               onChange={(e) => setTipoEcf(e.target.value as TipoEcf)}
             >
@@ -258,7 +258,7 @@ export function ModalCobro({
               ))}
             </select>
             <select
-              style={{ ...s.input, width: 90 }}
+              style={{ ...s.input, width: 90, flex: "0 0 auto" }}
               value={receptorTipo}
               onChange={(e) => setReceptorTipo(e.target.value as "rnc" | "cedula")}
             >
@@ -266,7 +266,7 @@ export function ModalCobro({
               <option value="cedula">Cédula</option>
             </select>
             <input
-              style={{ ...s.input, flex: 1 }}
+              style={{ ...s.input, flex: "1 1 120px", width: "auto", minWidth: 0 }}
               placeholder={compradorObligatorio ? "RNC del comprador (obligatorio)" : "RNC/cédula (opcional)"}
               value={receptorNumero}
               onChange={(e) => setReceptorNumero(e.target.value)}

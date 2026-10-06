@@ -242,9 +242,14 @@ tbody tr:hover {
   textarea {
     font-size: 16px !important;
   }
+}
 
-  /* Objetivo táctil mínimo recomendado. Los botones de la app rondan los 34px de alto. */
-  button {
+/* Objetivo táctil mínimo recomendado. Los botones y campos de la app rondan los 34-38px de alto.
+   También en ventanas angostas de escritorio, donde se arma la misma maqueta de teléfono. */
+@media (pointer: coarse), (max-width: 699px) {
+  button,
+  select,
+  input:not([type="checkbox"]):not([type="radio"]) {
     min-height: 44px;
   }
 
@@ -271,6 +276,20 @@ tbody tr:hover {
   overflow-x: auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* En teléfono se aprieta el aire horizontal de las celdas para que quepan más columnas sin desplazar. */
+@media (max-width: 699px) {
+  .sfr-tabla-scroll th,
+  .sfr-tabla-scroll td {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .sfr-tabla-scroll td button {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
 }
 
 /* Red de seguridad para las tablas que todavía no tienen su contenedor `.sfr-tabla-scroll`

@@ -73,7 +73,7 @@ export function SeccionSecuenciasNcf() {
             marginTop: 12,
           }}
         >
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
             <div>
               <label style={s.label}>Tipo</label>
               <select
@@ -111,7 +111,7 @@ export function SeccionSecuenciasNcf() {
             <div>
               <label style={s.label}>Vencimiento</label>
               <input
-                style={s.input}
+                style={{ ...s.input, minWidth: 0 }}
                 type="date"
                 value={form.vencimiento}
                 onChange={(e) => setForm({ ...form, vencimiento: e.target.value })}
