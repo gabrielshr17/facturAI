@@ -7,6 +7,9 @@ import { crearServicioEntrega, type ServicioEntrega } from "./servicio-entrega.j
 import { crearClienteContribuyente } from "./entrega.js";
 import { crearServicioEmision, type ServicioEmision } from "./servicio-emision.js";
 
+export type CodigoInactivo =
+  "falta-rnc" | "falta-certificado" | "certificado-ilegible" | "certificado-vencido" | "sn-no-coincide";
+
 export type ModuloFiscal =
   | {
       disponible: true;
@@ -18,18 +21,24 @@ export type ModuloFiscal =
       dgii: ClienteDgii;
       entrega: ServicioEntrega;
     }
-  | { disponible: false; ambiente: AmbienteDgii; motivo: string };
+  | { disponible: false; ambiente: AmbienteDgii; codigo: CodigoInactivo; motivo: string };
 
 export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
   const ambiente = config.dgiiAmbiente;
   const rncEmisor = config.dgiiRncEmisor;
   if (!rncEmisor) {
-    return { disponible: false, ambiente, motivo: "Falta configurar DGII_RNC_EMISOR (RNC de la empresa)." };
+    return {
+      disponible: false,
+      ambiente,
+      codigo: "falta-rnc",
+      motivo: "Falta configurar DGII_RNC_EMISOR (RNC de la empresa).",
+    };
   }
   if ((!config.dgiiP12Ruta && !config.dgiiP12Base64) || !config.dgiiP12Clave) {
     return {
       disponible: false,
       ambiente,
+      codigo: "falta-certificado",
       motivo: "Falta configurar DGII_P12_PATH (o DGII_P12_BASE64) y DGII_P12_PASSWORD.",
     };
   }
@@ -42,6 +51,7 @@ export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
       return {
         disponible: false,
         ambiente,
+        codigo: "certificado-vencido",
         motivo: `El certificado digital venció el ${certificado.venceEl.toISOString()}.`,
       };
     }
@@ -50,6 +60,7 @@ export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
       return {
         disponible: false,
         ambiente,
+        codigo: "sn-no-coincide",
         motivo: `El campo SN del certificado (${certificado.serialSujeto ?? "vacío"}) no corresponde al RNC ${rncEmisor}.`,
       };
     }
@@ -72,6 +83,7 @@ export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
     return {
       disponible: false,
       ambiente,
+      codigo: "certificado-ilegible",
       motivo: `No se pudo cargar el certificado digital: ${error instanceof Error ? error.message : String(error)}`,
     };
   }

@@ -73,7 +73,12 @@ describe("rutas /fiscal", () => {
 
   it("sin módulo configurado responde 503 con el motivo", async () => {
     const res = await (
-      await app({ disponible: false, ambiente: "testecf", motivo: "Falta el certificado." })
+      await app({
+        disponible: false,
+        ambiente: "testecf",
+        codigo: "falta-certificado",
+        motivo: "Falta el certificado.",
+      })
     ).inject({ method: "POST", url: "/fiscal/comprobantes", payload: consumoPrueba() });
     expect(res.statusCode).toBe(503);
     expect(res.json().error).toContain("Falta el certificado.");
