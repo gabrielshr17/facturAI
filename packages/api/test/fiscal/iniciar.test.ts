@@ -27,7 +27,10 @@ describe("iniciarModuloFiscal", () => {
   it("no queda disponible si el SN del certificado es de otro RNC", () => {
     const modulo = iniciarModuloFiscal(configCon("RNC101010101"));
     expect(modulo.disponible).toBe(false);
-    if (!modulo.disponible) expect(modulo.motivo).toMatch(/SN/);
+    if (!modulo.disponible) {
+      expect(modulo.motivo).toMatch(/SN/);
+      expect(modulo.codigo).toBe("sn-no-coincide");
+    }
   });
 
   it("no queda disponible si el certificado no trae SN", () => {
@@ -38,7 +41,16 @@ describe("iniciarModuloFiscal", () => {
   it("exige DGII_RNC_EMISOR", () => {
     const modulo = iniciarModuloFiscal(configCon("RNC131880738", { DGII_RNC_EMISOR: "" }));
     expect(modulo.disponible).toBe(false);
-    if (!modulo.disponible) expect(modulo.motivo).toMatch(/DGII_RNC_EMISOR/);
+    if (!modulo.disponible) {
+      expect(modulo.motivo).toMatch(/DGII_RNC_EMISOR/);
+      expect(modulo.codigo).toBe("falta-rnc");
+    }
+  });
+
+  it("distingue la contraseña incorrecta del certificado", () => {
+    const modulo = iniciarModuloFiscal(configCon("RNC131880738", { DGII_P12_PASSWORD: "otra-clave" }));
+    expect(modulo.disponible).toBe(false);
+    if (!modulo.disponible) expect(modulo.codigo).toBe("certificado-ilegible");
   });
 
   it("acepta el certificado en base64 (DGII_P12_BASE64) para hostings sin archivos", () => {
@@ -53,6 +65,8 @@ describe("iniciarModuloFiscal", () => {
   });
 
   it("sin certificado no queda disponible", () => {
-    expect(iniciarModuloFiscal(cargarConfig({})).disponible).toBe(false);
+    const modulo = iniciarModuloFiscal(cargarConfig({ DGII_RNC_EMISOR: "131880738" }));
+    expect(modulo.disponible).toBe(false);
+    if (!modulo.disponible) expect(modulo.codigo).toBe("falta-certificado");
   });
 });
