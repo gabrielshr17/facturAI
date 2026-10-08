@@ -6,6 +6,7 @@ import { iniciarModuloFiscal } from "../src/fiscal/iniciar.js";
 import { firmarXml } from "../src/fiscal/firma.js";
 import { certificadoEfimero } from "../src/fiscal/certificacion/certificado-efimero.js";
 import {
+  ordenEnvioSetPruebas,
   procesarFilaSetPruebas,
   type DgiiSetPruebas,
   type ResultadoFilaSetPruebas,
@@ -91,7 +92,7 @@ async function main(): Promise<void> {
 
   mkdirSync(salida, { recursive: true });
   const resultados: (ResultadoFilaSetPruebas & { hoja: string })[] = [];
-  for (const { hoja, numero, fila } of await leerFilas(archivo)) {
+  for (const { hoja, numero, fila } of ordenEnvioSetPruebas(await leerFilas(archivo), (item) => item.fila)) {
     const r = await procesarFilaSetPruebas(fila, numero, { firmar, dgii, enviar });
     resultados.push({ ...r, hoja });
     if (r.nombreArchivo && r.xmlFirmado) writeFileSync(join(salida, r.nombreArchivo), r.xmlFirmado, "utf8");

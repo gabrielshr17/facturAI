@@ -36,22 +36,30 @@ function duenosDelNombreSimple(raiz: NodoEsquema): Map<string, NodoEsquema> {
   return duenos;
 }
 
+const MARCADOR_VACIO = "#e";
+
 export function generarXmlDesdeFila(raiz: NodoEsquema, fila: FilaSetPruebas): XmlGenerado {
   const duenos = duenosDelNombreSimple(raiz);
   const usadas = new Set<string>();
-  const valores = new Map(
-    Object.entries(fila)
-      .map(([k, v]) => [k.trim(), String(v ?? "").trim()] as const)
-      .filter(([, v]) => v !== ""),
-  );
+  const originales = new Map<string, string>();
+  const valores = new Map<string, string>();
+  for (const [columna, bruto] of Object.entries(fila)) {
+    const valor = String(bruto ?? "").trim();
+    if (valor === "" || valor.toLowerCase() === MARCADOR_VACIO) continue;
+    const clave = columna.trim().toLowerCase();
+    valores.set(clave, valor);
+    originales.set(clave, columna.trim());
+  }
 
   function valorHoja(hoja: NodoEsquema, padre: string, indices: number[]): string | null {
     const candidatos = [`${padre}.${hoja.nombre}${sufijo(indices)}`];
     if (duenos.get(hoja.nombre) === hoja) candidatos.push(`${hoja.nombre}${sufijo(indices)}`);
+    if (padre === "DescuentoORecargo" && hoja.nombre === "NumeroLinea")
+      candidatos.push(`NumeroLineaDoR${sufijo(indices)}`);
     for (const clave of candidatos) {
-      const v = valores.get(clave);
+      const v = valores.get(clave.toLowerCase());
       if (v !== undefined) {
-        usadas.add(clave);
+        usadas.add(clave.toLowerCase());
         return v;
       }
     }
@@ -91,7 +99,10 @@ export function generarXmlDesdeFila(raiz: NodoEsquema, fila: FilaSetPruebas): Xm
   }
 
   const cuerpo = `<?xml version="1.0" encoding="utf-8"?><${raiz.nombre}>${interiorDe(raiz, [])}</${raiz.nombre}>`;
-  return { xml: cuerpo, columnasSinUsar: [...valores.keys()].filter((k) => !usadas.has(k)) };
+  return {
+    xml: cuerpo,
+    columnasSinUsar: [...valores.keys()].filter((k) => !usadas.has(k)).map((k) => originales.get(k) ?? k),
+  };
 }
 
 type Elemento = ReturnType<ReturnType<DOMParser["parseFromString"]>["createElement"]>;

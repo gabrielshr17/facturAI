@@ -40,8 +40,46 @@ export interface ResultadoFilaSetPruebas {
   error?: string;
 }
 
+const CODIGO_SEGURIDAD_MARCADOR = "AAAAAA";
+
+function columna(fila: FilaSetPruebas, nombre: string): string | undefined {
+  const buscado = nombre.toLowerCase();
+  const clave = Object.keys(fila).find((k) => k.trim().toLowerCase() === buscado);
+  return clave === undefined ? undefined : fila[clave];
+}
+
+function esFilaResumen(fila: FilaSetPruebas): boolean {
+  return columna(fila, "CodigoSeguridadeCF") !== undefined;
+}
+
+const ORDEN_PRIMER_GRUPO = ["31", "32", "41", "43", "44", "45", "46", "47"];
+const ORDEN_SEGUNDO_GRUPO = ["33", "34"];
+
+function rangoEnvio(fila: FilaSetPruebas): number {
+  if (esFilaResumen(fila)) return 500;
+  const tipo = columna(fila, "TipoeCF")?.trim() ?? "";
+  if (tipo === "32" && Number(columna(fila, "MontoTotal")) < UMBRAL_RESUMEN_CONSUMO) return 300;
+  const primero = ORDEN_PRIMER_GRUPO.indexOf(tipo);
+  if (primero >= 0) return 100 + primero;
+  const segundo = ORDEN_SEGUNDO_GRUPO.indexOf(tipo);
+  if (segundo >= 0) return 200 + segundo;
+  return 400;
+}
+
+/**
+ * Orden en que el portal de certificación exige remitir el set: primero 31, 32 de RD$250,000 o más, 41, 43, 44,
+ * 45, 46 y 47; luego las notas 33 y 34; al final los consumos menores (que viajan como resumen RFCE).
+ */
+export function ordenEnvioSetPruebas<T>(items: readonly T[], filaDe: (item: T) => FilaSetPruebas): T[] {
+  return items
+    .map((item, indice) => ({ item, indice, rango: rangoEnvio(filaDe(item)) }))
+    .sort((a, b) => a.rango - b.rango || a.indice - b.indice)
+    .map(({ item }) => item);
+}
+
 function esquemaDeFila(fila: FilaSetPruebas): NombreEsquema | null {
-  const tipo = fila.TipoeCF?.trim();
+  const tipo = columna(fila, "TipoeCF")?.trim();
+  if (tipo === "32" && esFilaResumen(fila)) return "rfce-32";
   if (tipo && TIPOS_ECF.has(tipo)) return `ecf-${tipo}` as NombreEsquema;
   if (fila.FechaHoraAprobacionComercial !== undefined || (fila.Estado !== undefined && fila.RNCComprador && !tipo)) {
     return "acecf";
@@ -62,7 +100,7 @@ export async function procesarFilaSetPruebas(
 ): Promise<ResultadoFilaSetPruebas> {
   const reloj = deps.reloj ?? (() => new Date());
   const esquema = esquemaDeFila(filaOriginal);
-  const base = { fila: numero, esquema, encf: filaOriginal.eNCF?.trim() || null, nombreArchivo: null };
+  const base = { fila: numero, esquema, encf: columna(filaOriginal, "eNCF")?.trim() || null, nombreArchivo: null };
   if (!esquema) {
     return {
       ...base,
@@ -76,15 +114,17 @@ export async function procesarFilaSetPruebas(
   const fila: FilaSetPruebas = { ...filaOriginal };
   const momento = fechaHoraDgii(reloj());
   if (esquema === "acecf") fila.FechaHoraAprobacionComercial ||= momento;
+  else if (esquema === "rfce-32") fila.CodigoSeguridadeCF = CODIGO_SEGURIDAD_MARCADOR;
   else fila.FechaHoraFirma ||= momento;
 
   const { xml, columnasSinUsar } = generarXmlDesdeFila(cargarEsquema(esquema), fila);
   const xmlFirmado = deps.firmar(xml);
   const erroresXsd = await erroresContraXsd(xmlFirmado, esquema);
-  const rncArchivo = esquema === "acecf" ? fila.RNCComprador : fila.RNCEmisor;
-  const nombreArchivo = `${rncArchivo ?? ""}${fila.eNCF ?? ""}.xml`;
+  const rncArchivo = esquema === "acecf" ? columna(fila, "RNCComprador") : columna(fila, "RNCEmisor");
+  const sufijoArchivo = esquema === "rfce-32" ? "-resumen" : "";
+  const nombreArchivo = `${rncArchivo ?? ""}${columna(fila, "eNCF") ?? ""}${sufijoArchivo}.xml`;
   const resultado: ResultadoFilaSetPruebas = { ...base, nombreArchivo, xmlFirmado, erroresXsd, columnasSinUsar };
-  if (!deps.enviar || erroresXsd.length > 0) return resultado;
+  if (!deps.enviar || erroresXsd.length > 0 || esquema === "rfce-32") return resultado;
 
   try {
     if (esquema === "acecf") {

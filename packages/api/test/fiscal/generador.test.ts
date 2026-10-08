@@ -70,6 +70,45 @@ describe("generador fila → XML (set de pruebas DGII)", () => {
     expect(await erroresContraXsd(firmado(xml), "ecf-31")).toEqual([]);
   });
 
+  it("trata el marcador #e del set de pruebas como celda vacía", () => {
+    const fila: Record<string, string> = {
+      TipoeCF: "31",
+      Version: "1.0",
+      IndicadorNotaCredito: "#e",
+      FechaLimitePago: "#E",
+      TerminoPago: " #e ",
+    };
+
+    const { xml, columnasSinUsar } = generarXmlDesdeFila(cargarEsquema("ecf-31"), fila);
+
+    expect(xml).not.toContain("#e");
+    expect(xml).not.toContain("#E");
+    expect(xml).not.toContain("IndicadorNotaCredito");
+    expect(columnasSinUsar).toEqual([]);
+  });
+
+  it("empareja las columnas con el XSD sin distinguir mayúsculas (ENCF del set de pruebas → eNCF)", () => {
+    const fila: Record<string, string> = { TipoeCF: "31", Version: "1.0", ENCF: "E310000000001" };
+
+    const { xml, columnasSinUsar } = generarXmlDesdeFila(cargarEsquema("ecf-31"), fila);
+
+    expect(xml).toContain("<eNCF>E310000000001</eNCF>");
+    expect(columnasSinUsar).toEqual([]);
+  });
+
+  it("acepta NumeroLineaDoR como el número de línea de un descuento o recargo", () => {
+    const fila: Record<string, string> = {
+      TipoeCF: "31",
+      "NumeroLineaDoR[1]": "1",
+      "TipoAjuste[1]": "D",
+    };
+
+    const { xml, columnasSinUsar } = generarXmlDesdeFila(cargarEsquema("ecf-31"), fila);
+
+    expect(xml).toContain("<DescuentoORecargo><NumeroLinea>1</NumeroLinea><TipoAjuste>D</TipoAjuste>");
+    expect(columnasSinUsar).toEqual([]);
+  });
+
   it("distingue NumeroLinea de ítems y de descuentos por el nombre del padre", () => {
     const { xml } = generarXmlDesdeFila(cargarEsquema("ecf-32"), {
       "NumeroLinea[1]": "1",
