@@ -1,5 +1,6 @@
 import type { AlmacenRecepcion, FilaEcfRecibido } from "./recepcion/almacen.js";
 import type { ClienteDgii, RespuestaAnulacion } from "./dgii-cliente.js";
+import type { RespuestaAprobacion } from "./respuesta-aprobacion.js";
 import type { ClienteContribuyente } from "./entrega.js";
 import { DocumentoFiscalInvalidoError } from "./errores.js";
 import { construirXmlAcecf } from "./xml/acecf.js";
@@ -116,12 +117,18 @@ export function crearServicioRecibidos(opciones: OpcionesServicioRecibidos): Ser
           "Este e-CF ya se está respondiendo desde otra caja o ya fue respondido.",
         );
       }
-      let respuestaDgii: RespuestaAnulacion;
+      let respuestaDgii: RespuestaAprobacion;
       try {
         respuestaDgii = await dgii.enviarAprobacionComercial(xml, nombreArchivo);
       } catch (error) {
         await almacen.liberarRespuesta(id);
         throw error;
+      }
+      if (respuestaDgii.estado === "no_reconocida") {
+        throw new Error(
+          `La DGII respondió algo que no se pudo interpretar y no se liberó la respuesta de ${fila.encf} para no duplicarla. ` +
+            `Verifica con la DGII antes de reintentar. Respuesta: ${respuestaDgii.respuestaCruda}`,
+        );
       }
       if (!respuestaDgii.aceptada) {
         await almacen.liberarRespuesta(id);

@@ -100,7 +100,9 @@ async function main(): Promise<void> {
       ? `ERROR: ${r.error}`
       : r.erroresXsd.length
         ? `XSD: ${r.erroresXsd.length} error(es)`
-        : (r.envio?.estado ?? "válido (no enviado)");
+        : r.envio && r.envio.estado !== "aceptado" && r.envio.mensajes.length > 0
+          ? `${r.envio.estado}: ${r.envio.mensajes.join(" | ")}`
+          : (r.envio?.estado ?? "válido (no enviado)");
     const avisos = r.columnasSinUsar.length ? ` | columnas sin usar: ${r.columnasSinUsar.join(", ")}` : "";
     console.log(`[${hoja} fila ${numero}] ${r.esquema ?? "?"} ${r.encf ?? ""} → ${estado}${avisos}`);
   }

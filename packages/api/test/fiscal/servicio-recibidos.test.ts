@@ -23,6 +23,7 @@ async function preparar(
   opciones: {
     directorio?: DirectorioContribuyente | null;
     dgiiAcepta?: boolean;
+    dgiiNoReconocida?: boolean;
     estadoEnDgii?: { estado: "aceptado" | "rechazado" | "no_encontrado"; montoTotal: number | null };
     fallaAlGuardar?: boolean;
   } = {},
@@ -69,9 +70,12 @@ async function preparar(
     dgii: {
       enviarAprobacionComercial: async (xml) => {
         enviadosDgii.push(xml);
+        if (opciones.dgiiNoReconocida) {
+          return { aceptada: false, estado: "no_reconocida", mensajes: ["raro"], respuestaCruda: "raro" };
+        }
         return opciones.dgiiAcepta === false
-          ? { aceptada: false, mensajes: ["e-CF no encontrado"] }
-          : { aceptada: true, mensajes: ["OK"] };
+          ? { aceptada: false, estado: "rechazada", mensajes: ["e-CF no encontrado"], respuestaCruda: "{}" }
+          : { aceptada: true, estado: "aceptada", mensajes: ["OK"], respuestaCruda: "{}" };
       },
       consultarDirectorio: async () => (opciones.directorio === undefined ? DIRECTORIO : opciones.directorio),
       consultarEstadoEcf: async (rncEmisor, encf, rncComprador, codigo) => {
@@ -106,7 +110,7 @@ describe("servicio de e-CF recibidos", () => {
 
     const resultado = await servicio.responder("r-1", { aprobado: true });
 
-    expect(resultado).toEqual({ dgii: { aceptada: true, mensajes: ["OK"] }, emisor: { entregada: true } });
+    expect(resultado).toMatchObject({ dgii: { aceptada: true, mensajes: ["OK"] }, emisor: { entregada: true } });
     const [acecf] = enviadosDgii;
     expect(acecf).toContain("<RNCEmisor>101010101</RNCEmisor>");
     expect(acecf).toContain("<RNCComprador>131880738</RNCComprador>");
@@ -166,9 +170,16 @@ describe("servicio de e-CF recibidos", () => {
   it("si la DGII no valida la aprobación, no se marca como respondida", async () => {
     const { servicio, ecfs, entregados } = await preparar({ dgiiAcepta: false });
     const r = await servicio.responder("r-1", { aprobado: true });
-    expect(r.dgii).toEqual({ aceptada: false, mensajes: ["e-CF no encontrado"] });
+    expect(r.dgii).toMatchObject({ aceptada: false, mensajes: ["e-CF no encontrado"] });
     expect(entregados).toEqual([]);
     expect(ecfs[0]?.estadoAprobacion).toBe("pendiente");
+  });
+
+  it("si la respuesta de la DGII no se entiende, no se libera el e-CF para no duplicar la aprobación", async () => {
+    const { servicio, ecfs } = await preparar({ dgiiNoReconocida: true });
+    await expect(servicio.responder("r-1", { aprobado: true })).rejects.toThrow(/no se pudo interpretar/);
+    expect(ecfs[0]?.estadoAprobacion).toBe("enviando");
+    await expect(servicio.responder("r-1", { aprobado: true })).rejects.toThrow(/ya fue/);
   });
 
   it("si el emisor no está en el directorio, igual queda aprobado ante la DGII", async () => {

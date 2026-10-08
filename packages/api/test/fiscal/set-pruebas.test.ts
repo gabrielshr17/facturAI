@@ -44,7 +44,7 @@ function dgiiFalsa() {
     },
     enviarAprobacionComercial: async (xml, nombre) => {
       llamadas.push({ ruta: "acecf", nombre, xml });
-      return { aceptada: true, mensajes: ["OK"] };
+      return { aceptada: true, estado: "aceptada", mensajes: ["OK"], respuestaCruda: "{}" };
     },
   };
   return { dgii, llamadas };
@@ -175,7 +175,7 @@ describe("set de pruebas DGII — procesamiento de una fila", () => {
 
     expect(r).toMatchObject({ esquema: "acecf", nombreArchivo: "131880738E310000000007.xml", erroresXsd: [] });
     expect(llamadas.map((l) => l.ruta)).toEqual(["acecf"]);
-    expect(r.envio).toEqual({ ruta: "acecf", estado: "aceptado", mensajes: ["OK"] });
+    expect(r.envio).toMatchObject({ ruta: "acecf", estado: "aceptado", mensajes: ["OK"] });
   });
 
   it("completa a dos decimales el MontoTotal numérico de una aprobación comercial (7080 → 7080.00)", async () => {
@@ -196,6 +196,66 @@ describe("set de pruebas DGII — procesamiento de una fila", () => {
     expect(r.erroresXsd).toEqual([]);
     expect(r.xmlFirmado).toContain("<MontoTotal>7080.00</MontoTotal>");
     expect(r.nombreArchivo).toBe("132069031E310000000001.xml");
+  });
+
+  it("una respuesta de aprobación comercial que no se entiende se reporta como error con la respuesta cruda", async () => {
+    const { dgii } = dgiiFalsa();
+    const rara: DgiiSetPruebas = {
+      ...dgii,
+      enviarAprobacionComercial: async () => ({
+        aceptada: false,
+        estado: "no_reconocida",
+        mensajes: ['Respuesta no reconocida: {"x":1}'],
+        respuestaCruda: '{"x":1}',
+      }),
+    };
+    const fila: Record<string, string> = {
+      Version: "1.0",
+      RNCEmisor: "131880681",
+      eNCF: "E310000000001",
+      FechaEmision: "01-04-2020",
+      MontoTotal: "7080",
+      RNCComprador: "132069031",
+      Estado: "1",
+      FechaHoraAprobacionComercial: "08-10-2026 17:55:11",
+    };
+
+    const r = await procesarFilaSetPruebas(fila, 2, { firmar, dgii: rara, enviar: true, reloj: () => AHORA });
+
+    expect(r.envio).toMatchObject({ ruta: "acecf", estado: "respuesta_no_reconocida", respuestaCruda: '{"x":1}' });
+    expect(r.error).toContain('{"x":1}');
+  });
+
+  it("una aprobación rechazada conserva los mensajes y la respuesta cruda de la DGII", async () => {
+    const { dgii } = dgiiFalsa();
+    const rechaza: DgiiSetPruebas = {
+      ...dgii,
+      enviarAprobacionComercial: async () => ({
+        aceptada: false,
+        estado: "rechazada",
+        mensajes: ["Factura no encontrada para esta Aprobación comercial."],
+        respuestaCruda: '{"codigo":"2"}',
+      }),
+    };
+    const fila: Record<string, string> = {
+      Version: "1.0",
+      RNCEmisor: "131880681",
+      eNCF: "E310000000001",
+      FechaEmision: "01-04-2020",
+      MontoTotal: "7080",
+      RNCComprador: "132069031",
+      Estado: "1",
+      FechaHoraAprobacionComercial: "08-10-2026 17:55:11",
+    };
+
+    const r = await procesarFilaSetPruebas(fila, 2, { firmar, dgii: rechaza, enviar: true, reloj: () => AHORA });
+
+    expect(r.envio).toMatchObject({
+      estado: "rechazado",
+      mensajes: ["Factura no encontrada para esta Aprobación comercial."],
+      respuestaCruda: '{"codigo":"2"}',
+    });
+    expect(r.error).toBeUndefined();
   });
 
   it("una fila sin tipo reconocible es un error de la fila, no del lote", async () => {
