@@ -113,8 +113,12 @@ export async function procesarFilaSetPruebas(
 
   const fila: FilaSetPruebas = { ...filaOriginal };
   const momento = fechaHoraDgii(reloj());
-  if (esquema === "acecf") fila.FechaHoraAprobacionComercial ||= momento;
-  else if (esquema === "rfce-32") fila.CodigoSeguridadeCF = CODIGO_SEGURIDAD_MARCADOR;
+  if (esquema === "acecf") {
+    fila.FechaHoraAprobacionComercial ||= momento;
+    const claveMonto = Object.keys(fila).find((k) => k.trim().toLowerCase() === "montototal");
+    const monto = claveMonto === undefined ? undefined : fila[claveMonto]?.trim();
+    if (claveMonto !== undefined && monto && /^\d+(\.\d+)?$/.test(monto)) fila[claveMonto] = Number(monto).toFixed(2);
+  } else if (esquema === "rfce-32") fila.CodigoSeguridadeCF = CODIGO_SEGURIDAD_MARCADOR;
   else fila.FechaHoraFirma ||= momento;
 
   const { xml, columnasSinUsar } = generarXmlDesdeFila(cargarEsquema(esquema), fila);
