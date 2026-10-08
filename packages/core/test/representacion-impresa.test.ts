@@ -19,6 +19,8 @@ describe("representación impresa (Informe Técnico e-CF §18)", () => {
     expect(NOMBRE_TIPO_ECF["31"]).toBe("Factura de Crédito Fiscal Electrónica");
     expect(NOMBRE_TIPO_ECF["32"]).toBe("Factura de Consumo Electrónica");
     expect(NOMBRE_TIPO_ECF["34"]).toBe("Nota de Crédito Electrónica");
+    expect(NOMBRE_TIPO_ECF["44"]).toBe("Comprobante Electrónico para Regímenes Especiales");
+    expect(NOMBRE_TIPO_ECF["46"]).toBe("Comprobante Electrónico para Exportaciones");
   });
 
   it("describe en palabras el código de modificación", () => {

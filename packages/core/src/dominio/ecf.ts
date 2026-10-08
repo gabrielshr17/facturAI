@@ -61,7 +61,11 @@ export const DESCRIPCION_CODIGO_MODIFICACION: Record<1 | 2 | 3 | 4 | 5, string> 
 };
 
 export function requiereCompradorIdentificado(tipoEcf: TipoEcf): boolean {
-  return tipoEcf === "31" || tipoEcf === "45";
+  return tipoEcf === "31" || tipoEcf === "44" || tipoEcf === "45" || tipoEcf === "46";
+}
+
+export function exoneraItbis(tipoEcf: TipoEcf): boolean {
+  return tipoEcf === "44" || tipoEcf === "46";
 }
 
 /** La fecha de vencimiento de la secuencia no aplica a notas de crédito ni a facturas de consumo. */

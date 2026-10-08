@@ -448,6 +448,15 @@ export function crearFacturaRepo(db: SqlDriver) {
       );
     },
 
+    /** Exonera de ITBIS un ticket (E44/E46): conserva los precios y el total, y deja todo como exento. */
+    async exonerarItbis(facturaId: string): Promise<void> {
+      await db.run(
+        "UPDATE factura_linea SET impuesto_tipo='exento', tasa_impuesto=0, monto_itbis=0, updated_at=? WHERE factura_id=? AND deleted_at IS NULL",
+        [now(), facturaId],
+      );
+      await recalcularTotales(facturaId);
+    },
+
     /** Enlaza la factura a su comprobante fiscal y la marca tipo='fiscal'. */
     async marcarFiscal(facturaId: string, comprobanteId: string): Promise<void> {
       await db.run("UPDATE factura SET tipo='fiscal', comprobante_id=?, updated_at=? WHERE id=?", [

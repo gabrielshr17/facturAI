@@ -72,6 +72,9 @@ function validar(doc: ComprobanteATransmitir, perfil: PerfilEcf): void {
   if (perfil.soloExento && doc.lineas.some((l) => indicadorFacturacion(l) !== 4)) {
     throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} solo admite ítems exentos de ITBIS.`);
   }
+  if (perfil.tasaCero && doc.lineas.some((l) => l.tasaImpuesto !== 0)) {
+    throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} solo admite ítems con ITBIS a tasa 0%.`);
+  }
   validarRetenciones(doc, perfil);
   if (perfil.vencimientoSecuencia && !doc.fechaVencimientoSecuencia) {
     throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} requiere la fecha de vencimiento de la secuencia.`);
@@ -101,7 +104,7 @@ function idDoc(doc: ComprobanteATransmitir, perfil: PerfilEcf, hayGravado: boole
           ? fechaDgii(`${doc.fechaVencimientoSecuencia}T12:00:00Z`)
           : null,
       ],
-      ["IndicadorMontoGravado", hayGravado ? "1" : null],
+      ["IndicadorMontoGravado", hayGravado && perfil.indicadorMontoGravado ? "1" : null],
       ["TipoIngresos", perfil.tipoIngresos ? "01" : null],
       ["TipoPago", perfil.tipoPago ? tipoPago(doc.pagos) : null],
       perfil.formasPago ? tablaFormasPago(doc.pagos) : ["TablaFormasPago", null],
@@ -144,7 +147,7 @@ function sumaRetenida(valores: (number | undefined)[]): number | null {
 }
 
 function totales(doc: ComprobanteATransmitir, perfil: PerfilEcf): { nodo: Nodo; hayGravado: boolean } {
-  const t = calcularTotalesEcf(doc.lineas);
+  const t = calcularTotalesEcf(doc.lineas, perfil.tasaCero);
   const itbisRetenido =
     perfil.retencion === "itbisEIsr" ? sumaRetenida(doc.lineas.map((l) => l.itbisRetenido ?? 0)) : null;
   const isrRetenido = perfil.retencion === "ninguna" ? null : sumaRetenida(doc.lineas.map((l) => l.isrRetenido));
@@ -156,12 +159,15 @@ function totales(doc: ComprobanteATransmitir, perfil: PerfilEcf): { nodo: Nodo; 
         ["MontoGravadoTotal", monto(t.montoGravadoTotal)],
         ["MontoGravadoI1", monto(t.montoGravadoI1)],
         ["MontoGravadoI2", monto(t.montoGravadoI2)],
+        ["MontoGravadoI3", monto(t.montoGravadoI3)],
         ["MontoExento", monto(t.montoExento)],
         ["ITBIS1", t.montoGravadoI1 === null ? null : "18"],
         ["ITBIS2", t.montoGravadoI2 === null ? null : "16"],
+        ["ITBIS3", t.montoGravadoI3 === null ? null : "0"],
         ["TotalITBIS", monto(t.totalItbis)],
         ["TotalITBIS1", monto(t.totalItbis1)],
         ["TotalITBIS2", monto(t.totalItbis2)],
+        ["TotalITBIS3", monto(t.totalItbis3)],
         ["MontoTotal", montoDgii(t.montoTotal)],
         ["TotalITBISRetenido", monto(itbisRetenido)],
         ["TotalISRRetencion", monto(isrRetenido)],
@@ -190,7 +196,7 @@ function detalles(doc: ComprobanteATransmitir, perfil: PerfilEcf): Nodo {
       "Item",
       [
         ["NumeroLinea", String(i + 1)],
-        ["IndicadorFacturacion", String(indicadorFacturacion(linea))],
+        ["IndicadorFacturacion", String(indicadorFacturacion(linea, perfil.tasaCero))],
         retencionItem(linea, perfil),
         ["NombreItem", texto(linea.descripcion, 80) ?? "Artículo"],
         ["IndicadorBienoServicio", linea.esServicio ? "2" : "1"],

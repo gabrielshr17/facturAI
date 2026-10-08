@@ -3,6 +3,7 @@ import {
   type MetodoPago,
   type TipoEcf,
   ETIQUETA_TIPO_ECF,
+  exoneraItbis,
   requiereCompradorIdentificado,
   tipoEcfSugerido,
   procesarCobro,
@@ -21,7 +22,7 @@ const METODOS: { valor: MetodoPago; etiqueta: string }[] = [
   { valor: "credito", etiqueta: "Crédito" },
 ];
 
-const TIPOS_ECF_DISPONIBLES: TipoEcf[] = ["32", "31", "45"];
+const TIPOS_ECF_DISPONIBLES: TipoEcf[] = ["32", "31", "45", "44", "46"];
 
 interface FilaPago {
   metodo: MetodoPago;
@@ -272,6 +273,11 @@ export function ModalCobro({
               onChange={(e) => setReceptorNumero(e.target.value)}
             />
           </div>
+        )}
+        {emitirFiscal && exoneraItbis(tipoEcf) && (
+          <p style={{ margin: "0 0 8px", fontSize: 13, color: c.gris }}>
+            Exonerado de ITBIS: el comprobante sale sin ITBIS y el total del ticket no cambia.
+          </p>
         )}
         {emitirFiscal && (compradorObligatorio || receptorNumero.trim() !== "") && (
           <input

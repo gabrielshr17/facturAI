@@ -21,6 +21,8 @@ export interface PerfilEcf {
   formasPago: boolean;
   exigeReferencia: boolean;
   soloExento: boolean;
+  tasaCero: boolean;
+  indicadorMontoGravado: boolean;
   retencion: Retencion;
 }
 
@@ -33,6 +35,8 @@ const VENTA: PerfilEcf = {
   formasPago: true,
   exigeReferencia: false,
   soloExento: false,
+  tasaCero: false,
+  indicadorMontoGravado: true,
   retencion: "ninguna",
 };
 
@@ -47,7 +51,9 @@ const PERFILES: Partial<Record<TipoEcfEmitible, PerfilEcf>> = {
   "34": { ...NOTA, vencimientoSecuencia: false, indicadorNotaCredito: true },
   "41": { ...GASTO, retencion: "itbisEIsr" },
   "43": { ...GASTO, comprador: "ninguno", soloExento: true },
+  "44": { ...VENTA, soloExento: true },
   "45": VENTA,
+  "46": { ...VENTA, tasaCero: true, indicadorMontoGravado: false },
   "47": { ...GASTO, comprador: "extranjero", soloExento: true, retencion: "isr" },
 };
 
