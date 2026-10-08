@@ -178,6 +178,26 @@ describe("set de pruebas DGII — procesamiento de una fila", () => {
     expect(r.envio).toEqual({ ruta: "acecf", estado: "aceptado", mensajes: ["OK"] });
   });
 
+  it("completa a dos decimales el MontoTotal numérico de una aprobación comercial (7080 → 7080.00)", async () => {
+    const { dgii } = dgiiFalsa();
+    const fila: Record<string, string> = {
+      Version: "1.0",
+      RNCEmisor: "131880681",
+      eNCF: "E310000000001",
+      FechaEmision: "01-04-2020",
+      MontoTotal: "7080",
+      RNCComprador: "132069031",
+      Estado: "1",
+      FechaHoraAprobacionComercial: "08-10-2026 17:55:11",
+    };
+
+    const r = await procesarFilaSetPruebas(fila, 2, { firmar, dgii, enviar: false, reloj: () => AHORA });
+
+    expect(r.erroresXsd).toEqual([]);
+    expect(r.xmlFirmado).toContain("<MontoTotal>7080.00</MontoTotal>");
+    expect(r.nombreArchivo).toBe("132069031E310000000001.xml");
+  });
+
   it("una fila sin tipo reconocible es un error de la fila, no del lote", async () => {
     const { dgii } = dgiiFalsa();
     const r = await procesarFilaSetPruebas({ Columna: "x" }, 6, { firmar, dgii, enviar: false, reloj: () => AHORA });
