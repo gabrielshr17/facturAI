@@ -45,6 +45,7 @@ import { useEsAngosto, useEsMovil, useEsTactil, sinAtajo } from "../hooks/useBre
 import { filtrarNumero } from "../utilidades/numero.js";
 import { moverIndiceFila, moverAccionFila } from "../utilidades/navegacionFilas.js";
 import { mensajeError, mensajesError } from "../utilidades/errores.js";
+import { mensajeCobroFiscal } from "../utilidades/mensajeCobro.js";
 // Los botones −/+ de cantidad ya no llevan estilo en línea: ahora son parte del control segmentado
 // `.sfr-grupo-cantidad` (§ estilos-globales.css), que los dibuja junto con el campo del medio.
 
@@ -134,6 +135,7 @@ export function Ventas() {
   const [montoEditandoInput, setMontoEditandoInput] = useState("");
   const [lineaResaltada, setLineaResaltada] = useState<FacturaLinea | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [avisoCobro, setAvisoCobro] = useState<string | null>(null);
   const [promoAplicada, setPromoAplicada] = useState<string | null>(null);
 
   // Deshacer/rehacer (Ctrl+Z/Ctrl+Y) de cambios en las líneas del ticket activo — § AccionLinea.
@@ -1072,6 +1074,7 @@ export function Ventas() {
         },
       );
       factura = resultado.factura;
+      setAvisoCobro(mensajeCobroFiscal(resultado.comprobante));
       comprobanteRecibo = await comprobanteParaRecibo(resultado.comprobante, secuenciaNcf);
     } else {
       const resultado = await repo.cobrar(activoId, { pagos, notas });
@@ -1240,6 +1243,18 @@ export function Ventas() {
         </div>
       </div>
 
+      {avisoCobro && (
+        <div role="status" style={s.avisoExitoBox}>
+          {avisoCobro}{" "}
+          <button
+            type="button"
+            style={{ ...s.botonSecundario, marginLeft: 8, padding: "2px 10px", fontSize: 12.5 }}
+            onClick={() => setAvisoCobro(null)}
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
       {errorCarga ? (
         <div role="alert" style={s.errorBox}>
           No se pudo cargar el ticket: {errorCarga}

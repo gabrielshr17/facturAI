@@ -164,6 +164,18 @@ export const s = {
     padding: 18,
     boxShadow: sombra.sm,
   } as CSSProperties,
+  avisoExitoBox: {
+    background: c.verdeFondo,
+    border: `1px solid ${c.verde}`,
+    borderLeft: `4px solid ${c.verde}`,
+    color: c.verde,
+    borderRadius: 8,
+    padding: "10px 14px",
+    fontSize: 13.5,
+    fontWeight: 600,
+    marginBottom: 10,
+    animation: "sfr-alerta-entrada 0.15s ease-out",
+  } as CSSProperties,
   errorBox: {
     background: c.rojoFondo,
     border: `1px solid ${c.rojo}`,
