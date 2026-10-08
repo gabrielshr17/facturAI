@@ -56,7 +56,9 @@ export function iniciarModuloFiscal(config: ConfigApi): ModuloFiscal {
       };
     }
     const digitosSn = (certificado.serialSujeto ?? "").replace(/\D/g, "");
-    if (!digitosSn.includes(rncEmisor)) {
+    const coincideRnc = digitosSn.includes(rncEmisor);
+    const coincideTitular = config.dgiiCedulaTitular !== null && digitosSn.includes(config.dgiiCedulaTitular);
+    if (!coincideRnc && !coincideTitular) {
       return {
         disponible: false,
         ambiente,

@@ -33,6 +33,23 @@ describe("iniciarModuloFiscal", () => {
     }
   });
 
+  it("acepta un certificado personal si su cédula coincide con DGII_CEDULA_TITULAR", () => {
+    const modulo = iniciarModuloFiscal(configCon("IDCDO-40200403224", { DGII_CEDULA_TITULAR: "402-0040322-4" }));
+    expect(modulo).toMatchObject({ disponible: true, rncEmisor: "131880738" });
+  });
+
+  it("rechaza un certificado personal si no se configuró la cédula del titular", () => {
+    const modulo = iniciarModuloFiscal(configCon("IDCDO-40200403224"));
+    expect(modulo.disponible).toBe(false);
+    if (!modulo.disponible) expect(modulo.codigo).toBe("sn-no-coincide");
+  });
+
+  it("rechaza un certificado personal de otra cédula aunque haya una configurada", () => {
+    const modulo = iniciarModuloFiscal(configCon("IDCDO-00100000001", { DGII_CEDULA_TITULAR: "40200403224" }));
+    expect(modulo.disponible).toBe(false);
+    if (!modulo.disponible) expect(modulo.codigo).toBe("sn-no-coincide");
+  });
+
   it("no queda disponible si el certificado no trae SN", () => {
     const modulo = iniciarModuloFiscal(configCon(undefined));
     expect(modulo.disponible).toBe(false);
