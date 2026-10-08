@@ -9,11 +9,15 @@ import {
   crearNcfAnulacionRepo,
   crearProveedorFiscalSimulado,
   cobrarConFiscal,
+  exoneraItbis,
   formatearNcf,
+  requiereCompradorIdentificado,
   tipoEcfSugerido,
+  type TipoEcf,
   ValidacionError,
   type ProveedorFiscal,
   type EmisorFiscal,
+  type ComprobanteATransmitir,
 } from "../src/index.js";
 
 const EMISOR: EmisorFiscal = {
@@ -39,6 +43,15 @@ describe("dominio ecf — formato y sugerencia de tipo", () => {
   it("formatea el NCF con padding a 10 dígitos", () => {
     expect(formatearNcf("32", 1)).toBe("E320000000001");
     expect(formatearNcf("31", 42)).toBe("E310000000042");
+  });
+
+  it("solo los E44 y E46 exoneran de ITBIS y exigen comprador identificado", () => {
+    expect(
+      ["31", "32", "33", "34", "41", "43", "44", "45", "46", "47"].filter((t) => exoneraItbis(t as TipoEcf)),
+    ).toEqual(["44", "46"]);
+    expect(requiereCompradorIdentificado("44")).toBe(true);
+    expect(requiereCompradorIdentificado("46")).toBe(true);
+    expect(requiereCompradorIdentificado("32")).toBe(false);
   });
 
   it("sugiere E31 si hay RNC y E32 si no", () => {
@@ -229,4 +242,114 @@ describe("cobrarConFiscal — flujo completo con proveedor simulado", () => {
     expect(factura?.estado).toBe("abierta"); // no se cobró
     expect(factura?.tipo).toBe("normal"); // no se marcó fiscal
   });
+});
+
+describe("cobrarConFiscal — E44 y E46 (ticket exonerado de ITBIS)", () => {
+  let db: SqlDriver;
+
+  beforeEach(async () => {
+    db = await nuevaDb();
+  });
+
+  function depsConEspia(transmitidos: ComprobanteATransmitir[], rechaza = false) {
+    const proveedorFiscal: ProveedorFiscal = {
+      async transmitir(comprobante) {
+        transmitidos.push(comprobante);
+        return rechaza
+          ? { estado: "rechazado", motivoRechazo: "prueba" }
+          : { estado: "aceptado", trackId: "T-1", codigoSeguridad: "ABC123" };
+      },
+    };
+    return {
+      facturaRepo: crearFacturaRepo(db),
+      secuenciaRepo: crearSecuenciaNcfRepo(db),
+      comprobanteRepo: crearComprobanteFiscalRepo(db),
+      anulacionRepo: crearNcfAnulacionRepo(db),
+      proveedorFiscal,
+    };
+  }
+
+  async function ticketGravado(facturaRepo: ReturnType<typeof crearFacturaRepo>) {
+    const t = await facturaRepo.abrirTicket();
+    await facturaRepo.agregarLinea(t.id, {
+      descripcion: "Arroz",
+      cantidad: 2,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
+    });
+    return t;
+  }
+
+  const comprador = {
+    receptorDocumentoTipo: "rnc" as const,
+    receptorDocumentoNumero: "101023122",
+    receptorNombre: "CLIENTE EXENTO SRL",
+  };
+
+  for (const tipo of ["44", "46"] as const) {
+    it(`E${tipo}: mantiene el total, transmite todo sin ITBIS y deja el ticket exento`, async () => {
+      const transmitidos: ComprobanteATransmitir[] = [];
+      const d = depsConEspia(transmitidos);
+      await d.secuenciaRepo.crear({ tipoEcf: tipo, rangoDesde: 1, rangoHasta: 100, vencimiento: hoyMasDias(365) });
+      const t = await ticketGravado(d.facturaRepo);
+      const antes = await d.facturaRepo.obtener(t.id);
+      expect(antes?.total_itbis).toBeGreaterThan(0);
+
+      const { factura, comprobante } = await cobrarConFiscal(d, t.id, {
+        pagos: [{ metodo: "efectivo", monto: 100 }],
+        tipoEcf: tipo,
+        ...comprador,
+        emisor: EMISOR,
+      });
+
+      const [enviado] = transmitidos;
+      expect(enviado?.lineas.map((l) => l.tasaImpuesto)).toEqual([0]);
+      expect(enviado?.lineas[0]?.subtotal).toBe(100);
+      expect(enviado).toMatchObject({ montoGravado: 0, montoExento: 100, montoItbis: 0, total: 100 });
+      expect(factura).toMatchObject({ estado: "cobrada", total: 100, total_itbis: 0, subtotal_gravado: 0 });
+      expect(factura.subtotal_exento).toBe(100);
+      expect(comprobante).toMatchObject({ monto_itbis: 0, monto_gravado: 0, monto_exento: 100, total: 100 });
+      const lineas = await d.facturaRepo.obtenerLineas(t.id);
+      expect(lineas.map((l) => [l.tasa_impuesto, l.monto_itbis, l.subtotal])).toEqual([[0, 0, 100]]);
+    });
+
+    it(`E${tipo}: exige comprador identificado y no consume número ni toca el ticket`, async () => {
+      const transmitidos: ComprobanteATransmitir[] = [];
+      const d = depsConEspia(transmitidos);
+      await d.secuenciaRepo.crear({ tipoEcf: tipo, rangoDesde: 1, rangoHasta: 100, vencimiento: hoyMasDias(365) });
+      const t = await ticketGravado(d.facturaRepo);
+
+      await expect(
+        cobrarConFiscal(d, t.id, { pagos: [{ metodo: "efectivo", monto: 100 }], tipoEcf: tipo, emisor: EMISOR }),
+      ).rejects.toBeInstanceOf(ValidacionError);
+
+      expect(transmitidos).toEqual([]);
+      expect((await d.secuenciaRepo.obtenerVigente(tipo))?.proximo_numero).toBe(1);
+      const factura = await d.facturaRepo.obtener(t.id);
+      expect(factura?.total_itbis).toBeGreaterThan(0);
+    });
+
+    it(`E${tipo}: si la DGII lo rechaza, el ticket conserva su ITBIS original`, async () => {
+      const transmitidos: ComprobanteATransmitir[] = [];
+      const d = depsConEspia(transmitidos, true);
+      await d.secuenciaRepo.crear({ tipoEcf: tipo, rangoDesde: 1, rangoHasta: 100, vencimiento: hoyMasDias(365) });
+      const t = await ticketGravado(d.facturaRepo);
+      const antes = await d.facturaRepo.obtener(t.id);
+
+      await expect(
+        cobrarConFiscal(d, t.id, {
+          pagos: [{ metodo: "efectivo", monto: 100 }],
+          tipoEcf: tipo,
+          ...comprador,
+          emisor: EMISOR,
+        }),
+      ).rejects.toBeInstanceOf(ValidacionError);
+
+      const despues = await d.facturaRepo.obtener(t.id);
+      expect(despues).toMatchObject({ estado: "abierta", total: antes?.total, total_itbis: antes?.total_itbis });
+      const lineas = await d.facturaRepo.obtenerLineas(t.id);
+      expect(lineas.map((l) => l.tasa_impuesto)).toEqual([0.18]);
+    });
+  }
 });

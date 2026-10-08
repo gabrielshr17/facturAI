@@ -12,6 +12,8 @@ import {
   notaCreditoPrueba,
   notaDebitoPrueba,
   pagoExteriorPrueba,
+  exportacionPrueba,
+  regimenEspecialPrueba,
 } from "./datos-prueba.js";
 
 const FIRMA = new Date("2026-10-01T18:31:05.000Z");
@@ -405,10 +407,70 @@ describe("XML e-CF 47 (pagos al exterior)", () => {
   });
 });
 
-describe("tipos de e-CF aún no soportados", () => {
-  it("se niega a construir un E44 en lugar de generar un XML inválido", () => {
-    expect(() => construirXmlEcf(consumoPrueba({ tipoEcf: "44", ncf: "E440000000001" }), FIRMA)).toThrow(
-      /E44.*no se puede emitir/i,
+describe("tipos de e-CF desconocidos", () => {
+  it("se niega a construir un tipo sin perfil en lugar de generar un XML inválido", () => {
+    const desconocido = consumoPrueba({ tipoEcf: "99" as never, ncf: "E990000000001" });
+    expect(() => construirXmlEcf(desconocido, FIRMA)).toThrow(/E99.*no se puede emitir/i);
+  });
+});
+
+describe("XML e-CF 44 (regímenes especiales)", () => {
+  it("cumple el XSD oficial con todo exento de ITBIS y el comprador identificado", async () => {
+    const xml = construirXmlEcf(regimenEspecialPrueba(), FIRMA);
+
+    expect(valorDe(xml, "TipoeCF")).toBe("44");
+    expect(valorDe(xml, "FechaVencimientoSecuencia")).toBe("31-12-2027");
+    expect(valorDe(xml, "RNCComprador")).toBe("131880681");
+    expect(valorDe(xml, "MontoExento")).toBe("4750.00");
+    expect(valorDe(xml, "MontoTotal")).toBe("4750.00");
+    expect(xml).not.toContain("IndicadorMontoGravado");
+    expect(xml).not.toContain("MontoGravadoTotal");
+    expect(xml).not.toContain("TotalITBIS");
+    expect(await erroresContraXsd(firmado(xml), "ecf-44")).toEqual([]);
+  });
+
+  it("marca cada ítem como exento (indicador 4)", () => {
+    const xml = construirXmlEcf(regimenEspecialPrueba(), FIRMA);
+    expect(xml.match(/<IndicadorFacturacion>4<\/IndicadorFacturacion>/g)).toHaveLength(2);
+  });
+
+  it("se niega a construir un E44 con un ítem gravado, sin comprador o sin vencimiento de secuencia", () => {
+    const gravado = regimenEspecialPrueba().lineas.map((l) => ({ ...l, tasaImpuesto: 0.18 }));
+    expect(() => construirXmlEcf(regimenEspecialPrueba({ lineas: gravado }), FIRMA)).toThrow(/exentos/);
+    expect(() => construirXmlEcf(regimenEspecialPrueba({ receptorDocumentoNumero: null }), FIRMA)).toThrow(/RNC/);
+    expect(() => construirXmlEcf(regimenEspecialPrueba({ fechaVencimientoSecuencia: null }), FIRMA)).toThrow(
+      /vencimiento/i,
+    );
+  });
+});
+
+describe("XML e-CF 46 (exportaciones)", () => {
+  it("cumple el XSD oficial con ítems gravados a tasa 0% (indicador 3)", async () => {
+    const xml = construirXmlEcf(exportacionPrueba(), FIRMA);
+
+    expect(valorDe(xml, "TipoeCF")).toBe("46");
+    expect(valorDe(xml, "MontoGravadoTotal")).toBe("117500.00");
+    expect(valorDe(xml, "MontoGravadoI3")).toBe("117500.00");
+    expect(valorDe(xml, "ITBIS3")).toBe("0");
+    expect(valorDe(xml, "TotalITBIS")).toBe("0.00");
+    expect(valorDe(xml, "TotalITBIS3")).toBe("0.00");
+    expect(valorDe(xml, "MontoTotal")).toBe("117500.00");
+    expect(xml).not.toContain("MontoExento");
+    expect(xml).not.toContain("IndicadorMontoGravado");
+    expect(await erroresContraXsd(firmado(xml), "ecf-46")).toEqual([]);
+  });
+
+  it("marca cada ítem con el indicador 3", () => {
+    const xml = construirXmlEcf(exportacionPrueba(), FIRMA);
+    expect(xml.match(/<IndicadorFacturacion>3<\/IndicadorFacturacion>/g)).toHaveLength(2);
+  });
+
+  it("se niega a construir un E46 con un ítem con ITBIS, sin comprador o sin vencimiento de secuencia", () => {
+    const gravado = exportacionPrueba().lineas.map((l) => ({ ...l, tasaImpuesto: 0.18 }));
+    expect(() => construirXmlEcf(exportacionPrueba({ lineas: gravado }), FIRMA)).toThrow(/tasa 0/);
+    expect(() => construirXmlEcf(exportacionPrueba({ receptorNombre: null }), FIRMA)).toThrow(/razón social/);
+    expect(() => construirXmlEcf(exportacionPrueba({ fechaVencimientoSecuencia: null }), FIRMA)).toThrow(
+      /vencimiento/i,
     );
   });
 });

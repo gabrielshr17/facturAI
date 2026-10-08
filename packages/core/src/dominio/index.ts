@@ -24,6 +24,7 @@ export {
   formatearNcf,
   tipoEcfSugerido,
   requiereCompradorIdentificado,
+  exoneraItbis,
   ETIQUETA_TIPO_ECF,
   NOMBRE_TIPO_ECF,
   DESCRIPCION_CODIGO_MODIFICACION,

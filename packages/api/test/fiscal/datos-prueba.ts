@@ -94,6 +94,46 @@ export function gubernamentalPrueba(cambios: Partial<ComprobanteATransmitir> = {
   });
 }
 
+export function regimenEspecialPrueba(cambios: Partial<ComprobanteATransmitir> = {}): ComprobanteATransmitir {
+  return consumoPrueba({
+    ncf: "E440000000001",
+    tipoEcf: "44",
+    receptorDocumentoTipo: "rnc",
+    receptorDocumentoNumero: "131880681",
+    receptorNombre: "ZONA FRANCA EJEMPLO SA",
+    lineas: [
+      { descripcion: "Galletas", cantidad: 25, precioUnitario: 90, tasaImpuesto: 0, subtotal: 2250 },
+      { descripcion: "Café molido", cantidad: 10, precioUnitario: 250, tasaImpuesto: 0, subtotal: 2500 },
+    ],
+    pagos: [{ metodo: "transferencia", monto: 4750 }],
+    montoGravado: 0,
+    montoExento: 4750,
+    montoItbis: 0,
+    total: 4750,
+    ...cambios,
+  });
+}
+
+export function exportacionPrueba(cambios: Partial<ComprobanteATransmitir> = {}): ComprobanteATransmitir {
+  return consumoPrueba({
+    ncf: "E460000000001",
+    tipoEcf: "46",
+    receptorDocumentoTipo: "rnc",
+    receptorDocumentoNumero: "131880681",
+    receptorNombre: "IMPORTADORA EJEMPLO LTD",
+    lineas: [
+      { descripcion: "Sardinas", cantidad: 150, precioUnitario: 500, tasaImpuesto: 0, subtotal: 75000 },
+      { descripcion: "Atún", cantidad: 50, precioUnitario: 850, tasaImpuesto: 0, subtotal: 42500 },
+    ],
+    pagos: [{ metodo: "transferencia", monto: 117500 }],
+    montoGravado: 0,
+    montoExento: 117500,
+    montoItbis: 0,
+    total: 117500,
+    ...cambios,
+  });
+}
+
 export function compraInformalPrueba(cambios: Partial<ComprobanteATransmitir> = {}): ComprobanteATransmitir {
   return consumoPrueba({
     ncf: "E410000000001",

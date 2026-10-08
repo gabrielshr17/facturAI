@@ -5,7 +5,13 @@ import type { NcfAnulacionRepo } from "../repos/ncf-anulacion-repo.js";
 import type { EmisorFiscal, PagoATransmitir, ProveedorFiscal } from "./proveedor.js";
 import { redondear2 } from "../dominio/dinero.js";
 import { procesarCobro, type PagoInput } from "../dominio/factura.js";
-import { ETIQUETA_TIPO_ECF, formatearNcf, requiereCompradorIdentificado, type TipoEcf } from "../dominio/ecf.js";
+import {
+  ETIQUETA_TIPO_ECF,
+  exoneraItbis,
+  formatearNcf,
+  requiereCompradorIdentificado,
+  type TipoEcf,
+} from "../dominio/ecf.js";
 import { esDocumentoValido } from "../dominio/validacion.js";
 import { ValidacionError } from "../repos/producto-repo.js";
 import type { Factura, ComprobanteFiscal } from "../repos/tipos.js";
@@ -135,6 +141,7 @@ export async function cobrarConFiscal(
   // A partir de aquí sí hay efectos secundarios: se consume el NCF y se transmite.
   const numero = await secuenciaRepo.consumirSiguiente(secuencia.id);
   const ncf = formatearNcf(input.tipoEcf, numero);
+  const exonera = exoneraItbis(input.tipoEcf);
 
   const resultadoTransmision = await transmitirNcfConsumido(
     deps,
@@ -151,18 +158,20 @@ export async function cobrarConFiscal(
         descripcion: l.descripcion,
         cantidad: l.cantidad,
         precioUnitario: l.precio_unitario,
-        tasaImpuesto: l.tasa_impuesto,
+        tasaImpuesto: exonera ? 0 : l.tasa_impuesto,
         subtotal: l.subtotal,
       })),
       pagos: pagosAplicados(input.pagos, resultadoCobro.cambio),
-      montoGravado: factura.subtotal_gravado,
-      montoExento: factura.subtotal_exento,
-      montoItbis: factura.total_itbis,
+      montoGravado: exonera ? 0 : factura.subtotal_gravado,
+      montoExento: exonera ? factura.total : factura.subtotal_exento,
+      montoItbis: exonera ? 0 : factura.total_itbis,
       total: factura.total,
       referencia: null,
     },
     "el comprobante",
   );
+
+  if (exonera) await facturaRepo.exonerarItbis(facturaId);
 
   const { factura: facturaCobrada, cambio } = await facturaRepo.cobrar(facturaId, {
     pagos: input.pagos,
