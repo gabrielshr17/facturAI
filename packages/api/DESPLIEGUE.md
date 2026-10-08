@@ -103,3 +103,6 @@ Cualquiera puede enviar un XML a `/fe/recepcion/api/ecf`. Por eso:
 3. `GET https://<host>/health` → `fiscal.disponible: true`.
 4. `GET https://<host>/fe/autenticacion/api/semilla` → XML `SemillaModel`.
 5. Registrar las URLs en el formulario de postulación.
+6. El portal genera un XML de postulación que hay que firmar con el certificado antes de subirlo. En tu propia terminal:
+   `pnpm --filter @sfr/api firmar-xml <postulacion.xml> --p12 <ruta al .p12>`. Pide la contraseña sin mostrarla (o usa
+   `DGII_P12_PASSWORD`), guarda `<postulacion>-firmado.xml` junto al original y no envía nada.
