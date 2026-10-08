@@ -1,6 +1,7 @@
 import { urlsDgii, type AmbienteDgii } from "./ambiente.js";
 import { firmarXml, type CertificadoFirma } from "./firma.js";
 import { DgiiNoDisponibleError, DgiiRespuestaError } from "./errores.js";
+import { interpretarRespuestaAprobacion, type RespuestaAprobacion } from "./respuesta-aprobacion.js";
 
 export type EstadoDgiiRespuesta = "no_encontrado" | "aceptado" | "rechazado" | "en_proceso" | "aceptado_condicional";
 
@@ -20,7 +21,7 @@ export interface ClienteDgii {
   enviarRfce(xmlFirmado: string, nombreArchivo: string): Promise<RespuestaEstado>;
   consultarResultado(trackId: string): Promise<RespuestaEstado>;
   anularRangos(xmlFirmado: string, nombreArchivo: string): Promise<RespuestaAnulacion>;
-  enviarAprobacionComercial(xmlFirmado: string, nombreArchivo: string): Promise<RespuestaAnulacion>;
+  enviarAprobacionComercial(xmlFirmado: string, nombreArchivo: string): Promise<RespuestaAprobacion>;
   consultarDirectorio(rnc: string): Promise<DirectorioContribuyente | null>;
   consultarTrackIds(rncEmisor: string, encf: string): Promise<TrackIdRegistrado[]>;
   /** Validez de un e-CF ante la DGII (rol receptor): confirma que el documento con ese código de seguridad existe. */
@@ -73,13 +74,14 @@ interface CuerpoEstado {
   secuenciaUtilizada?: boolean;
 }
 
-function estadoDesdeTexto(estado: string | undefined): EstadoDgiiRespuesta {
+function estadoDesdeTexto(estado: string | undefined): EstadoDgiiRespuesta | null {
   const normalizado = (estado ?? "").toLowerCase();
   if (normalizado.includes("condicional")) return "aceptado_condicional";
   if (normalizado.includes("aceptado")) return "aceptado";
   if (normalizado.includes("rechazado")) return "rechazado";
   if (normalizado.includes("proceso")) return "en_proceso";
-  return "no_encontrado";
+  if (normalizado.includes("no encontrado")) return "no_encontrado";
+  return null;
 }
 
 function traducirMensajes(mensajes: CuerpoEstado["mensajes"]): string[] {
@@ -91,8 +93,13 @@ function traducirMensajes(mensajes: CuerpoEstado["mensajes"]): string[] {
 
 function traducirEstado(cuerpo: CuerpoEstado): RespuestaEstado {
   const codigo = Number(cuerpo.codigo);
+  const estado = ESTADO_POR_CODIGO[codigo] ?? estadoDesdeTexto(cuerpo.estado);
+  if (estado === null) {
+    const cruda = JSON.stringify(cuerpo).slice(0, 400);
+    throw new DgiiRespuestaError(`La DGII respondió algo que no se pudo interpretar: ${cruda}`, 200, cruda);
+  }
   return {
-    estado: ESTADO_POR_CODIGO[codigo] ?? estadoDesdeTexto(cuerpo.estado),
+    estado,
     mensajes: traducirMensajes(cuerpo.mensajes),
     secuenciaUtilizada: cuerpo.secuenciaUtilizada ?? false,
   };
@@ -220,13 +227,7 @@ export function crearClienteDgii(opciones: OpcionesClienteDgii): ClienteDgii {
         method: "POST",
         body: archivoXml(xmlFirmado, nombreArchivo),
       }));
-      const cuerpo = (await respuesta.json()) as {
-        codigo?: string | number;
-        estado?: string;
-        mensaje?: string[] | string;
-      };
-      const mensajes = Array.isArray(cuerpo.mensaje) ? cuerpo.mensaje : cuerpo.mensaje ? [cuerpo.mensaje] : [];
-      return { aceptada: String(cuerpo.codigo) === "1", mensajes };
+      return interpretarRespuestaAprobacion(await respuesta.text());
     },
 
     async consultarDirectorio(rnc) {
@@ -269,7 +270,7 @@ export function crearClienteDgii(opciones: OpcionesClienteDgii): ClienteDgii {
       const lista = Array.isArray(cuerpo) ? cuerpo : [cuerpo];
       return lista
         .filter((t): t is { trackId: string; estado?: string } => Boolean(t.trackId))
-        .map((t) => ({ trackId: t.trackId, estado: estadoDesdeTexto(t.estado) }));
+        .map((t) => ({ trackId: t.trackId, estado: estadoDesdeTexto(t.estado) ?? "no_encontrado" }));
     },
   };
 }

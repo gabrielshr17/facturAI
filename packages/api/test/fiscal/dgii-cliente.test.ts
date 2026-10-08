@@ -142,6 +142,11 @@ describe("cliente DGII — recepción y consultas", () => {
     });
   });
 
+  it("una respuesta de estado que no se entiende falla en vez de inventar un estado", async () => {
+    const dgii = crearDgiiFalsa({ consultaresultado: () => json({ cosa: "rara" }) });
+    await expect(cliente(dgii).consultarResultado("t")).rejects.toThrow(/no se pudo interpretar/);
+  });
+
   it("traduce 'En Proceso' y 'No encontrado'", async () => {
     let codigo = 3;
     const dgii = crearDgiiFalsa({ consultaresultado: () => json({ codigo, estado: "x", mensajes: [] }) });

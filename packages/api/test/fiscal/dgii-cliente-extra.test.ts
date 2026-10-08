@@ -23,17 +23,25 @@ describe("cliente DGII — aprobación comercial, directorio y trackIds", () => 
       "https://ecf.dgii.gov.do/testecf/aprobacioncomercial/api/aprobacioncomercial",
     );
     expect(dgii.solicitudes.at(-1)?.archivo?.nombre).toBe("131880738E310000000007.xml");
-    expect(r).toEqual({ aceptada: true, mensajes: ["OK"] });
+    expect(r).toMatchObject({ aceptada: true, estado: "aceptada", mensajes: ["OK"] });
   });
 
   it("una aprobación comercial rechazada devuelve el mensaje", async () => {
     const dgii = crearDgiiFalsa({
       "aprobacioncomercial/api": () => json({ mensaje: ["e-CF no encontrado"], estado: "Rechazado", codigo: "2" }),
     });
-    expect(await cliente(dgii).enviarAprobacionComercial("<ACECF/>", "a.xml")).toEqual({
+    expect(await cliente(dgii).enviarAprobacionComercial("<ACECF/>", "a.xml")).toMatchObject({
       aceptada: false,
+      estado: "rechazada",
       mensajes: ["e-CF no encontrado"],
     });
+  });
+
+  it("una respuesta de aprobación comercial que no se entiende no se da por rechazada y se conserva cruda", async () => {
+    const dgii = crearDgiiFalsa({ "aprobacioncomercial/api": () => json({ resultado: "raro" }) });
+    const r = await cliente(dgii).enviarAprobacionComercial("<ACECF/>", "a.xml");
+    expect(r).toMatchObject({ aceptada: false, estado: "no_reconocida" });
+    expect(r.respuestaCruda).toContain("raro");
   });
 
   it("consulta el directorio de un RNC electrónico", async () => {

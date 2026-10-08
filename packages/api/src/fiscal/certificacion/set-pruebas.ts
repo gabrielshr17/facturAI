@@ -26,6 +26,7 @@ export interface EnvioSetPruebas {
   estado: string;
   trackId?: string;
   mensajes: string[];
+  respuestaCruda?: string;
 }
 
 export interface ResultadoFilaSetPruebas {
@@ -133,7 +134,12 @@ export async function procesarFilaSetPruebas(
   try {
     if (esquema === "acecf") {
       const r = await deps.dgii.enviarAprobacionComercial(xmlFirmado, nombreArchivo);
-      resultado.envio = { ruta: "acecf", estado: r.aceptada ? "aceptado" : "rechazado", mensajes: r.mensajes };
+      const estado =
+        r.estado === "aceptada" ? "aceptado" : r.estado === "rechazada" ? "rechazado" : "respuesta_no_reconocida";
+      resultado.envio = { ruta: "acecf", estado, mensajes: r.mensajes, respuestaCruda: r.respuestaCruda };
+      if (r.estado === "no_reconocida") {
+        resultado.error = `La DGII respondió algo que no se pudo interpretar (no es un rechazo confirmado): ${r.respuestaCruda}`;
+      }
     } else if (esquema === "ecf-32" && Number(fila.MontoTotal) < UMBRAL_RESUMEN_CONSUMO) {
       const rfce = generarXmlDesdeFila(cargarEsquema("rfce-32"), {
         ...fila,
