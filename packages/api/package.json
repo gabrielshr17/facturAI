@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "caja-key": "tsx --env-file-if-exists=.env scripts/caja-key.ts",
-    "set-pruebas": "tsx --env-file-if-exists=.env scripts/set-pruebas.ts"
+    "set-pruebas": "tsx --env-file-if-exists=.env scripts/set-pruebas.ts",
+    "firmar-xml": "tsx --env-file-if-exists=.env scripts/firmar-xml.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.114.0",
