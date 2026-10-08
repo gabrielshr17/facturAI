@@ -46,6 +46,7 @@ Verificado localmente: la imagen arranca en modo producción, carga el certifica
 | `NODE_ENV` | `production` (ya viene en la imagen). Sin Supabase, **rechaza** las rutas protegidas en vez de abrirlas. |
 | `DGII_AMBIENTE` | `testecf` → `certecf` → `ecf` según la etapa |
 | `DGII_RNC_EMISOR` | RNC de la empresa |
+| `DGII_CEDULA_TITULAR` | solo si el `.p12` es personal (su SN trae la cédula, p. ej. `IDCDO-40200403224`): cédula del Usuario Administrador e-CF registrado para el RNC |
 | `DGII_P12_BASE64` | el `.p12` en base64 (ver `.env.example` para generarlo en PowerShell) |
 | `DGII_P12_PASSWORD` | contraseña del `.p12` |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | proyecto Supabase (guarda e-CF recibidos y llaves de caja) |

@@ -46,6 +46,7 @@ export interface ConfigApi {
   dgiiConfigurado: boolean;
   /** RNC de la empresa: el API se niega a firmar comprobantes de cualquier otro emisor. */
   dgiiRncEmisor: string | null;
+  dgiiCedulaTitular: string | null;
   /** Bundle PEM con las autoridades certificadoras aceptadas para documentos recibidos. */
   dgiiCaRaicesRuta: string | null;
   /** Correos de Google con permiso para emitir comprobantes (además de las llaves de caja). */
@@ -88,6 +89,7 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): ConfigApi {
     dgiiP12Clave,
     dgiiConfigurado: Boolean((dgiiP12Ruta || dgiiP12Base64) && dgiiP12Clave),
     dgiiRncEmisor: env.DGII_RNC_EMISOR?.trim() || null,
+    dgiiCedulaTitular: env.DGII_CEDULA_TITULAR?.replace(/\D/g, "") || null,
     dgiiCaRaicesRuta: env.DGII_CA_RAICES_PATH?.trim() || null,
     correosPermitidos: (env.API_CORREOS_PERMITIDOS ?? "")
       .split(",")
