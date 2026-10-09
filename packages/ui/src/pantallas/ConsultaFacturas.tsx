@@ -463,7 +463,7 @@ function FacturasCobradas() {
               ))}
             </div>
 
-            <div style={s.formFooter}>
+            <div style={{ ...s.formFooter, flexWrap: "wrap" }}>
               <button
                 style={{ ...s.boton, flex: "1 1 auto", whiteSpace: "nowrap" }}
                 onClick={() => void reimprimir(seleccionada)}
