@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Cliente, ComprobanteFiscal, Factura, SecuenciaNcf } from "@sfr/core";
-import { comprobanteParaRecibo, datosReciboNotaDebito, encabezadoFiscal } from "../src/impresion/representacion.js";
+import {
+  comprobanteParaRecibo,
+  datosReciboCompra,
+  datosReciboNotaDebito,
+  encabezadoFiscal,
+} from "../src/impresion/representacion.js";
 
 function comprobante(cambios: Partial<ComprobanteFiscal>): ComprobanteFiscal {
   return {
@@ -156,5 +161,59 @@ describe("recibo de una nota de débito", () => {
     });
     expect(datos.comprobante?.referencia?.ncfModificado).toBe("E310000000007");
     expect(datos.comprobante?.ncf).toBe("E330000000001");
+  });
+});
+
+describe("representación impresa de una compra con comprobante fiscal", () => {
+  const xmlCompra =
+    "<ECF><DetallesItems><Item><NombreItem>Arroz</NombreItem><IndicadorFacturacion>1</IndicadorFacturacion>" +
+    "<CantidadItem>2</CantidadItem><PrecioUnitarioItem>50.00</PrecioUnitarioItem><MontoItem>100.00</MontoItem></Item>" +
+    "</DetallesItems></ECF>";
+  const negocio = {
+    nombre_comercial: "Mi Negocio",
+    rnc: "132069031",
+    direccion: null,
+    telefono: null,
+    ancho_impresora_default: 80,
+  };
+
+  it("lleva el e-NCF, el QR, el código de seguridad y los ítems del XML firmado", async () => {
+    const datos = await datosReciboCompra({
+      comprobante: comprobante({
+        tipo_ecf: "41",
+        ncf: "E410000001001",
+        xml_firmado: xmlCompra,
+        qr_url: "https://ecf.dgii.gov.do/certecf/consultatimbre?x=1",
+        codigo_seguridad: "AbC123",
+        monto_gravado: 84.75,
+        monto_itbis: 15.25,
+        total: 100,
+      }),
+      negocio,
+      secuencias: SECUENCIAS,
+    });
+
+    expect(encabezadoFiscal(datos.comprobante!)).toEqual([
+      "Comprobante Electrónico de Compras",
+      "e-NCF: E410000001001",
+      "Válido hasta: 31-12-2027",
+    ]);
+    expect(datos.comprobante?.qrUrl).toContain("consultatimbre");
+    expect(datos.comprobante?.codigoSeguridad).toBe("AbC123");
+    expect(datos.lineas).toHaveLength(1);
+    expect(datos.lineas[0]?.descripcion).toBe("Arroz");
+    expect(datos.factura.total).toBe(100);
+    expect(datos.factura.numero_interno).toBe(0);
+    expect(datos.pagos).toEqual([]);
+  });
+
+  it("sin XML guardado devuelve el comprobante sin ítems en lugar de fallar", async () => {
+    const datos = await datosReciboCompra({
+      comprobante: comprobante({ tipo_ecf: "43", ncf: "E430000001001" }),
+      negocio,
+      secuencias: SECUENCIAS,
+    });
+
+    expect(datos.lineas).toEqual([]);
   });
 });

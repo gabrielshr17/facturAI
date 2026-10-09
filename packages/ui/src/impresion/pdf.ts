@@ -110,7 +110,7 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
   const fecha = new Date(datos.fecha);
   const lineasDerecha = [
     ...(datos.comprobante ? encabezadoFiscal(datos.comprobante).slice(1) : []),
-    `No. ${datos.numero}`,
+    ...(datos.numero > 0 ? [`No. ${datos.numero}`] : []),
     `Fecha de emisión: ${fecha.toLocaleDateString("es-DO")}`,
   ];
   lineasDerecha.forEach((l, i) => doc.text(l, derecha, 27 + i * 5, { align: "right" }));

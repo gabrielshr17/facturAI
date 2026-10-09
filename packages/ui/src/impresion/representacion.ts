@@ -191,3 +191,31 @@ export async function datosReciboNotaGuardada(datos: DatosNotaGuardada): Promise
     comprobante: await comprobanteParaRecibo(nota, datos.secuencias),
   };
 }
+
+export interface DatosCompraFiscal {
+  comprobante: ComprobanteFiscal;
+  negocio: ReciboDatos["negocio"];
+  secuencias: Pick<SecuenciaNcfRepo, "obtener">;
+}
+
+export async function datosReciboCompra(datos: DatosCompraFiscal): Promise<ReciboDatos> {
+  const { comprobante } = datos;
+  return {
+    negocio: datos.negocio,
+    factura: {
+      numero_interno: 0,
+      fecha_hora: comprobante.fecha_emision,
+      subtotal_gravado: comprobante.monto_gravado,
+      subtotal_exento: comprobante.monto_exento,
+      total_itbis: comprobante.monto_itbis,
+      total: comprobante.total,
+      monto_pagado: 0,
+      cambio: 0,
+      notas: null,
+    },
+    lineas: lineasDesdeXml(comprobante.xml_firmado),
+    pagos: [],
+    cliente: null,
+    comprobante: await comprobanteParaRecibo(comprobante, datos.secuencias),
+  };
+}
