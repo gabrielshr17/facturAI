@@ -133,7 +133,7 @@ describe("emitirComprobanteDeCompra — E41, E43 y E47 hacia la DGII", () => {
       expect([enviado?.montoGravado, enviado?.montoExento, enviado?.montoItbis, enviado?.total]).toEqual([
         1000, 50, 180, 1230,
       ]);
-      expect(enviado?.pagos).toEqual([]);
+      expect(enviado?.pagos).toEqual([{ metodo: "efectivo", monto: 1230 }]);
 
       expect(comprobante).toMatchObject({
         tipo_ecf: "41",
@@ -339,6 +339,7 @@ describe("emitirComprobanteDeCompra — E41, E43 y E47 hacia la DGII", () => {
       expect(enviado?.receptorDocumentoNumero).toBeNull();
       expect(enviado?.receptorNombre).toBeNull();
       expect([enviado?.montoGravado, enviado?.montoExento, enviado?.total]).toEqual([0, 350, 350]);
+      expect(enviado?.pagos).toEqual([]);
       expect(comprobante.tipo_ecf).toBe("43");
       expect((await d.comprobanteRepo.obtenerPorCompra(compra.id))?.ncf).toBe("E430000000001");
       expect((await d.compraRepo.obtener(compra.id))?.tiene_comprobante_fiscal).toBe(1);

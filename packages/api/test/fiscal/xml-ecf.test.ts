@@ -293,8 +293,36 @@ describe("XML e-CF 41 (compras a proveedores sin comprobante)", () => {
     expect(valorDe(xml, "RNCComprador")).toBe("101010101");
     expect(valorDe(xml, "RazonSocialComprador")).toBe("PLOMERO EJEMPLO SRL");
     expect(xml).not.toContain("TipoIngresos");
-    expect(xml).not.toContain("TablaFormasPago");
     expect(await erroresContraXsd(firmado(xml), "ecf-41")).toEqual([]);
+  });
+
+  it("lleva el tipo y la forma de pago que exige la DGII, como en su set de pruebas", () => {
+    const xml = construirXmlEcf(compraInformalPrueba(), FIRMA);
+
+    expect(valorDe(xml, "IndicadorMontoGravado")).toBe("1");
+    expect(valorDe(xml, "TipoPago")).toBe("1");
+    expect(xml).toContain("<TablaFormasPago><FormaDePago><FormaPago>1</FormaPago><MontoPago>1230.00</MontoPago>");
+    expect(xml.indexOf("<TipoPago>")).toBeGreaterThan(xml.indexOf("<IndicadorMontoGravado>"));
+    expect(xml.indexOf("<TipoPago>")).toBeLessThan(xml.indexOf("<Emisor>"));
+  });
+
+  it("con todos los ítems exentos declara IndicadorMontoGravado en 0", async () => {
+    const lineas = compraInformalPrueba().lineas.map((l) => ({
+      ...l,
+      tasaImpuesto: 0,
+      esServicio: undefined,
+      itbisRetenido: 0,
+      isrRetenido: undefined,
+    }));
+    const xml = construirXmlEcf(compraInformalPrueba({ lineas }), FIRMA);
+
+    expect(valorDe(xml, "IndicadorMontoGravado")).toBe("0");
+    expect(valorDe(xml, "TipoPago")).toBe("1");
+    expect(await erroresContraXsd(firmado(xml), "ecf-41")).toEqual([]);
+  });
+
+  it("se niega a construir un E41 sin forma de pago", () => {
+    expect(() => construirXmlEcf(compraInformalPrueba({ pagos: [] }), FIRMA)).toThrow(/forma de pago/);
   });
 
   it("cada ítem declara la retención: un servicio lleva ISR y un ítem exento lleva ITBIS retenido en cero", () => {

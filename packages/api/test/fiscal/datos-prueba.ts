@@ -161,7 +161,7 @@ export function compraInformalPrueba(cambios: Partial<ComprobanteATransmitir> = 
         itbisRetenido: 0,
       },
     ],
-    pagos: [],
+    pagos: [{ metodo: "efectivo", monto: 1230 }],
     montoGravado: 1000,
     montoExento: 50,
     montoItbis: 180,
