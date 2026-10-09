@@ -185,7 +185,7 @@ export function SeccionSecuenciasNcf() {
                 </td>
               </tr>
             )}
-            {lista.map((sec) => (
+            {lista.map((sec) => [
               <tr key={sec.id}>
                 <td style={celda}>
                   <span style={s.badge}>{ETIQUETA_TIPO_ECF[sec.tipo_ecf]}</span>
@@ -218,35 +218,43 @@ export function SeccionSecuenciasNcf() {
                   </span>
                 </td>
                 <td style={celda}>
-                  {sec.estado === "disponible" &&
-                    (cerrandoId === sec.id ? (
-                      <span style={{ display: "inline-flex", gap: 6 }}>
-                        <button
-                          type="button"
-                          className="sfr-peligro"
-                          style={s.botonPeligro}
-                          onClick={() => void cerrar(sec.id)}
-                        >
-                          Confirmar cierre
-                        </button>
-                        <button type="button" style={s.botonSecundario} onClick={() => setCerrandoId(null)}>
-                          Cancelar
-                        </button>
-                      </span>
-                    ) : (
+                  {sec.estado === "disponible" && cerrandoId !== sec.id && (
+                    <button
+                      type="button"
+                      className="sfr-peligro"
+                      style={s.botonPeligro}
+                      title="Deja de ofrecer los números que no se han usado"
+                      onClick={() => setCerrandoId(sec.id)}
+                    >
+                      Cerrar
+                    </button>
+                  )}
+                </td>
+              </tr>,
+              cerrandoId === sec.id && (
+                <tr key={`${sec.id}-cierre`}>
+                  <td style={{ ...celda, background: c.fondo }} colSpan={7}>
+                    <span style={{ marginRight: 12 }}>
+                      ¿Cerrar la secuencia {ETIQUETA_TIPO_ECF[sec.tipo_ecf]} {sec.rango_desde}–{sec.rango_hasta}? Los
+                      números sin usar dejarán de ofrecerse; los ya emitidos no se tocan.
+                    </span>
+                    <span style={{ display: "inline-flex", gap: 6 }}>
                       <button
                         type="button"
                         className="sfr-peligro"
                         style={s.botonPeligro}
-                        title="Deja de ofrecer los números que no se han usado"
-                        onClick={() => setCerrandoId(sec.id)}
+                        onClick={() => void cerrar(sec.id)}
                       >
-                        Cerrar
+                        Confirmar cierre
                       </button>
-                    ))}
-                </td>
-              </tr>
-            ))}
+                      <button type="button" style={s.botonSecundario} onClick={() => setCerrandoId(null)}>
+                        Cancelar
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+              ),
+            ])}
           </tbody>
         </table>
       </div>
