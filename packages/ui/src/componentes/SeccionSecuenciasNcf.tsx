@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { type SecuenciaNcf, type SecuenciaNcfInput, type TipoEcf, ETIQUETA_TIPO_ECF, UMBRAL_BAJO } from "@sfr/core";
 import { Receipt, TriangleAlert } from "lucide-react";
 import { useRepos } from "../data/contexto.js";
@@ -6,6 +6,12 @@ import { s, c } from "../estilos.js";
 import { mensajesError } from "../utilidades/errores.js";
 
 const TIPOS: TipoEcf[] = ["32", "31", "34", "33", "41", "43", "44", "45", "46", "47"];
+
+const PADDING_COMPACTO = "8px 5px";
+const cabecera: CSSProperties = { ...s.th, padding: PADDING_COMPACTO, fontSize: 11 };
+const celda: CSSProperties = { ...s.td, padding: PADDING_COMPACTO, fontSize: 13 };
+const celdaSinSalto: CSSProperties = { ...celda, whiteSpace: "nowrap" };
+const celdaDerecha: CSSProperties = { ...s.tdDerecha, padding: PADDING_COMPACTO, fontSize: 13 };
 
 const VACIO: SecuenciaNcfInput = { tipoEcf: "32", rangoDesde: 1, rangoHasta: 1000, vencimiento: "" };
 
@@ -146,102 +152,104 @@ export function SeccionSecuenciasNcf() {
         </div>
       )}
 
-      <table style={s.tabla}>
-        <thead>
-          <tr>
-            <th scope="col" style={s.th}>
-              Tipo
-            </th>
-            <th scope="col" style={s.th}>
-              Rango
-            </th>
-            <th scope="col" style={s.th}>
-              Próximo
-            </th>
-            <th scope="col" style={s.th}>
-              Restantes
-            </th>
-            <th scope="col" style={s.th}>
-              Vencimiento
-            </th>
-            <th scope="col" style={s.th}>
-              Estado
-            </th>
-            <th scope="col" style={s.th}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {lista.length === 0 && (
+      <div className="sfr-tabla-scroll">
+        <table style={s.tabla}>
+          <thead>
             <tr>
-              <td style={s.filaVacia} colSpan={7}>
-                Sin secuencias cargadas. Sin esto no se puede emitir NCF.
-              </td>
+              <th scope="col" style={cabecera}>
+                Tipo
+              </th>
+              <th scope="col" style={cabecera}>
+                Rango
+              </th>
+              <th scope="col" style={cabecera}>
+                Próximo
+              </th>
+              <th scope="col" style={cabecera}>
+                Restantes
+              </th>
+              <th scope="col" style={cabecera}>
+                Vencimiento
+              </th>
+              <th scope="col" style={cabecera}>
+                Estado
+              </th>
+              <th scope="col" style={cabecera}></th>
             </tr>
-          )}
-          {lista.map((sec) => (
-            <tr key={sec.id}>
-              <td style={s.td}>
-                <span style={s.badge}>{ETIQUETA_TIPO_ECF[sec.tipo_ecf]}</span>
-              </td>
-              <td style={s.td}>
-                {sec.rango_desde}–{sec.rango_hasta}
-              </td>
-              <td style={s.tdDerecha}>{sec.proximo_numero}</td>
-              <td style={s.tdDerecha}>
-                {restantes(sec)}
-                {sec.estado === "disponible" && restantes(sec) <= UMBRAL_BAJO && (
-                  <span
-                    style={{
-                      color: c.rojo,
-                      marginLeft: 6,
-                      fontSize: 12,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 3,
-                    }}
-                  >
-                    <TriangleAlert size={11} /> umbral bajo
+          </thead>
+          <tbody>
+            {lista.length === 0 && (
+              <tr>
+                <td style={s.filaVacia} colSpan={7}>
+                  Sin secuencias cargadas. Sin esto no se puede emitir NCF.
+                </td>
+              </tr>
+            )}
+            {lista.map((sec) => (
+              <tr key={sec.id}>
+                <td style={celda}>
+                  <span style={s.badge}>{ETIQUETA_TIPO_ECF[sec.tipo_ecf]}</span>
+                </td>
+                <td style={celdaSinSalto}>
+                  {sec.rango_desde}–{sec.rango_hasta}
+                </td>
+                <td style={celdaDerecha}>{sec.proximo_numero}</td>
+                <td style={celdaDerecha}>
+                  {restantes(sec)}
+                  {sec.estado === "disponible" && restantes(sec) <= UMBRAL_BAJO && (
+                    <span
+                      style={{
+                        color: c.rojo,
+                        marginLeft: 6,
+                        fontSize: 12,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                      }}
+                    >
+                      <TriangleAlert size={11} /> umbral bajo
+                    </span>
+                  )}
+                </td>
+                <td style={celdaSinSalto}>{sec.vencimiento}</td>
+                <td style={celda}>
+                  <span style={{ ...s.badge, color: COLOR_ESTADO[sec.estado], background: c.grisClaro }}>
+                    {sec.estado}
                   </span>
-                )}
-              </td>
-              <td style={s.td}>{sec.vencimiento}</td>
-              <td style={s.td}>
-                <span style={{ ...s.badge, color: COLOR_ESTADO[sec.estado], background: c.grisClaro }}>
-                  {sec.estado}
-                </span>
-              </td>
-              <td style={s.td}>
-                {sec.estado === "disponible" &&
-                  (cerrandoId === sec.id ? (
-                    <span style={{ display: "inline-flex", gap: 6 }}>
+                </td>
+                <td style={celda}>
+                  {sec.estado === "disponible" &&
+                    (cerrandoId === sec.id ? (
+                      <span style={{ display: "inline-flex", gap: 6 }}>
+                        <button
+                          type="button"
+                          className="sfr-peligro"
+                          style={s.botonPeligro}
+                          onClick={() => void cerrar(sec.id)}
+                        >
+                          Confirmar cierre
+                        </button>
+                        <button type="button" style={s.botonSecundario} onClick={() => setCerrandoId(null)}>
+                          Cancelar
+                        </button>
+                      </span>
+                    ) : (
                       <button
                         type="button"
                         className="sfr-peligro"
                         style={s.botonPeligro}
-                        onClick={() => void cerrar(sec.id)}
+                        title="Deja de ofrecer los números que no se han usado"
+                        onClick={() => setCerrandoId(sec.id)}
                       >
-                        Confirmar cierre
+                        Cerrar
                       </button>
-                      <button type="button" style={s.botonSecundario} onClick={() => setCerrandoId(null)}>
-                        Cancelar
-                      </button>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="sfr-peligro"
-                      style={s.botonPeligro}
-                      title="Deja de ofrecer los números que no se han usado"
-                      onClick={() => setCerrandoId(sec.id)}
-                    >
-                      Cerrar
-                    </button>
-                  ))}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                    ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
