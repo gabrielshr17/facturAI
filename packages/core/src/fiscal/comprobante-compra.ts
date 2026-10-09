@@ -196,7 +196,7 @@ export async function emitirComprobanteDeCompra(
       receptorDocumentoNumero: receptor.numero,
       receptorNombre: receptor.nombre,
       lineas: lineas.map((l) => lineaATransmitir(l, input.retenciones[l.id])),
-      pagos: [],
+      pagos: input.tipoEcf === "41" ? [{ metodo: "efectivo", monto: total }] : [],
       montoGravado: gravado,
       montoExento: exento,
       montoItbis: itbis,

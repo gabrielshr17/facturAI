@@ -76,6 +76,9 @@ function validar(doc: ComprobanteATransmitir, perfil: PerfilEcf): void {
     throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} solo admite ítems con ITBIS a tasa 0%.`);
   }
   validarRetenciones(doc, perfil);
+  if (perfil.formasPago && !doc.pagos.some((p) => p.monto > 0)) {
+    throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} requiere al menos una forma de pago.`);
+  }
   if (perfil.vencimientoSecuencia && !doc.fechaVencimientoSecuencia) {
     throw new DocumentoFiscalInvalidoError(`El E${doc.tipoEcf} requiere la fecha de vencimiento de la secuencia.`);
   }
@@ -91,6 +94,11 @@ function validar(doc: ComprobanteATransmitir, perfil: PerfilEcf): void {
   }
 }
 
+function indicadorMontoGravado(hayGravado: boolean, perfil: PerfilEcf): string | null {
+  if (hayGravado) return perfil.indicadorMontoGravado ? "1" : null;
+  return perfil.indicadorCeroSinGravado ? "0" : null;
+}
+
 function idDoc(doc: ComprobanteATransmitir, perfil: PerfilEcf, hayGravado: boolean): Nodo {
   return [
     "IdDoc",
@@ -104,7 +112,7 @@ function idDoc(doc: ComprobanteATransmitir, perfil: PerfilEcf, hayGravado: boole
           ? fechaDgii(`${doc.fechaVencimientoSecuencia}T12:00:00Z`)
           : null,
       ],
-      ["IndicadorMontoGravado", hayGravado && perfil.indicadorMontoGravado ? "1" : null],
+      ["IndicadorMontoGravado", indicadorMontoGravado(hayGravado, perfil)],
       ["TipoIngresos", perfil.tipoIngresos ? "01" : null],
       ["TipoPago", perfil.tipoPago ? tipoPago(doc.pagos) : null],
       perfil.formasPago ? tablaFormasPago(doc.pagos) : ["TablaFormasPago", null],
