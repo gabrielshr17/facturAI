@@ -18,6 +18,7 @@ import { analizarComprobante, type DatosExtraidosComprobante } from "../data/cha
 import { useAtajosTeclado } from "../hooks/useAtajosTeclado.js";
 import { useEsAngosto, useEsMovil } from "../hooks/useBreakpoint.js";
 import { filtrarNumero } from "../utilidades/numero.js";
+import { documentoProveedor } from "../utilidades/documentoProveedor.js";
 import { mensajeError } from "../utilidades/errores.js";
 import { ComprobantesProveedores, type EcfParaCompra } from "../componentes/ComprobantesProveedores.js";
 import { ModalComprobanteCompra } from "../componentes/ModalComprobanteCompra.js";
@@ -73,6 +74,8 @@ export function Compras() {
   const [proveedorSel, setProveedorSel] = useState<Proveedor | null>(null);
   const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
   const [nuevoProveedorNombre, setNuevoProveedorNombre] = useState("");
+  const [nuevoProveedorRnc, setNuevoProveedorRnc] = useState("");
+  const [rncEdicion, setRncEdicion] = useState<string | null>(null);
 
   const [ncfProveedor, setNcfProveedor] = useState("");
   const [tieneComprobanteFiscal, setTieneComprobanteFiscal] = useState(false);
@@ -89,6 +92,7 @@ export function Compras() {
   const [mostrarSuelto, setMostrarSuelto] = useState(false);
   const [sueltoDesc, setSueltoDesc] = useState("");
   const [sueltoCosto, setSueltoCosto] = useState("");
+  const [sueltoExento, setSueltoExento] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -173,13 +177,36 @@ export function Compras() {
 
   async function crearProveedorRapido() {
     if (!nuevoProveedorNombre.trim()) return;
+    const rnc = nuevoProveedorRnc.trim() ? documentoProveedor(nuevoProveedorRnc) : null;
+    if (nuevoProveedorRnc.trim() && !rnc) {
+      setError("El RNC debe tener 9 dígitos y la cédula 11.");
+      return;
+    }
     try {
-      const p = await proveedores.crear({ nombre: nuevoProveedorNombre });
+      const p = await proveedores.crear({ nombre: nuevoProveedorNombre, rnc });
       setProveedorSel(p);
       setMostrarNuevoProveedor(false);
       setNuevoProveedorNombre("");
+      setNuevoProveedorRnc("");
       setProveedorQ("");
       setProveedorResultados([]);
+    } catch (e) {
+      setError(mensajeError(e));
+    }
+  }
+
+  async function guardarRncProveedor() {
+    if (!proveedorSel || rncEdicion === null) return;
+    const rnc = documentoProveedor(rncEdicion);
+    if (!rnc) {
+      setError("El RNC debe tener 9 dígitos y la cédula 11.");
+      return;
+    }
+    try {
+      await proveedores.actualizar(proveedorSel.id, { nombre: proveedorSel.nombre, rnc });
+      setProveedorSel({ ...proveedorSel, rnc });
+      setRncEdicion(null);
+      setError(null);
     } catch (e) {
       setError(mensajeError(e));
     }
@@ -216,12 +243,13 @@ export function Compras() {
         descripcion: sueltoDesc,
         cantidad: 1,
         costoUnitario: Number(sueltoCosto) || 0,
-        impuestoTipo: "itbis18",
-        tasaImpuesto: 0.18,
+        impuestoTipo: sueltoExento ? "exento" : "itbis18",
+        tasaImpuesto: sueltoExento ? 0 : 0.18,
       },
     ]);
     setSueltoDesc("");
     setSueltoCosto("");
+    setSueltoExento(false);
     setMostrarSuelto(false);
   }
 
@@ -380,12 +408,35 @@ export function Compras() {
           <div>
             <label style={s.label}>Proveedor (opcional)</label>
             {proveedorSel ? (
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span>{proveedorSel.nombre}</span>
-                <button style={s.botonSecundario} onClick={() => setProveedorSel(null)}>
-                  Quitar
-                </button>
-              </div>
+              <>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span>{proveedorSel.nombre}</span>
+                  <button
+                    style={s.botonSecundario}
+                    onClick={() => {
+                      setProveedorSel(null);
+                      setRncEdicion(null);
+                    }}
+                  >
+                    Quitar
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                  <input
+                    style={s.input}
+                    placeholder="RNC o cédula del proveedor"
+                    aria-label="RNC o cédula del proveedor"
+                    inputMode="numeric"
+                    value={rncEdicion ?? proveedorSel.rnc ?? ""}
+                    onChange={(e) => setRncEdicion(e.target.value)}
+                  />
+                  {rncEdicion !== null && rncEdicion !== (proveedorSel.rnc ?? "") && (
+                    <button style={s.boton} onClick={() => void guardarRncProveedor()}>
+                      Guardar RNC
+                    </button>
+                  )}
+                </div>
+              </>
             ) : (
               <>
                 <div style={{ display: "flex", gap: 6 }}>
@@ -451,6 +502,14 @@ export function Compras() {
                       placeholder="Nombre del proveedor"
                       value={nuevoProveedorNombre}
                       onChange={(e) => setNuevoProveedorNombre(e.target.value)}
+                    />
+                    <input
+                      style={{ ...s.input, maxWidth: 170 }}
+                      placeholder="RNC (opcional)"
+                      aria-label="RNC del proveedor nuevo"
+                      inputMode="numeric"
+                      value={nuevoProveedorRnc}
+                      onChange={(e) => setNuevoProveedorRnc(e.target.value)}
                     />
                     <button style={s.boton} onClick={crearProveedorRapido}>
                       Crear
@@ -562,6 +621,15 @@ export function Compras() {
               value={sueltoCosto}
               onChange={(e) => setSueltoCosto(filtrarNumero(e.target.value))}
             />
+            <select
+              style={{ ...s.input, maxWidth: 150 }}
+              aria-label="Impuesto del artículo"
+              value={sueltoExento ? "exento" : "itbis18"}
+              onChange={(e) => setSueltoExento(e.target.value === "exento")}
+            >
+              <option value="itbis18">ITBIS 18%</option>
+              <option value="exento">Exento</option>
+            </select>
             <button style={s.boton} onClick={agregarLineaSuelta}>
               Agregar
             </button>
