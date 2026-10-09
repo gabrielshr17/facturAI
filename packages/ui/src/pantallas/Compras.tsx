@@ -23,6 +23,8 @@ import { mensajeError } from "../utilidades/errores.js";
 import { ComprobantesProveedores, type EcfParaCompra } from "../componentes/ComprobantesProveedores.js";
 import { ModalComprobanteCompra } from "../componentes/ModalComprobanteCompra.js";
 import { marcarEcfRecibidoImportado } from "../data/fiscalCliente.js";
+import { datosReciboCompra } from "../impresion/representacion.js";
+import { generarPdfRecibo, guardarPdf } from "../impresion/pdf.js";
 
 interface LineaLocal {
   producto_id: string | null;
@@ -57,6 +59,7 @@ export function Compras() {
     producto: productos,
     comprobanteArchivo: archivos,
     comprobanteFiscal,
+    secuenciaNcf,
     negocio: negocioRepo,
     api,
     modoFiscal,
@@ -161,6 +164,26 @@ export function Compras() {
   useEffect(() => {
     void negocioRepo.obtener().then((n) => setNegocio(n ?? null));
   }, [negocioRepo]);
+
+  async function guardarPdfComprobante(comprobante: ComprobanteFiscal) {
+    try {
+      const datos = await datosReciboCompra({
+        comprobante,
+        negocio: negocio ?? {
+          nombre_comercial: "Mi Negocio",
+          rnc: null,
+          direccion: null,
+          telefono: null,
+          ancho_impresora_default: 80,
+        },
+        secuencias: secuenciaNcf,
+      });
+      guardarPdf(generarPdfRecibo(datos), `Compra-${comprobante.ncf}.pdf`);
+    } catch (e) {
+      console.error("No se pudo generar el PDF del comprobante de compra", e);
+      setError(mensajeError(e));
+    }
+  }
 
   async function recargarTrasEmitir() {
     if (seleccionadaId) {
@@ -906,6 +929,15 @@ export function Compras() {
                 <br />
                 DGII: {ESTADO_DGII_COMPRA[comprobanteSel.estado_dgii]}
               </p>
+            )}
+            {comprobanteSel?.qr_url && (
+              <button
+                type="button"
+                style={{ ...s.botonSecundario, marginTop: 12, minHeight: 44, width: "100%" }}
+                onClick={() => void guardarPdfComprobante(comprobanteSel)}
+              >
+                Guardar PDF
+              </button>
             )}
             {comprobanteSel === null &&
               lineasSel.length > 0 &&
