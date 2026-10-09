@@ -73,7 +73,8 @@ function validarRetencionDeLinea(
   linea: CompraLinea,
   retencion: RetencionLineaInput | undefined,
 ): void {
-  const { itbisRetenido, isrRetenido, esServicio } = retencion ?? {};
+  const { itbisRetenido, isrRetenido } = retencion ?? {};
+  const esServicio = tipoEcf === "47" || retencion?.esServicio === true;
   const etiqueta = `"${linea.descripcion}"`;
   if ((itbisRetenido ?? 0) < 0 || (isrRetenido ?? 0) < 0) {
     throw error("retenciones", `La retención de ${etiqueta} no puede ser negativa.`);
@@ -121,7 +122,11 @@ async function validarCompra(
   return compra;
 }
 
-function lineaATransmitir(linea: CompraLinea, retencion: RetencionLineaInput | undefined): LineaATransmitir {
+function lineaATransmitir(
+  linea: CompraLinea,
+  retencion: RetencionLineaInput | undefined,
+  tipoEcf: TipoEcfDeCompra,
+): LineaATransmitir {
   const transmitida: LineaATransmitir = {
     descripcion: linea.descripcion,
     cantidad: linea.cantidad,
@@ -129,7 +134,7 @@ function lineaATransmitir(linea: CompraLinea, retencion: RetencionLineaInput | u
     tasaImpuesto: linea.tasa_impuesto,
     subtotal: linea.subtotal,
   };
-  if (retencion?.esServicio) transmitida.esServicio = true;
+  if (retencion?.esServicio || tipoEcf === "47") transmitida.esServicio = true;
   if (retencion?.itbisRetenido !== undefined) transmitida.itbisRetenido = retencion.itbisRetenido;
   if (retencion?.isrRetenido !== undefined) transmitida.isrRetenido = retencion.isrRetenido;
   return transmitida;
@@ -195,7 +200,7 @@ export async function emitirComprobanteDeCompra(
       receptorDocumentoTipo: receptor.tipo,
       receptorDocumentoNumero: receptor.numero,
       receptorNombre: receptor.nombre,
-      lineas: lineas.map((l) => lineaATransmitir(l, input.retenciones[l.id])),
+      lineas: lineas.map((l) => lineaATransmitir(l, input.retenciones[l.id], input.tipoEcf)),
       pagos: input.tipoEcf === "41" ? [{ metodo: "efectivo", monto: total }] : [],
       montoGravado: gravado,
       montoExento: exento,
