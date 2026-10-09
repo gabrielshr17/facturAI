@@ -82,7 +82,7 @@ export async function registrarDevolucionConFiscal(
       fechaVencimientoSecuencia: null,
       receptorDocumentoTipo: comprobanteOriginal.receptor_documento_tipo,
       receptorDocumentoNumero: comprobanteOriginal.receptor_documento_numero,
-      receptorNombre: null,
+      receptorNombre: comprobanteOriginal.receptor_nombre,
       lineas: preparada.lineas.map((l) => ({
         descripcion: l.descripcion,
         cantidad: l.cantidad,
@@ -115,6 +115,7 @@ export async function registrarDevolucionConFiscal(
     rncEmisor: emisor.rnc,
     receptorDocumentoTipo: comprobanteOriginal.receptor_documento_tipo,
     receptorDocumentoNumero: comprobanteOriginal.receptor_documento_numero,
+    receptorNombre: comprobanteOriginal.receptor_nombre,
     montoGravado: preparada.subtotalGravado,
     montoExento: preparada.subtotalExento,
     montoItbis: preparada.totalItbis,

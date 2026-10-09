@@ -17,6 +17,7 @@ import {
   ValidacionError,
   type ProveedorFiscal,
   type EmisorFiscal,
+  type ComprobanteATransmitir,
 } from "../src/index.js";
 
 const EMISOR: EmisorFiscal = {
@@ -204,6 +205,46 @@ describe("registrarDevolucionConFiscal — exige Nota de Crédito (E34)", () => 
     expect(comprobante.ncf).toBe("E340000000001");
     expect(devolucion.comprobante_id).toBe(comprobante.id);
     expect(devolucion.total).toBe(50);
+  });
+
+  it("envía en la nota de crédito la razón social del comprador del comprobante original", async () => {
+    const enviados: ComprobanteATransmitir[] = [];
+    proveedor = {
+      async transmitir(c) {
+        enviados.push(c);
+        return { estado: "aceptado", trackId: "T", codigoSeguridad: "ABC123" };
+      },
+    };
+    const d = deps();
+    await d.secuenciaRepo.crear({ tipoEcf: "31", rangoDesde: 1, rangoHasta: 100, vencimiento: hoyMasDias(365) });
+    await d.secuenciaRepo.crear({ tipoEcf: "34", rangoDesde: 1, rangoHasta: 100, vencimiento: hoyMasDias(365) });
+    const t = await d.facturaRepo.abrirTicket();
+    const linea = await d.facturaRepo.agregarLinea(t.id, {
+      descripcion: "Arroz",
+      cantidad: 2,
+      precioUnitario: 50,
+      impuestoTipo: "itbis18",
+      tasaImpuesto: 0.18,
+    });
+    await cobrarConFiscal(d, t.id, {
+      pagos: [{ metodo: "efectivo", monto: 100 }],
+      tipoEcf: "31",
+      receptorDocumentoTipo: "rnc",
+      receptorDocumentoNumero: "131880681",
+      receptorNombre: "CLIENTE EJEMPLO SRL",
+      emisor: EMISOR,
+    });
+
+    const { comprobante } = await registrarDevolucionConFiscal(
+      d,
+      { facturaId: t.id, lineas: [{ facturaLineaId: linea.id, cantidad: 1 }] },
+      EMISOR,
+    );
+
+    const nota = enviados.find((e) => e.tipoEcf === "34");
+    expect(nota?.receptorDocumentoNumero).toBe("131880681");
+    expect(nota?.receptorNombre).toBe("CLIENTE EJEMPLO SRL");
+    expect(comprobante.receptor_nombre).toBe("CLIENTE EJEMPLO SRL");
   });
 
   it("rechaza si la venta original no tiene comprobante fiscal", async () => {

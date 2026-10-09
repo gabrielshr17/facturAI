@@ -421,19 +421,19 @@ describe("emitirComprobanteDeCompra — E41, E43 y E47 hacia la DGII", () => {
       expect((await d.secuenciaRepo.obtenerVigente("47"))?.proximo_numero).toBe(1);
     });
 
-    it("solo retiene ISR en un pago declarado como servicio, sin consumir número", async () => {
-      const d = depsCon(proveedorFiscalQue(ACEPTADO).proveedor);
+    it("marca cada artículo como servicio, lo único que admite la DGII en un E47", async () => {
+      const { proveedor, recibidos } = proveedorFiscalQue(ACEPTADO);
+      const d = depsCon(proveedor);
       await secuencia(d, "47");
       const { compra, linea } = await pagoExterior(d);
 
-      await expect(
-        emitirComprobanteDeCompra(
-          d,
-          { compraId: compra.id, tipoEcf: "47", retenciones: { [linea.id]: { isrRetenido: 2700 } } },
-          EMISOR,
-        ),
-      ).rejects.toBeInstanceOf(ValidacionError);
-      expect((await d.secuenciaRepo.obtenerVigente("47"))?.proximo_numero).toBe(1);
+      await emitirComprobanteDeCompra(
+        d,
+        { compraId: compra.id, tipoEcf: "47", retenciones: { [linea.id]: { isrRetenido: 2700 } } },
+        EMISOR,
+      );
+
+      expect(recibidos.at(-1)?.lineas.every((l) => l.esServicio === true)).toBe(true);
     });
 
     it("exige el ISR retenido de cada línea, sin consumir número", async () => {
