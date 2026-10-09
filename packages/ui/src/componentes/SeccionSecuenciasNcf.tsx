@@ -25,6 +25,7 @@ export function SeccionSecuenciasNcf() {
   const [lista, setLista] = useState<SecuenciaNcf[]>([]);
   const [form, setForm] = useState<SecuenciaNcfInput | null>(null);
   const [errores, setErrores] = useState<string[]>([]);
+  const [cerrandoId, setCerrandoId] = useState<string | null>(null);
 
   async function recargar() {
     setLista(await repo.listar());
@@ -38,6 +39,17 @@ export function SeccionSecuenciasNcf() {
     try {
       await repo.crear(form);
       setForm(null);
+      setErrores([]);
+      await recargar();
+    } catch (e) {
+      setErrores(mensajesError(e));
+    }
+  }
+
+  async function cerrar(id: string) {
+    try {
+      await repo.cerrar(id);
+      setCerrandoId(null);
       setErrores([]);
       await recargar();
     } catch (e) {
@@ -155,12 +167,13 @@ export function SeccionSecuenciasNcf() {
             <th scope="col" style={s.th}>
               Estado
             </th>
+            <th scope="col" style={s.th}></th>
           </tr>
         </thead>
         <tbody>
           {lista.length === 0 && (
             <tr>
-              <td style={s.filaVacia} colSpan={6}>
+              <td style={s.filaVacia} colSpan={7}>
                 Sin secuencias cargadas. Sin esto no se puede emitir NCF.
               </td>
             </tr>
@@ -196,6 +209,34 @@ export function SeccionSecuenciasNcf() {
                 <span style={{ ...s.badge, color: COLOR_ESTADO[sec.estado], background: c.grisClaro }}>
                   {sec.estado}
                 </span>
+              </td>
+              <td style={s.td}>
+                {sec.estado === "disponible" &&
+                  (cerrandoId === sec.id ? (
+                    <span style={{ display: "inline-flex", gap: 6 }}>
+                      <button
+                        type="button"
+                        className="sfr-peligro"
+                        style={s.botonPeligro}
+                        onClick={() => void cerrar(sec.id)}
+                      >
+                        Confirmar cierre
+                      </button>
+                      <button type="button" style={s.botonSecundario} onClick={() => setCerrandoId(null)}>
+                        Cancelar
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="sfr-peligro"
+                      style={s.botonPeligro}
+                      title="Deja de ofrecer los números que no se han usado"
+                      onClick={() => setCerrandoId(sec.id)}
+                    >
+                      Cerrar
+                    </button>
+                  ))}
               </td>
             </tr>
           ))}

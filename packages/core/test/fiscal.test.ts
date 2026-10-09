@@ -87,6 +87,32 @@ describe("secuenciaNcfRepo", () => {
     expect(await repo.obtenerVigente("31")).toBeUndefined();
   });
 
+  it("cerrar deja de ofrecer los números sin usar y respeta los ya consumidos", async () => {
+    const repo = crearSecuenciaNcfRepo(db);
+    const vieja = await repo.crear({ tipoEcf: "31", rangoDesde: 1, rangoHasta: 10, vencimiento: hoyMasDias(100) });
+    await repo.consumirSiguiente(vieja.id);
+    await repo.consumirSiguiente(vieja.id);
+    const nueva = await repo.crear({ tipoEcf: "31", rangoDesde: 100, rangoHasta: 110, vencimiento: hoyMasDias(900) });
+    expect((await repo.obtenerVigente("31"))?.id).toBe(vieja.id);
+
+    await repo.cerrar(vieja.id);
+
+    const cerrada = await repo.obtener(vieja.id);
+    expect(cerrada).toMatchObject({ rango_desde: 1, rango_hasta: 2, proximo_numero: 3, estado: "agotada" });
+    await expect(repo.consumirSiguiente(vieja.id)).rejects.toBeInstanceOf(ValidacionError);
+    expect((await repo.obtenerVigente("31"))?.id).toBe(nueva.id);
+    expect(await repo.consumirSiguiente(nueva.id)).toBe(100);
+  });
+
+  it("cerrar una secuencia sin uso la deja agotada y una inexistente se rechaza", async () => {
+    const repo = crearSecuenciaNcfRepo(db);
+    const s = await repo.crear({ tipoEcf: "32", rangoDesde: 5, rangoHasta: 9, vencimiento: hoyMasDias(30) });
+    await repo.cerrar(s.id);
+    expect(await repo.obtenerVigente("32")).toBeUndefined();
+    expect((await repo.obtener(s.id))?.estado).toBe("agotada");
+    await expect(repo.cerrar("no-existe")).rejects.toThrow();
+  });
+
   it("marca agotada cuando se consume el último número", async () => {
     const repo = crearSecuenciaNcfRepo(db);
     const s = await repo.crear({ tipoEcf: "32", rangoDesde: 1, rangoHasta: 1, vencimiento: hoyMasDias(30) });

@@ -150,6 +150,17 @@ export function crearSecuenciaNcfRepo(db: SqlDriver) {
       return numero;
     },
 
+    /** Retira lo que queda sin usar de una secuencia: los números ya consumidos no se tocan. */
+    async cerrar(secuenciaId: string): Promise<void> {
+      const s = await db.get<SecuenciaNcf>(`SELECT ${COLS} FROM secuencia_ncf WHERE id=?`, [secuenciaId]);
+      if (!s) throw new Error(MSG.secuenciaNoExiste);
+      await db.run("UPDATE secuencia_ncf SET rango_hasta=?, estado='agotada', updated_at=? WHERE id=?", [
+        s.proximo_numero - 1,
+        now(),
+        secuenciaId,
+      ]);
+    },
+
     /** Cuántos números quedan; útil para el aviso de umbral bajo en Configuración. */
     restantes(s: Pick<SecuenciaNcf, "rango_hasta" | "proximo_numero">): number {
       return Math.max(0, s.rango_hasta - s.proximo_numero + 1);
