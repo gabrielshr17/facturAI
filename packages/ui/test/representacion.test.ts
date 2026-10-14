@@ -71,9 +71,9 @@ describe("representación impresa de notas de crédito y débito", () => {
     expect(encabezadoFiscal(ri)).toEqual([
       "Nota de Débito Electrónica",
       "e-NCF: E330000000001",
-      "Válido hasta: 31-12-2027",
-      "e-NCF modificado: E310000000007",
-      "Código de modificación: Corrige montos del NCF modificado",
+      "Fecha Vencimiento: 31-12-2027",
+      "NCF Modificado: E310000000007",
+      "Corrige montos del NCF modificado",
     ]);
   });
 
@@ -90,8 +90,8 @@ describe("representación impresa de notas de crédito y débito", () => {
     expect(encabezadoFiscal(ri)).toEqual([
       "Nota de Crédito Electrónica",
       "e-NCF: E340000000001",
-      "e-NCF modificado: E320000000001",
-      "Código de modificación: Anula el NCF modificado",
+      "NCF Modificado: E320000000001",
+      "Anula el NCF modificado",
     ]);
   });
 
@@ -196,7 +196,7 @@ describe("representación impresa de una compra con comprobante fiscal", () => {
     expect(encabezadoFiscal(datos.comprobante!)).toEqual([
       "Comprobante Electrónico de Compras",
       "e-NCF: E410000001001",
-      "Válido hasta: 31-12-2027",
+      "Fecha Vencimiento: 31-12-2027",
     ]);
     expect(datos.comprobante?.qrUrl).toContain("consultatimbre");
     expect(datos.comprobante?.codigoSeguridad).toBe("AbC123");

@@ -26,18 +26,18 @@ export function encabezadoFiscal(comprobante: ComprobanteRecibo): string[] {
     comprobante.tipoEcfEtiqueta,
     `e-NCF: ${comprobante.ncf}`,
     comprobante.fechaVencimientoSecuencia
-      ? `Válido hasta: ${fechaDgiiDesdeIso(comprobante.fechaVencimientoSecuencia)}`
+      ? `Fecha Vencimiento: ${fechaDgiiDesdeIso(comprobante.fechaVencimientoSecuencia)}`
       : null,
-    comprobante.referencia ? `e-NCF modificado: ${comprobante.referencia.ncfModificado}` : null,
-    comprobante.referencia ? `Código de modificación: ${comprobante.referencia.codigoModificacion}` : null,
+    comprobante.referencia ? `NCF Modificado: ${comprobante.referencia.ncfModificado}` : null,
+    comprobante.referencia ? comprobante.referencia.codigoModificacion : null,
   ].filter((l): l is string => l !== null);
 }
 
 /** Datos del comprador (parte inferior izquierda del encabezado): razón social y RNC/cédula si aplica. */
 export function datosComprador(comprobante: ComprobanteRecibo): string[] {
   return [
-    comprobante.receptorNombre ? `Razón social comprador: ${comprobante.receptorNombre}` : null,
-    comprobante.receptorDocumento ? `RNC comprador: ${comprobante.receptorDocumento}` : null,
+    comprobante.receptorNombre ? `Razón Social Cliente: ${comprobante.receptorNombre}` : null,
+    comprobante.receptorDocumento ? `RNC Cliente: ${comprobante.receptorDocumento}` : null,
   ].filter((l): l is string => l !== null);
 }
 
