@@ -75,6 +75,7 @@ const ETIQUETA_METODO: Record<string, string> = {
 };
 
 function construirPdf(datos: DocumentoPdfDatos): jsPDF {
+  if (datos.comprobante) return construirPdfFiscal(datos, datos.comprobante);
   const doc = new jsPDF({ unit: "mm", format: "letter" });
   const anchoPagina = doc.internal.pageSize.getWidth();
   const margen = 18;
@@ -89,9 +90,6 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
   doc.setFontSize(9);
   doc.setTextColor(90);
   const lineasNegocio = [
-    datos.comprobante && datos.negocio.razon_social && datos.negocio.razon_social !== datos.negocio.nombre_comercial
-      ? datos.negocio.razon_social
-      : null,
     datos.negocio.rnc ? `RNC: ${datos.negocio.rnc}` : null,
     ...lineasDireccionEmisor(datos.negocio),
     datos.negocio.telefono ? `Tel: ${datos.negocio.telefono}` : null,
@@ -108,24 +106,10 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   const fecha = new Date(datos.fecha);
-  const lineasDerecha = [
-    ...(datos.comprobante ? encabezadoFiscal(datos.comprobante).slice(1) : []),
-    ...(datos.numero > 0 ? [`No. ${datos.numero}`] : []),
-    `Fecha de emisión: ${fecha.toLocaleDateString("es-DO")}`,
-  ];
+  const lineasDerecha = [`No. ${datos.numero}`, `Fecha de emisión: ${fecha.toLocaleDateString("es-DO")}`];
   lineasDerecha.forEach((l, i) => doc.text(l, derecha, 27 + i * 5, { align: "right" }));
 
   y = Math.max(y, 27 + (lineasDerecha.length - 1) * 5) + 8;
-
-  if (datos.comprobante) {
-    const comprador = datosComprador(datos.comprobante);
-    if (comprador.length > 0) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      comprador.forEach((l, i) => doc.text(l, margen, y + i * 5));
-      y += comprador.length * 5 + 4;
-    }
-  }
 
   if (datos.cliente) {
     doc.setFont("helvetica", "bold");
@@ -139,20 +123,9 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
   autoTable(doc, {
     startY: y,
     margin: { left: margen, right: margen },
-    head: [
-      datos.comprobante
-        ? ["Descripción", "Cant.", "Precio unit.", "ITBIS", "Valor"]
-        : ["Descripción", "Cant.", "Precio unit.", "Subtotal"],
-    ],
+    head: [["Descripción", "Cant.", "Precio unit.", "Subtotal"]],
     body: datos.lineas.map((l) => {
-      const descripcion = descripcionLinea(
-        { descripcion: l.descripcion, tasa_impuesto: l.tasa_impuesto ?? 0.18 },
-        !!datos.comprobante,
-      );
-      const base = [descripcion, cantidad(l.cantidad), `RD$ ${money(l.precio_unitario)}`];
-      return datos.comprobante
-        ? [...base, l.monto_itbis ? `RD$ ${money(l.monto_itbis)}` : "", `RD$ ${money(l.subtotal)}`]
-        : [...base, `RD$ ${money(l.subtotal)}`];
+      return [l.descripcion, cantidad(l.cantidad), `RD$ ${money(l.precio_unitario)}`, `RD$ ${money(l.subtotal)}`];
     }),
     styles: { font: "helvetica", fontSize: 9, cellPadding: 2.5 },
     headStyles: { fillColor: [30, 30, 30], textColor: 255 },
@@ -193,10 +166,6 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
     y += 8;
   }
 
-  if (datos.comprobante?.qrUrl) {
-    y = dibujarTimbre(doc, datos.comprobante, Math.max(margen, DISTANCIA_MINIMA_QR_BORDE_MM), y + 6);
-  }
-
   if (datos.piePagina) {
     doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
@@ -208,35 +177,147 @@ function construirPdf(datos: DocumentoPdfDatos): jsPDF {
 }
 
 const LADO_QR_MM = 30;
-/** Informe Técnico e-CF §18.2.3: el QR empieza a 2 cm o más del borde, lado inferior izquierdo. */
 const DISTANCIA_MINIMA_QR_BORDE_MM = 20;
+const AZUL_TITULO: [number, number, number] = [31, 78, 121];
+const AZUL_LINEA: [number, number, number] = [91, 155, 213];
+const GRIS_CAJA: [number, number, number] = [242, 242, 242];
+const GRIS_BORDE: [number, number, number] = [150, 150, 150];
 
-function dibujarTimbre(
-  doc: jsPDF,
-  comprobante: { codigoSeguridad?: string | null; fechaFirma?: string | null; qrUrl?: string | null },
-  x: number,
-  yInicial: number,
-): number {
-  const modulos = modulosQr(comprobante.qrUrl!);
-  const lado = LADO_QR_MM / modulos.length;
-  let y = yInicial;
-  if (y + LADO_QR_MM > doc.internal.pageSize.getHeight() - 20) {
+function fechaDgii(fechaIso: string): string {
+  const f = new Date(fechaIso);
+  const dos = (n: number) => String(n).padStart(2, "0");
+  return `${dos(f.getDate())}-${dos(f.getMonth() + 1)}-${f.getFullYear()}`;
+}
+
+function textoConRotulo(doc: jsPDF, rotulo: string, valor: string, x: number, y: number): void {
+  doc.setFont("helvetica", "bold");
+  doc.text(rotulo, x, y);
+  const ancho = doc.getTextWidth(rotulo);
+  doc.setFont("helvetica", "normal");
+  doc.text(valor, x + ancho, y);
+}
+
+function construirPdfFiscal(datos: DocumentoPdfDatos, comprobante: ComprobanteRecibo): jsPDF {
+  const doc = new jsPDF({ unit: "mm", format: "letter" });
+  const margen = 18;
+  const derecha = doc.internal.pageSize.getWidth() - margen;
+  const altoPagina = doc.internal.pageSize.getHeight();
+  const { negocio } = datos;
+
+  const linea = (y: number) => {
+    doc.setDrawColor(...AZUL_LINEA);
+    doc.setLineWidth(0.4);
+    doc.line(margen, y, derecha, y);
+  };
+
+  let y = 22;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(...AZUL_TITULO);
+  doc.text(negocio.nombre_comercial, margen, y);
+  doc.text(comprobante.tipoEcfEtiqueta, derecha, y, { align: "right" });
+
+  doc.setTextColor(0);
+  doc.setFontSize(9.5);
+  const derechaLineas = encabezadoFiscal(comprobante).slice(1);
+  derechaLineas.forEach((l, i) => doc.text(l, derecha, y + 6 + i * 5, { align: "right" }));
+
+  const direccion = lineasDireccionEmisor(negocio).join(", ");
+  const izquierda: [string, string][] = [];
+  if (negocio.razon_social && negocio.razon_social !== negocio.nombre_comercial) {
+    izquierda.push(["", negocio.razon_social]);
+  }
+  if (negocio.rnc) izquierda.push(["", `RNC ${negocio.rnc}`]);
+  if (direccion) izquierda.push(["Dirección: ", direccion]);
+  izquierda.push(["Fecha Emisión: ", fechaDgii(datos.fecha)]);
+  izquierda.forEach(([rotulo, valor], i) => textoConRotulo(doc, rotulo, valor, margen, y + 6 + i * 5));
+  y += 6 + Math.max(izquierda.length, derechaLineas.length) * 5;
+
+  linea(y);
+  y += 7;
+  const comprador = datosComprador(comprobante);
+  doc.setFontSize(10);
+  for (const l of comprador) {
+    const corte = l.indexOf(": ") + 2;
+    textoConRotulo(doc, l.slice(0, corte), l.slice(corte), margen, y);
+    y += 5.5;
+  }
+  if (comprador.length > 0) {
+    y += 1;
+    linea(y);
+    y += 5;
+  }
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margen, right: margen },
+    head: [["Cantidad", "Descripción", "Unidad de Medida", "Precio", "ITBIS", "Valor"]],
+    body: datos.lineas.map((l) => [
+      cantidad(l.cantidad),
+      descripcionLinea({ descripcion: l.descripcion, tasa_impuesto: l.tasa_impuesto ?? 0.18 }, true),
+      "UND",
+      money(l.precio_unitario),
+      l.monto_itbis ? money(l.monto_itbis) : "",
+      money(l.subtotal),
+    ]),
+    theme: "grid",
+    styles: { font: "helvetica", fontSize: 9, cellPadding: 2, lineColor: GRIS_BORDE, textColor: 0 },
+    headStyles: { fillColor: [217, 217, 217], textColor: 0, halign: "center", fontStyle: "bold" },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 20 },
+      2: { halign: "center", cellWidth: 24 },
+      3: { halign: "right", cellWidth: 26 },
+      4: { halign: "right", cellWidth: 26 },
+      5: { halign: "right", cellWidth: 28, fillColor: GRIS_CAJA },
+    },
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  y = (doc as any).lastAutoTable.finalY + 6;
+  const totales: [string, number][] = [["Subtotal Gravado:", datos.subtotalGravado]];
+  if (datos.subtotalExento > 0) totales.push(["Subtotal Exento:", datos.subtotalExento]);
+  totales.push(["Total ITBIS:", datos.totalItbis], ["Total:", datos.total]);
+
+  if (y + Math.max(LADO_QR_MM + 12, totales.length * 6 + 4) > altoPagina - 20) {
     doc.addPage();
     y = 20;
   }
-  doc.setFillColor(0, 0, 0);
-  modulos.forEach((fila, f) =>
-    fila.forEach((oscuro, c) => {
-      if (oscuro) doc.rect(x + c * lado, y + f * lado, lado, lado, "F");
-    }),
-  );
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(0);
-  const textoX = x + LADO_QR_MM + 5;
-  if (comprobante.codigoSeguridad) doc.text(`Código de seguridad: ${comprobante.codigoSeguridad}`, textoX, y + 10);
-  if (comprobante.fechaFirma) doc.text(`Fecha de firma digital: ${comprobante.fechaFirma}`, textoX, y + 16);
-  return y + LADO_QR_MM + 4;
+  linea(y);
+  y += 5;
+
+  const xQr = Math.max(margen, DISTANCIA_MINIMA_QR_BORDE_MM);
+  if (comprobante.qrUrl) {
+    const modulos = modulosQr(comprobante.qrUrl);
+    const lado = LADO_QR_MM / modulos.length;
+    doc.setFillColor(0, 0, 0);
+    modulos.forEach((fila, f) =>
+      fila.forEach((oscuro, c) => {
+        if (oscuro) doc.rect(xQr + c * lado, y + f * lado, lado, lado, "F");
+      }),
+    );
+  }
+  doc.setFont("times", "normal");
+  doc.setFontSize(8.5);
+  if (comprobante.codigoSeguridad) {
+    doc.text(`Código de Seguridad: ${comprobante.codigoSeguridad}`, xQr, y + LADO_QR_MM + 4);
+  }
+  if (comprobante.fechaFirma) doc.text(`Fecha Firma: ${comprobante.fechaFirma}`, xQr, y + LADO_QR_MM + 8);
+
+  const anchoCaja = 34;
+  totales.forEach(([rotulo, valor], i) => {
+    const yt = y + i * 6;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(0);
+    doc.text(rotulo, derecha - anchoCaja - 2, yt + 4, { align: "right" });
+    doc.setFillColor(...GRIS_CAJA);
+    doc.setDrawColor(...GRIS_BORDE);
+    doc.rect(derecha - anchoCaja, yt, anchoCaja, 6, "FD");
+    doc.setFont("helvetica", "normal");
+    doc.text(money(valor), derecha - 2, yt + 4, { align: "right" });
+  });
+
+  return doc;
 }
 
 /** PDF del recibo de una venta cobrada (§ Cobrar) — mismo shape de datos que `imprimirRecibo`. */

@@ -183,10 +183,10 @@ function bloqueTimbreHtml(comprobante: ComprobanteRecibo): string {
   const partes: string[] = ["<hr/>"];
   if (comprobante.qrUrl) partes.push(`<div class="centro">${svgQr(comprobante.qrUrl, 30)}</div>`);
   if (comprobante.codigoSeguridad) {
-    partes.push(`<div class="centro">Código de seguridad: ${escapeHtml(comprobante.codigoSeguridad)}</div>`);
+    partes.push(`<div class="centro">Código de Seguridad: ${escapeHtml(comprobante.codigoSeguridad)}</div>`);
   }
   if (comprobante.fechaFirma) {
-    partes.push(`<div class="centro">Fecha de firma digital: ${escapeHtml(comprobante.fechaFirma)}</div>`);
+    partes.push(`<div class="centro">Fecha Firma: ${escapeHtml(comprobante.fechaFirma)}</div>`);
   }
   return partes.join("\n  ");
 }
@@ -254,8 +254,8 @@ function generarTextoRecibo(datos: ReciboDatos): string[] {
   }
   if (comprobante?.codigoSeguridad) {
     out.push(separador);
-    out.push(`Código de seguridad: ${comprobante.codigoSeguridad}`);
-    if (comprobante.fechaFirma) out.push(`Fecha de firma digital: ${comprobante.fechaFirma}`);
+    out.push(`Código de Seguridad: ${comprobante.codigoSeguridad}`);
+    if (comprobante.fechaFirma) out.push(`Fecha Firma: ${comprobante.fechaFirma}`);
   }
   out.push(separador);
   out.push("¡Gracias por su compra!");
