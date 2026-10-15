@@ -115,6 +115,21 @@ describe("servicio de recepción de e-CF (/fe/recepcion/api/ecf)", () => {
     expect(noAceptado?.detalle).toContain("alterado");
   });
 
+  it("acepta un e-CF íntegro cuyo certificado no menciona el RNC emisor si no hay autoridades configuradas", async () => {
+    const { app, ecfs } = await servidor();
+    const certDgii = cargarCertificado(certificadoPrueba("DIRECCION-GENERAL").p12, CLAVE_P12_PRUEBA);
+    const doc = creditoFiscalPrueba({
+      ncf: "E310000000001",
+      emisor: { ...EMISOR_PRUEBA, rnc: PROVEEDOR, razonSocial: "PROVEEDOR EJEMPLO SRL" },
+      receptorDocumentoNumero: NOSOTROS,
+      receptorNombre: "SUPLIDORA MAROHI SRL",
+    });
+    const xml = firmarXml(construirXmlEcf(doc, AHORA), certDgii);
+    const res = await app.inject({ method: "POST", url: "/fe/recepcion/api/ecf", ...multipart(xml) });
+    expect(valor(res.body, "Estado")).toBe("0");
+    expect(ecfs).toHaveLength(1);
+  });
+
   it("acusa envío duplicado (motivo 3)", async () => {
     const { app } = await servidor();
     await app.inject({ method: "POST", url: "/fe/recepcion/api/ecf", ...multipart(ecfDelProveedor()) });
@@ -161,6 +176,29 @@ describe("servicio de aprobación comercial (/fe/aprobacioncomercial/api/ecf)", 
     );
     return firmarXml(xml, certProveedor());
   }
+
+  it("guarda una aprobación íntegra firmada con un certificado que no menciona el RNC", async () => {
+    const { app, aprobaciones } = await servidor();
+    const certDgii = cargarCertificado(certificadoPrueba("DIRECCION-GENERAL").p12, CLAVE_P12_PRUEBA);
+    const xml = firmarXml(
+      construirXmlAcecf(
+        {
+          rncEmisor: NOSOTROS,
+          encf: "E310000000001",
+          fechaEmision: "01-10-2026",
+          montoTotal: 286,
+          rncComprador: PROVEEDOR,
+          aprobado: true,
+          motivoRechazo: null,
+        },
+        AHORA,
+      ),
+      certDgii,
+    );
+    const res = await app.inject({ method: "POST", url: "/fe/aprobacioncomercial/api/ecf", ...multipart(xml) });
+    expect(res.statusCode).toBe(200);
+    expect(aprobaciones).toHaveLength(1);
+  });
 
   it("guarda la aprobación de un e-CF nuestro y responde 200", async () => {
     const { app, aprobaciones } = await servidor();

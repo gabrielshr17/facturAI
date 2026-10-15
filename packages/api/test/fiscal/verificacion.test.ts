@@ -23,11 +23,21 @@ describe("verificación de documentos recibidos", () => {
     expect(verificarDocumentoFirmado(alterado, "131880738")).toMatchObject({ valido: false, motivo: "firma" });
   });
 
-  it("rechaza una firma válida hecha con el certificado de otro contribuyente", () => {
-    expect(verificarDocumentoFirmado(ecfFirmadoPor("RNC101010101"), "131880738")).toMatchObject({
+  it("con autoridades configuradas rechaza una firma hecha con el certificado de otro contribuyente", () => {
+    const ajeno = certificadoPrueba("RNC101010101");
+    const xml = firmarXml(
+      construirXmlEcf(creditoFiscalPrueba(), FIRMA),
+      cargarCertificado(ajeno.p12, CLAVE_P12_PRUEBA),
+    );
+    expect(verificarDocumentoFirmado(xml, "131880738", { raices: [ajeno.certificadoPem] })).toMatchObject({
       valido: false,
       motivo: "firma",
+      detalle: expect.stringContaining("no pertenece al RNC"),
     });
+  });
+
+  it("sin autoridades configuradas no exige que el serial del certificado mencione el RNC", () => {
+    expect(verificarDocumentoFirmado(ecfFirmadoPor("RNC101010101"), "131880738")).toEqual({ valido: true });
   });
 
   it("rechaza un documento sin firma o que no es XML", () => {
