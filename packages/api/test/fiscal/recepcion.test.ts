@@ -95,6 +95,26 @@ describe("servicio de recepción de e-CF (/fe/recepcion/api/ecf)", () => {
     expect(valor(res.body, "CodigoMotivoNoRecibido")).toBe("2");
   });
 
+  it("registra en el log el detalle de por qué no aceptó un e-CF", async () => {
+    const lineas: string[] = [];
+    const app = Fastify({ logger: { level: "warn", stream: { write: (l: string) => void lineas.push(l) } } });
+    await app.register(
+      rutasRecepcion({
+        receptor: { rncPropio: NOSOTROS, firmar: (xml) => firmarXml(xml, certNuestro()) },
+        almacen: crearAlmacenMemoria().almacen,
+        autenticador: crearAutenticadorReceptor({ reloj: () => AHORA }),
+        reloj: () => AHORA,
+      }),
+    );
+    const alterado = ecfDelProveedor().replace("<MontoTotal>286.00", "<MontoTotal>1.00");
+    await app.inject({ method: "POST", url: "/fe/recepcion/api/ecf", ...multipart(alterado) });
+
+    const registro = lineas.map((l) => JSON.parse(l) as { msg: string; detalle?: string; motivo?: number });
+    const noAceptado = registro.find((r) => r.msg === "e-CF recibido no aceptado");
+    expect(noAceptado?.motivo).toBe(2);
+    expect(noAceptado?.detalle).toContain("alterado");
+  });
+
   it("acusa envío duplicado (motivo 3)", async () => {
     const { app } = await servidor();
     await app.inject({ method: "POST", url: "/fe/recepcion/api/ecf", ...multipart(ecfDelProveedor()) });

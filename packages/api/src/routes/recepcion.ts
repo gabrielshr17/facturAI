@@ -94,9 +94,15 @@ export function rutasRecepcion(deps: DependenciasRecepcion): FastifyPluginAsync 
       }
 
       let motivo: MotivoNoRecibido | undefined;
+      let detalle: string | undefined;
       const verificacion = verificarDocumentoFirmado(xml, ecf.rncEmisor, { raices: deps.raices });
-      if (!verificacion.valido) motivo = verificacion.motivo === "especificacion" ? 1 : 2;
-      else if (ecf.rncComprador !== receptor.rncPropio) motivo = 4;
+      if (!verificacion.valido) {
+        motivo = verificacion.motivo === "especificacion" ? 1 : 2;
+        detalle = verificacion.detalle;
+      } else if (ecf.rncComprador !== receptor.rncPropio) {
+        motivo = 4;
+        detalle = `El RNC comprador del e-CF (${ecf.rncComprador ?? "ausente"}) no es el nuestro (${receptor.rncPropio}).`;
+      }
 
       const acuse = (recibido: boolean, m?: MotivoNoRecibido) =>
         receptor.firmar(
@@ -121,6 +127,7 @@ export function rutasRecepcion(deps: DependenciasRecepcion): FastifyPluginAsync 
             return;
           }
           motivo = 3;
+          detalle = "El e-CF ya había sido recibido.";
         } catch (error) {
           request.log.error(error, "No se pudo guardar un e-CF recibido");
           await reply.code(500).send({ error: "No se pudo registrar el e-CF. Reintente." });
@@ -128,7 +135,7 @@ export function rutasRecepcion(deps: DependenciasRecepcion): FastifyPluginAsync 
         }
       }
 
-      request.log.warn({ encf: ecf.encf, rncEmisor: ecf.rncEmisor, motivo }, "e-CF recibido no aceptado");
+      request.log.warn({ encf: ecf.encf, rncEmisor: ecf.rncEmisor, motivo, detalle }, "e-CF recibido no aceptado");
       await reply.type("application/xml").send(acuse(false, motivo));
     });
 
