@@ -35,8 +35,9 @@ function serialSujeto(certificadoPem: string): string {
 
 /**
  * Verifica un documento recibido de otro contribuyente (e-CF, ACECF): la firma debe cubrir el
- * documento entero (`Reference URI=""`) y el certificado incluido debe pertenecer al RNC que
- * dice emitirlo (campo SN). Sin lo segundo, cualquiera podría firmar a nombre de otro.
+ * documento entero (`Reference URI=""`). Con autoridades certificadoras configuradas, el
+ * certificado además debe pertenecer al RNC que dice emitirlo (campo SN): sin ellas ese campo lo
+ * escribe quien firma y no prueba nada, así que la autenticidad la confirma la DGII al usar el documento.
  */
 export interface OpcionesVerificacion {
   /**
@@ -92,10 +93,11 @@ export function verificarDocumentoFirmado(
   }
   if (!integra) return { valido: false, motivo: "firma", detalle: "El documento fue alterado después de firmado." };
 
-  if (opciones.raices?.length && !emitidoPorRaizConfiable(certificadoPem, opciones.raices)) {
+  const hayRaices = (opciones.raices?.length ?? 0) > 0;
+  if (hayRaices && !emitidoPorRaizConfiable(certificadoPem, opciones.raices ?? [])) {
     return { valido: false, motivo: "firma", detalle: "El certificado no fue emitido por una autoridad de confianza." };
   }
-  if (rncFirmante !== null && !serialSujeto(certificadoPem).replace(/\D/g, "").includes(rncFirmante)) {
+  if (hayRaices && rncFirmante !== null && !serialSujeto(certificadoPem).replace(/\D/g, "").includes(rncFirmante)) {
     return { valido: false, motivo: "firma", detalle: `El certificado no pertenece al RNC ${rncFirmante}.` };
   }
   return { valido: true };
